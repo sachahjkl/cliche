@@ -708,6 +708,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 		}
 	}
 
+	canvas: ui.Rect
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###editor") {   // (the theme's surface: the host only clears to black)
 		editor_bar(app, em)
@@ -715,10 +716,14 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 		b := ui.build_box({.Clickable, .Clip, .Draw_Background}, "###canvas")
 		b.custom, b.custom_user = editor_canvas_draw, app
 		_ = ui.signal(b)
+		canvas = b.rect   // (last frame's layout: where the canvas is)
 	}
 	// (after the canvas: drawn over it, and first for the pointer)
 	editor_text_field(app, em)
 	editor_dialogs(app)
+	// (the toasts at the bottom of the canvas: over the bar they hid the buttons just pressed)
+	if canvas.max.x > canvas.min.x { ui.set_toast_area(canvas) }
+	ui.set_toast_position(&ed.host.state, .Bottom_Center)
 	ui.toasts_build()
 }
 
