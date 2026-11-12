@@ -666,13 +666,8 @@ editor_export_poll :: proc(app: ^App) {
 		editor_close(app)
 		workflow_editor_done(app, shot)
 	case .Copy:
-		// (the clipboard is the anchor's, as a workflow's Copy step is: it outlives this window)
-		ok := platform.clipboard_set_image(app.anchor, {rgba = shot.rgba, size = shot.size})
-		shot_free(&shot)
-		ui.use(&ed.host.state)
-		defer ui.use(&app.shared.main.state)
-		if ok { ui.toast(.Good, "Copied to the clipboard") } else { ui.toast(.Bad, "The picture cannot go to the clipboard") }
-		ed.host.settle = max(ed.host.settle, 3)
+		// (its PNG is made on the worker: editor_copied puts it on the clipboard)
+		worker_send(&app.worker, Job_Copy_Encode{shot = shot})
 	case .Save:
 		worker_send(&app.worker, Job_Save{shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern)})
 	}
@@ -988,4 +983,33 @@ canvas_selection :: proc(dc: ^draw.Context, m: ^Edit_Model, accent: draw.Color, 
 		draw.rect(dc, {c - half, c + half}, {1, 1, 1, 1}, 1.5)
 		draw.rect(dc, {c - half, c + half}, accent, 1.5, px)
 	}
+}
+
+// The editor's Ctrl+C, its PNG made on the worker: on the clipboard (the anchor's, as a workflow's Copy step: it outlives
+// this window), and said in the editor.
+editor_copied :: proc(app: ^App, r: Result_Copy_Encoded) {
+	r := r
+	defer { shot_free(&r.shot); delete(r.png) }
+	ed := &app.editor
+	ok := len(r.png) > 0 && platform.clipboard_set_image(app.anchor, {rgba = r.shot.rgba, size = r.shot.size, png = r.png})
+	if !ed.visible { return }
+	ui.use(&ed.host.state)
+	defer ui.use(&app.shared.main.state)
+	if ok { ui.toast(.Good, "Copied to the clipboard") } else { ui.toast(.Bad, "The picture cannot go to the clipboard") }
+	ed.host.settle = max(ed.host.settle, 3)
+}
+
+// Pictures wait for the editor (a workflow's Annotate steps while it holds another): said in the editor, where the
+// person is, with what makes the next one come.
+editor_note_waiting :: proc(app: ^App, waiting: int) {
+	ed := &app.editor
+	if !ed.visible { return }
+	ui.use(&ed.host.state)
+	defer ui.use(&app.shared.main.state)
+	if waiting == 1 {
+		ui.toast(.Info, "Another picture waits: it opens after Done, or when you close this one")
+	} else {
+		ui.toast(.Info, "%d pictures wait: each opens after Done, or when you close this one", waiting)
+	}
+	ed.host.settle = max(ed.host.settle, 3)
 }

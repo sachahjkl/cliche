@@ -37,9 +37,26 @@ shots_run :: proc(folder: string, which: string) -> int {
 	case "editor":       return shots_editor(app, folder)
 	case "history":      return shots_history(app, folder)
 	case "workflows":    return shots_workflows(app, folder)
+	case "record":       return shots_record(app, folder)
 	}
-	fmt.eprintfln("shots: no window %q (settings, editor, history, workflows)", which)
+	fmt.eprintfln("shots: no window %q (settings, editor, history, workflows, record)", which)
 	return 2
+}
+
+// The recording's overlay over a made-up output: ready (Record, the format, Cancel), then recording (the time, Stop,
+// Cancel). Offscreen the window is black where a desktop would show through.
+@(private = "file")
+shots_record :: proc(app: ^App, folder: string) -> int {
+	app.record_output = {0, 0, 1280, 720}
+	app.record_region = {240, 160, 800, 380}
+	app.record = Record_Ready{.Mp4}
+	if !record_overlay_show(app, headless = true) { return 1 }
+	ro := &app.record_overlay
+	defer { host.host_close(&ro.host) }
+	failed := !shots_write(app, &ro.host, folder, "record-ready")
+	app.record = Record_Recording{.Mp4, 83_000}
+	failed |= !shots_write(app, &ro.host, folder, "record-running")
+	return failed ? 1 : 0
 }
 
 @(private = "file")

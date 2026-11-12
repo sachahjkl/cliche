@@ -357,6 +357,10 @@ app_results :: proc(app: ^App) {
 			workflows_loaded(app, v)
 		case Result_Picture:
 			workflow_preview_picture(app, v)
+		case Result_Copy_Encoded:
+			editor_copied(app, v)
+		case Result_Thumbnail:
+			workflow_thumbnail_result(app, v)
 		case Result_History:
 			history_result(app, v)
 		case Result_Uploaders:

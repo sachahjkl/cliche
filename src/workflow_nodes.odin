@@ -75,7 +75,11 @@ Resize_Mode :: enum u8 { Percent, Largest }
 Condition_Test :: enum u8 { Width, Height, Aspect, Source }
 Condition_Compare :: enum u8 { More, Less, Equal }
 Notify_Show :: enum u8 { Input, Summary }
-Save_Format :: enum u8 { Png_Small, Png_Fast }
+Save_Format :: enum u8 { Png_Small, Png_Fast, Jpeg, Webp, Webp_Lossless }
+
+SAVE_FORMAT_TEXT := [Save_Format]string{.Png_Small = "PNG", .Png_Fast = "PNG (fast)", .Jpeg = "JPEG", .Webp = "WebP", .Webp_Lossless = "WebP (lossless)"}
+// The extension a file of each format gets, in place of the one its name pattern ends with (".png" by default).
+SAVE_FORMAT_EXTENSION := [Save_Format]string{.Png_Small = ".png", .Png_Fast = ".png", .Jpeg = ".jpg", .Webp = ".webp", .Webp_Lossless = ".webp"}
 
 NODE_DEFS := [Node_Kind]Node_Def{
 	.Capture = {title = "Capture", group = .Source, icon = lucide.MONITOR, tags = {"start", "trigger", "screenshot"}, outputs = {{name = "picture", kind = .Image}}, place = .Run},
@@ -171,11 +175,12 @@ NODE_DEFS := [Node_Kind]Node_Def{
 		{name = "source", title = "Source", type = .Choice, choices = {"Region", "Screen", "Window"}},
 	}},
 
-	.Copy_Image = {title = "Copy image", group = .Outputs, icon = lucide.COPY, tags = {"clipboard", "paste"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Interface, effect = true},
+	.Copy_Image = {title = "Copy image", group = .Outputs, icon = lucide.COPY, tags = {"clipboard", "paste"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, effect = true},   // (the worker encodes its PNG; the interface sets the clipboard: workflow_node_result)
 	.Save_File = {title = "Save file", group = .Outputs, icon = lucide.SAVE, tags = {"disk", "png", "write", "folder"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "file", kind = .File}}, place = .Worker, effect = true, params = {
 		{name = "folder", title = "Folder", type = .Folder, placeholder = "The default folder (Settings, Save)"},
 		{name = "name", title = "File name", type = .Text, placeholder = "The default name (Settings, Save)"},
-		{name = "format", title = "Format", type = .Choice, choices = {"PNG, small", "PNG, fast"}},
+		{name = "format", title = "Format", type = .Choice, choices = {"PNG, small", "PNG, fast", "JPEG", "WebP", "WebP, lossless"}},
+		{name = "quality", title = "Quality", type = .Int, lo = 1, hi = 100, step = 1, unit = "%", default_number = 90},   // (JPEG and WebP)
 	}},
 	.Upload = {title = "Upload", group = .Outputs, icon = lucide.SEND_HORIZONTAL, tags = {"share", "host", "link", "sxcu", "imgur"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "address", kind = .Url}}, place = .Worker, effect = true, params = {
 		{name = "uploader", title = "Host", type = .Uploader, placeholder = "The default host (Settings, Upload)"},
@@ -312,7 +317,9 @@ node_summary :: proc(n: ^Workflow_Node) -> string {
 		op := [Condition_Compare]string{.More = ">", .Less = "<", .Equal = "="}
 		return fmt.tprintf("%s %s %s", what[test], op[Condition_Compare(node_int(n, "compare"))], number_text(node_float(n, "value")))
 	case .Save_File:
-		format := Save_Format(node_int(n, "format")) == .Png_Fast ? "PNG (fast)" : "PNG"
+		f := Save_Format(clamp(node_int(n, "format"), 0, len(Save_Format) - 1))
+		format := SAVE_FORMAT_TEXT[f]
+		if f == .Jpeg || f == .Webp { format = fmt.tprintf("%s %d %%", format, node_int(n, "quality")) }
 		folder := node_text(n, "folder")
 		if folder == "" { return fmt.tprintf("%s to the default folder", format) }
 		return fmt.tprintf("%s to %s", format, path_short(folder))

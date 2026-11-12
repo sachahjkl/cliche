@@ -44,14 +44,15 @@ Record_Overlay :: struct {
 }
 
 // Opens the overlay over the region's output (app.record_output) and shows it. False: no overlay here (no layer shell).
-record_overlay_show :: proc(app: ^App) -> bool {
+record_overlay_show :: proc(app: ^App, headless := false) -> bool {
 	ro := &app.record_overlay
 	out := app.record_output
 	// (another output than the last one: a window of the system covers one output, the one it was opened on)
 	if ro.opened && ro.area != out { record_overlay_close(app) }
 	if !ro.opened {
 		area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}
-		o := host.Open{title = "cliche recording", size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area}
+		// (headless: offscreen, on the software renderer: clichetool shots)
+		o := host.Open{title = "cliche recording", size = {max(area[2], 1), max(area[3], 1)}, overlay = !headless, overlay_area = area, headless = headless}
 		if !host.host_open(&ro.host, &app.shared, o, record_overlay_build, app) { return false }
 		ro.opened = true
 		ro.area = out

@@ -330,7 +330,7 @@ history_pixels :: proc(app: ^App, v: History_Pixels) {
 	switch v.purpose {
 	case .Copy:
 		if !v.ok { history_status(hw, "The picture cannot be read"); return }
-		if platform.clipboard_set_image(app.anchor, {rgba = v.rgba, size = v.size}) {
+		if platform.clipboard_set_image(app.anchor, {rgba = v.rgba, size = v.size, png = v.png}) {
 			history_status(hw, "The picture is on the clipboard")
 		} else {
 			history_status(hw, "The picture cannot go to the clipboard")

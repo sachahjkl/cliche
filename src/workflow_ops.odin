@@ -38,7 +38,19 @@ Result_Node :: struct {
 	input:     ^Run_Picture,   // the job's reference: the interface lets it go
 	result:    Run_Result,     // its message owned
 	thumbnail: []u8,           // RGBA (owned; nil: none)
+	clipboard_png: []u8,       // Copy image: the picture as a PNG file, for the clipboard (owned): encoded here, not on the interface's thread
 	thumbnail_size: [2]int,
+}
+
+// A node's thumbnail alone, for one the worker does not run (Capture): its input picture made small.
+Job_Thumbnail :: struct { run: u64, node: int, input: Run_Value }
+Result_Thumbnail :: struct { run: u64, node: int, input: ^Run_Picture, thumbnail: []u8, thumbnail_size: [2]int }   // (owned; input: the job's reference)
+
+thumbnail_work :: proc(j: ^Job_Thumbnail) -> (out: Result_Thumbnail) {
+	out = {run = j.run, node = j.node, input = j.input.picture}
+	if out.input != nil { out.thumbnail, out.thumbnail_size = thumbnail_of(out.input.shot) }
+	delete(j.input.text)
+	return
 }
 
 job_node_free :: proc(j: ^Job_Node) {
@@ -60,6 +72,7 @@ result_node_free :: proc(r: ^Result_Node) {
 	for &v in r.result.outputs { value_free(&v) }
 	delete(r.result.message)
 	delete(r.thumbnail)
+	delete(r.clipboard_png)
 	r^ = {}
 }
 
@@ -74,6 +87,11 @@ node_work :: proc(j: ^Job_Node, fonts: ^Worker_Fonts) -> (out: Result_Node) {
 	if out.input != nil { shot = out.input.shot }
 
 	#partial switch n.kind {
+	case .Copy_Image:
+		// (only the file: the picture's references are the interface's, which sets the clipboard and passes it on)
+		out.clipboard_png = png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
+		if len(out.clipboard_png) == 0 { return node_failed(out, "the picture cannot go to the clipboard") }
+		out.result = {ok = true}
 	case .Save_File:
 		path, size, bytes, err := node_save(n, shot, j.defaults)
 		if err != "" { return node_failed(out, err) }
@@ -235,8 +253,18 @@ background_make :: proc(n: ^Workflow_Node, src: pic.Image) -> pic.Image {
 @(private = "file")
 node_save :: proc(n: ^Workflow_Node, shot: Shot, d: Node_Defaults) -> (path: string, size: [2]int, bytes: i64, err: string) {
 	if shot.rgba == nil { return "", {}, 0, "no picture came in" }
-	level: png.Compression = Save_Format(node_int(n, "format")) == .Png_Fast ? .Fast : .Small
-	file := png.encode(shot.rgba, shot.size.x, shot.size.y, level)
+	format := Save_Format(clamp(node_int(n, "format"), 0, len(Save_Format) - 1))
+	quality := clamp(node_int(n, "quality"), 1, 100)
+	img := pic.Image{pixels = shot.rgba, width = shot.size.x, height = shot.size.y}
+	file: []u8
+	switch format {
+	case .Png_Small:     file = png.encode(shot.rgba, shot.size.x, shot.size.y, .Small)
+	case .Png_Fast:      file = png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
+	case .Jpeg:          file = pic.jpeg_encode(img, quality)
+	case .Webp, .Webp_Lossless:
+		if !pic.webp_available() { return "", {}, 0, "this system has no WebP encoder (install libwebp)" }
+		file = pic.webp_encode(img, quality, format == .Webp_Lossless)
+	}
 	defer delete(file)
 	if file == nil { return "", {}, 0, FLOW_ERROR_TEXT[.Empty] }
 	pattern := node_text(n, "name")
@@ -244,7 +272,7 @@ node_save :: proc(n: ^Workflow_Node, shot: Shot, d: Node_Defaults) -> (path: str
 	if pattern == "" { pattern = DEFAULT_NAME_PATTERN }
 	folder := node_text(n, "folder")
 	if folder == "" { folder = d.folder }
-	name := name_expand(pattern, stamp_now(), shot.source, context.temp_allocator)
+	name := name_with_extension(name_expand(pattern, stamp_now(), shot.source, context.temp_allocator), SAVE_FORMAT_EXTENSION[format])
 	p, e := save_file(file, folder, name)
 	if e != .None { return "", {}, 0, FLOW_ERROR_TEXT[e] }
 	return p, shot.size, i64(len(file)), ""

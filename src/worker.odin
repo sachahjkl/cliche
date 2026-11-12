@@ -11,12 +11,14 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 import capture "gt:capture"
+import png "gt:png"
 import "gt:platform"
 
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
 Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
 Job_Save      :: struct { shot: Shot, folder, pattern: string }   // the editor's Ctrl+S; owned by the job
+Job_Copy_Encode :: struct { shot: Shot }                      // the editor's Ctrl+C: its PNG for the clipboard, made here (owned)
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences, the workflows); owned
 Job_Workflows_Load :: struct {}                               // the workflows' file, read at the start (workflow_store.odin)
 Job_Picture_Load :: struct { path: string, workflow: u64 }    // a PNG of the history decoded, for a preview run of `workflow`; owned
@@ -27,7 +29,7 @@ Job_Pick_Folder :: struct { start: string, workflow, node: u64 }   // the system
 Job_Open_Folder :: struct { folder: string }                  // the save folder in the file manager ("": the default); owned
 Job_Integrate :: struct { menu, autostart: bool }             // cliche's launcher and its start with the session (integration.odin)
 
-Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write, Job_Node, Job_Workflows_Load, Job_Picture_Load, Job_Pick_Folder, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Reveal }
+Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Pick_Folder, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Reveal }
 
 // The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
@@ -43,6 +45,9 @@ Result_Desktop :: struct {
 
 // A picture to act on (owned).
 Result_Shot :: struct { error: Flow_Error, shot: Shot }
+
+// The editor's Ctrl+C: the picture and its PNG, which the interface's thread puts on the clipboard (owned).
+Result_Copy_Encoded :: struct { shot: Shot, png: []u8 }
 
 // The editor's Ctrl+S is written (save.odin's Saved, its path owned).
 Result_Saved :: struct { using saved: Saved }
@@ -64,7 +69,7 @@ Result_Folder :: struct { path: string, workflow, node: u64 }
 // What went wrong putting cliche on the desktop (owned; "": nothing).
 Result_Integrated :: struct { problem: string }
 
-Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Folder, Result_Integrated, Result_Uploaders }
+Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Folder, Result_Integrated, Result_Uploaders }
 
 Worker :: struct {
 	thread:    ^thread.Thread,
@@ -178,6 +183,11 @@ worker_do :: proc(w: ^Worker, j: Job) {
 	case Job_Save:
 		job := v
 		worker_post(w, Result_Saved{save_shot(&job)})
+	case Job_Thumbnail:
+		job := v
+		worker_post(w, thumbnail_work(&job))
+	case Job_Copy_Encode:
+		worker_post(w, Result_Copy_Encoded{shot = v.shot, png = png.encode(v.shot.rgba, v.shot.size.x, v.shot.size.y, .Fast)})
 	case Job_Write:
 		ok := write_file(v.path, transmute([]u8)v.text)
 		delete(v.text)
@@ -235,6 +245,11 @@ worker_session :: proc(w: ^Worker) -> bool {
 
 job_free :: proc(j: ^Job) {
 	#partial switch &v in j {
+	case Job_Copy_Encode:
+		shot_free(&v.shot)
+	case Job_Thumbnail:
+		// (the worker has stopped: this is the interface's thread, where a picture may be let go)
+		value_free(&v.input)
 	case Job_Save:
 		shot_free(&v.shot)
 		delete(v.folder)
@@ -263,6 +278,8 @@ result_free :: proc(r: ^Result) {
 	case Result_Desktop: desktop_free(&v)
 	case Result_Shot:    shot_free(&v.shot)
 	case Result_Saved:   delete(v.path)
+	case Result_Copy_Encoded: shot_free(&v.shot); delete(v.png)
+	case Result_Thumbnail: delete(v.thumbnail); picture_release(v.input)
 	case Result_Node:    result_node_free(&v)
 	case Result_Workflows: workflows_free(&v.workflows); delete(v.problem)
 	case Result_Picture: shot_free(&v.shot)

@@ -30,3 +30,12 @@ name_numbers :: proc(t: ^testing.T) {
 	testing.expect_value(t, name_numbered("noext", 2, context.temp_allocator), "noext (2)")
 	testing.expect_value(t, name_numbered(".png", 2, context.temp_allocator), ".png (2)")
 }
+
+// A name made for PNG files takes the extension of the format it is saved in.
+@(test)
+a_name_takes_its_format_extension :: proc(t: ^testing.T) {
+	testing.expect_value(t, name_with_extension("cliche-1.png", ".jpg"), "cliche-1.jpg")
+	testing.expect_value(t, name_with_extension("shot.PNG", ".webp"), "shot.webp")
+	testing.expect_value(t, name_with_extension("notes", ".png"), "notes.png")
+	testing.expect_value(t, name_with_extension("a.tar", ".jpg"), "a.tar.jpg")
+}

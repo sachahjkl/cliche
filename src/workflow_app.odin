@@ -92,6 +92,13 @@ workflow_run_start :: proc(app: ^App, wf: Workflow, shot: Shot, start: Run_Start
 	run_start(run, wf, shot, start)
 	append(&app.runs, run)
 	workflow_view_run_started(app, run)
+	// (the Capture node's thumbnail: its picture made smaller on the worker, as every other node's)
+	if workflow_view_wants(app, run) {
+		for &rn, i in run.nodes {
+			if run.workflow.nodes[i].kind != .Capture || rn.outputs[0].picture == nil { continue }
+			worker_send(&app.worker, Job_Thumbnail{run = run.id, node = i, input = value_clone(rn.outputs[0])})
+		}
+	}
 	workflow_pump(app, run)
 }
 
@@ -154,15 +161,6 @@ workflow_defaults :: proc(app: ^App, n: ^Workflow_Node) -> Node_Defaults {
 @(private = "file")
 workflow_interface_task :: proc(app: ^App, run: ^Run, task: Run_Task) -> (r: Run_Result) {
 	#partial switch task.kind {
-	case .Copy_Image:
-		v := task.inputs[0]
-		if v.picture == nil { return {message = "no picture came in"} }
-		// (gt:platform encodes the clipboard's PNG on this thread, at its fast level: it takes no encoded file)
-		if !platform.clipboard_set_image(app.anchor, {rgba = v.picture.shot.rgba, size = v.picture.shot.size}) {
-			return {message = "the picture cannot go to the clipboard"}
-		}
-		r = {ok = true, made = {0}}
-		r.outputs[0] = value_clone(v)
 	case .Copy_Text:
 		v := task.inputs[0]
 		if !platform.clipboard_set(app.anchor, {text = v.text}) { return {message = "the text cannot go to the clipboard"} }
@@ -205,6 +203,15 @@ workflow_history_note :: proc(app: ^App, run: ^Run, inputs: []Run_Value) {
 	app.notice_entry = history_note(app, e)
 }
 
+// A thumbnail made on the worker for a node that is not run there (Capture): to the Workflows mode; the picture's
+// reference let go here, where it was taken.
+workflow_thumbnail_result :: proc(app: ^App, r: Result_Thumbnail) {
+	r := r
+	if run := workflow_run_find(app, r.run); run != nil { workflow_view_thumbnail(app, run, r.node, r.thumbnail, r.thumbnail_size) }
+	delete(r.thumbnail)
+	picture_release(r.input)
+}
+
 // A node's result from the worker: given to its run (gone meanwhile: freed), its thumbnail to the Workflows mode.
 workflow_node_result :: proc(app: ^App, r: Result_Node) {
 	r := r
@@ -216,6 +223,17 @@ workflow_node_result :: proc(app: ^App, r: Result_Node) {
 	workflow_view_thumbnail(app, run, r.node, r.thumbnail, r.thumbnail_size)
 	delete(r.thumbnail)
 	r.thumbnail = nil
+	if r.clipboard_png != nil {
+		// Copy image: its PNG made on the worker; the clipboard is the anchor's (it outlives every window)
+		if r.input != nil && platform.clipboard_set_image(app.anchor, {rgba = r.input.shot.rgba, size = r.input.shot.size, png = r.clipboard_png}) {
+			r.result.made = {0}
+			r.result.outputs[0] = value_clone({kind = .Image, picture = r.input})
+		} else {
+			r.result = {message = strings.clone("the picture cannot go to the clipboard")}
+		}
+		delete(r.clipboard_png)
+		r.clipboard_png = nil
+	}
 	run_finish(run, r.node, r.result)   // (its outputs are the run's now)
 	r.result.outputs = {}
 	delete(r.result.message)
@@ -276,6 +294,8 @@ workflow_preview_picture :: proc(app: ^App, r: Result_Picture) {
 workflow_annotate_ask :: proc(app: ^App, run: ^Run, task: Run_Task) {
 	append(&app.annotate_queue, Annotate_Ask{run.id, task.node})
 	workflow_annotate_next(app)
+	// (the editor is busy with another picture: this one waits its turn, and the editor says so)
+	if n := len(app.annotate_queue); n > 0 { editor_note_waiting(app, n) }
 }
 
 // The editor takes the next Annotate waiting when it is free: no picture, or one of the history left unchanged.

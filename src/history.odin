@@ -539,7 +539,7 @@ History_Loaded :: struct { entries: []History_Entry, missing: []u64, offset_minu
 History_Checked :: struct { missing: []u64 }   // (owned)
 // A thumbnail (owned; ok false: none, an icon stands for it), at most `asked` pixels on its longer side.
 History_Thumb :: struct { id: u64, asked: int, rgba: []u8, size: [2]int, ok: bool }
-History_Pixels :: struct { id: u64, purpose: History_Picture_Purpose, rgba: []u8, size: [2]int, ok: bool }   // (owned)
+History_Pixels :: struct { id: u64, purpose: History_Picture_Purpose, rgba: []u8, size: [2]int, ok: bool, png: []u8 }   // (owned; png: the file, for Copy: the clipboard takes it as it is)
 History_Uploaded :: struct { id: u64, url, problem: string }   // (owned)
 
 Result_History :: union { History_Loaded, History_Checked, History_Thumb, History_Pixels, History_Uploaded }
@@ -600,6 +600,8 @@ history_job_run :: proc(d: ^History_Disk, j: Job_History) -> (r: Result_History,
 		out := History_Pixels{id = v.id, purpose = v.purpose}
 		if data, ok := fsx.read_all(v.path, context.temp_allocator); ok {
 			out.rgba, out.size.x, out.size.y, out.ok = png.decode(data)
+			// (the file is the clipboard's PNG already: the interface's thread encodes nothing)
+			if out.ok && v.purpose == .Copy { out.png = slice.clone(data) }
 		}
 		return out, true
 	case History_Upload:
@@ -649,7 +651,7 @@ history_result_free :: proc(r: ^Result_History) {
 		delete(v.missing)
 	case History_Checked:  delete(v.missing)
 	case History_Thumb:    delete(v.rgba)
-	case History_Pixels:   delete(v.rgba)
+	case History_Pixels:   delete(v.rgba); delete(v.png)
 	case History_Uploaded: delete(v.url); delete(v.problem)
 	}
 	r^ = nil

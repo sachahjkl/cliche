@@ -57,3 +57,13 @@ name_numbered :: proc(name: string, n: int, allocator := context.allocator) -> s
 	if dot <= 0 { return fmt.aprintf("%s (%d)", name, n, allocator = allocator) }
 	return fmt.aprintf("%s (%d)%s", name[:dot], n, name[dot:], allocator = allocator)
 }
+
+// `name` with the extension of its format: a picture's extension it ends with (.png, .jpg, .jpeg, .webp) replaced, else
+// added. A name pattern made for PNG files gives a JPEG file a .jpg name.
+name_with_extension :: proc(name, extension: string, allocator := context.temp_allocator) -> string {
+	base := name
+	for old in ([]string{".png", ".jpg", ".jpeg", ".webp"}) {
+		if len(base) > len(old) && strings.equal_fold(base[len(base) - len(old):], old) { base = base[:len(base) - len(old)]; break }
+	}
+	return strings.concatenate({base, extension}, allocator)
+}

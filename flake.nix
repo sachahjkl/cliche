@@ -61,6 +61,7 @@
       openh264
       tesseract
       curl
+      libwebp
     ];
 
     # APP_VERSION of src/main.odin

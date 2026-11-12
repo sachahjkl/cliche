@@ -188,7 +188,7 @@ run_shots :: proc(args: []string) -> int {
 	out := fmt.tprintf("build/cliche-shots%s", ODIN_OS == .Windows ? ".exe" : "")
 	if !toolbox.run(odin_cmd("build", "src", {fmt.tprintf("-out:%s", out), "-debug", "-o:none", fmt.tprintf("-define:CLICHE_SHOTS=%s", folder)}), {echo = true}) { return 1 }
 	// (one window a run: a headless renderer has only its first one)
-	for window in ([]string{"settings", "editor", "history", "workflows"}) {
+	for window in ([]string{"settings", "editor", "history", "workflows", "record"}) {
 		if !toolbox.run({out, window}, {echo = true}) { return 1 }
 	}
 	return 0
