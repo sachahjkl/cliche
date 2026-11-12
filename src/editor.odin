@@ -322,14 +322,11 @@ editor_load_stop :: proc(app: ^App) {
 	ed.load_work, ed.load_thread = nil, nil
 }
 
-// What the worker said of a save asked from the editor (Ctrl+S): told in the window. `path` is not kept.
+// What the worker said of a save asked from the editor (Ctrl+S): told as cliche tells (app_announce). `path` is not kept.
 editor_saved :: proc(app: ^App, path: string, error: Flow_Error) {
 	ed := &app.editor
-	if !ed.visible { return }
-	ui.use(&ed.host.state)
-	defer ui.use(&app.shared.main.state)
-	if error != .None { ui.toast(.Bad, "%s", FLOW_ERROR_TEXT[error]) } else { ui.toast(.Good, "Saved: %s", path) }
-	ed.host.settle = max(ed.host.settle, 3)
+	window := ed.visible ? &ed.host : nil
+	if error != .None { app_announce(app, .Bad, "Not saved", FLOW_ERROR_TEXT[error], window) } else { app_announce(app, .Good, "Saved", path, window) }
 }
 
 // The texture goes with the renderer: before the windows close.
@@ -651,10 +648,7 @@ editor_export_poll :: proc(app: ^App) {
 		purpose := ed.export.purpose
 		edit_export_free(&ed.export)
 		ed.exporting = false
-		ui.use(&ed.host.state)
-		defer ui.use(&app.shared.main.state)
-		ui.toast(.Bad, "The picture could not be made%s", purpose == .Done ? ": nothing was done with it" : "")
-		ed.host.settle = max(ed.host.settle, 3)
+		app_announce(app, .Bad, "The picture could not be made", purpose == .Done ? "Nothing was done with it." : "", &ed.host)
 		return
 	case .Ready:
 	}
@@ -992,11 +986,8 @@ editor_copied :: proc(app: ^App, r: Result_Copy_Encoded) {
 	defer { shot_free(&r.shot); delete(r.png) }
 	ed := &app.editor
 	ok := len(r.png) > 0 && platform.clipboard_set_image(app.anchor, {rgba = r.shot.rgba, size = r.shot.size, png = r.png})
-	if !ed.visible { return }
-	ui.use(&ed.host.state)
-	defer ui.use(&app.shared.main.state)
-	if ok { ui.toast(.Good, "Copied to the clipboard") } else { ui.toast(.Bad, "The picture cannot go to the clipboard") }
-	ed.host.settle = max(ed.host.settle, 3)
+	window := ed.visible ? &ed.host : nil
+	if ok { app_announce(app, .Good, "Copied to the clipboard", "", window) } else { app_announce(app, .Bad, "The picture cannot go to the clipboard", "", window) }
 }
 
 // Pictures wait for the editor (a workflow's Annotate steps while it holds another): said in the editor, where the
@@ -1004,12 +995,9 @@ editor_copied :: proc(app: ^App, r: Result_Copy_Encoded) {
 editor_note_waiting :: proc(app: ^App, waiting: int) {
 	ed := &app.editor
 	if !ed.visible { return }
-	ui.use(&ed.host.state)
-	defer ui.use(&app.shared.main.state)
 	if waiting == 1 {
-		ui.toast(.Info, "Another picture waits: it opens after Done, or when you close this one")
+		app_announce(app, .Info, "Another picture waits for the editor", "It opens after Done, or when you close this one.", &ed.host)
 	} else {
-		ui.toast(.Info, "%d pictures wait: each opens after Done, or when you close this one", waiting)
+		app_announce(app, .Info, fmt.tprintf("%d pictures wait for the editor", waiting), "Each opens after Done, or when you close this one.", &ed.host)
 	}
-	ed.host.settle = max(ed.host.settle, 3)
 }

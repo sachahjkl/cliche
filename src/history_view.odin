@@ -317,9 +317,11 @@ history_result :: proc(app: ^App, r: Result_History) {
 		if v.url != "" {
 			history_set_url(&hw.history, v.id, v.url)
 			platform.clipboard_set(app.anchor, {text = v.url})
-			history_status(hw, fmt.tprintf("Uploaded, the URL is on the clipboard: %s", v.url))
+			history_status(hw, "")
+			app_announce(app, .Good, "Uploaded: the address is on the clipboard", v.url, history_window_of(app))
 		} else {
-			history_status(hw, fmt.tprintf("Not uploaded: %s", v.problem))
+			history_status(hw, "")
+			app_announce(app, .Bad, "Not uploaded", v.problem, history_window_of(app))
 		}
 	}
 }
@@ -329,11 +331,11 @@ history_pixels :: proc(app: ^App, v: History_Pixels) {
 	hw := &app.history_window
 	switch v.purpose {
 	case .Copy:
-		if !v.ok { history_status(hw, "The picture cannot be read"); return }
+		if !v.ok { app_announce(app, .Bad, "The picture cannot be read", "", history_window_of(app)); return }
 		if platform.clipboard_set_image(app.anchor, {rgba = v.rgba, size = v.size, png = v.png}) {
-			history_status(hw, "The picture is on the clipboard")
+			app_announce(app, .Good, "Copied to the clipboard", "", history_window_of(app))
 		} else {
-			history_status(hw, "The picture cannot go to the clipboard")
+			app_announce(app, .Bad, "The picture cannot go to the clipboard", "", history_window_of(app))
 		}
 	case .Preview:
 		if v.id != hw.preview_asked || !hw.visible { return }
@@ -1038,7 +1040,7 @@ history_dialogs :: proc(app: ^App) {
 		switch ui.confirm("delete", &hw.confirm_open, {title = title, note = "The files go from the disk, not to the trash. Their lines stay in the history, marked missing.", lines = names[:], act = "Delete"}) {
 		case .Confirmed:
 			worker_send(&app.worker, Job_History(History_Delete{ids = clone_ids(hw.delete_ids[:])}))
-			history_status(hw, len(names) == 1 ? "The file is deleted" : fmt.tprintf("%d files are deleted", len(names)))
+			app_announce(app, .Good, len(names) == 1 ? "The file is deleted" : fmt.tprintf("%d files are deleted", len(names)), "", history_window_of(app))
 			clear(&hw.delete_ids)
 		case .Cancelled:
 			clear(&hw.delete_ids)
@@ -1142,7 +1144,7 @@ history_action :: proc(app: ^App, a: History_Action) {
 		gone := clone_ids(ids)
 		history_remove(&hw.history, gone)
 		worker_send(&app.worker, Job_History(History_Remove{ids = gone}))
-		history_status(hw, len(gone) == 1 ? "Removed from the history (the file stays)" : fmt.tprintf("%d removed from the history (the files stay)", len(gone)))
+		app_announce(app, .Good, len(gone) == 1 ? "Removed from the history" : fmt.tprintf("%d removed from the history", len(gone)), len(gone) == 1 ? "The file stays." : "The files stay.", history_window_of(app))
 	case .Preview:
 		hw.preview_open = !hw.preview_open
 		if !hw.preview_open { history_preview_drop(app) }
@@ -1190,7 +1192,7 @@ history_copy_text :: proc(app: ^App, ids: []u64, field: proc(e: ^History_Entry) 
 	}
 	if len(parts) == 0 { return }
 	if platform.clipboard_set(app.anchor, {text = strings.join(parts[:], separator, context.temp_allocator)}) {
-		history_status(hw, len(parts) == 1 ? one : several)
+		app_announce(app, .Good, len(parts) == 1 ? one : several, "", history_window_of(app))
 	}
 }
 
@@ -1232,4 +1234,10 @@ history_size_text :: proc(e: History_Entry) -> string {
 	if e.bytes > 0 { append(&parts, size_text(e.bytes)) }
 	if e.length_ms > 0 { append(&parts, record_elapsed_text(e.length_ms)) }
 	return strings.join(parts[:], ", ", context.temp_allocator)
+}
+
+// The main window, for a toast where the system shows no notification: while it is shown.
+@(private = "file")
+history_window_of :: proc(app: ^App) -> ^host.Host {
+	return app.history_window.visible ? &app.history_window.host : nil
 }

@@ -52,7 +52,7 @@ app_record_chosen :: proc(app: ^App, r: Rect) {
 	if !record_running(app.record) || !app.settings.record_notify { return }
 	keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
 	body := keys != "" ? fmt.tprintf("Press %s again, or click cliche's icon, to stop it.", keys) : "Click cliche's icon in the notification area to stop it."
-	if id, ok := platform.notify(app.anchor, {title = "Recording", body = body, silent = true, replace = app.notice}); ok { app.notice = id }
+	app_announce(app, .Info, "Recording", body)
 }
 
 // The Record button, the same keys, the tray: the recorder starts on the live screen.
@@ -144,6 +144,7 @@ app_record_end :: proc(app: ^App) {
 // Done or Failed: told to the user, then Idle.
 app_record_told :: proc(app: ^App, path: string, bytes, length_ms: i64) {
 	title, body: string
+	failed := false
 	#partial switch s in app.record {
 	case Record_Done:
 		title = s.format == .Gif ? "GIF saved" : "Recording saved"
@@ -152,11 +153,10 @@ app_record_told :: proc(app: ^App, path: string, bytes, length_ms: i64) {
 		body = record_notice_body(path, bytes, length_ms)
 	case Record_Failed:
 		title, body = "No recording", RECORD_ERROR_TEXT[s.error]
+		failed = true
 		fmt.eprintfln("cliche: %s", body)
 	}
-	if title != "" && app.settings.record_notify {
-		if id, ok := platform.notify(app.anchor, {title = title, body = body, silent = true, replace = app.notice}); ok { app.notice = id }
-	}
+	if title != "" && (app.settings.record_notify || failed) { app_announce(app, failed ? .Bad : .Good, title, body) }
 	app_record_step(app, Record_Reset{})
 }
 

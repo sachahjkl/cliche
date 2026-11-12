@@ -29,6 +29,8 @@ import instance "gt:instance"
 import shortcuts "gt:shortcuts"
 import "gt:platform"
 import "gt:render"
+import prefs_page "gt:prefs_page"
+import "gt:ui"
 
 // The tray menu's items. The first seven are Shortcut_Action's, in its order.
 Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit }
@@ -77,7 +79,7 @@ App :: struct {
 	uploaders:  Result_Uploaders,                          // the uploaders found, for the settings (owned)
 	token:      string,                                    // the activation token of the next window shown (owned)
 	backend:    capture.Backend,                           // the session's, once open
-	notice:     platform.Notification_Id,                  // the last notification: the next one replaces it
+	announcer:  ui.Announcer,                              // where cliche says what it did (general.messages): app_announce
 	shortcuts:  ^shortcuts.Service,                        // shortcuts.odin
 	shortcuts_bound: [Shortcut_Action]string,              // the keys the service was given last (owned)
 	tray_keys:  [Shortcut_Action]string,                   // the keys the tray's menu shows (owned): built again when they change
@@ -116,6 +118,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	history_start(app)
 	workflows_start(app)
 	app.server = instance.serve_start(owner, app_message, app)
+	app.announcer = {mode = prefs_page.messages_mode(&app.prefs), window = app.anchor}
 	app_tray_open(app)
 	app_shortcuts_start(app)
 	app_integrate(app, force = true)
@@ -482,6 +485,28 @@ app_saved :: proc(app: ^App, r: Result_Saved) {
 	editor_saved(app, r.path, r.error)
 }
 
+// What cliche did (copied, saved, recorded), said as the person chose (general.messages): a notification of the
+// system, else a toast of `window` (where it was asked: the editor; nil: the main window when it is shown). With no
+// window to show a toast in, the console only.
+app_announce :: proc(app: ^App, kind: ui.Toast_Kind, title: string, body := "", window: ^host.Host = nil) {
+	h := window
+	if h == nil && app.history_window.visible { h = &app.history_window.host }
+	if h == nil { h = app.shared.main }   // (hidden: a toast there waits for it; the system's notification is what is seen)
+	if h == nil {
+		// (no window at all yet, so no toast: the system's notification alone, and the console)
+		fmt.eprintfln("cliche: %s%s%s", title, body != "" ? ": " : "", body)
+		if app.announcer.mode == .Off && kind != .Bad { return }
+		if app.announcer.mode != .Window && !app.announcer.missing {
+			platform.notify_async(app.anchor, {title = title, body = body, silent = true, replace = app.announcer.last})
+		}
+		return
+	}
+	ui.use(&h.state)
+	defer if app.shared.main != nil { ui.use(&app.shared.main.state) }
+	ui.announce(&app.announcer, kind, title, body)
+	h.settle = max(h.settle, 3)
+}
+
 // A capture that failed: told to the user, then Idle. (A capture that worked is told by its workflow's run.)
 @(private = "file")
 app_outcome :: proc(app: ^App) {
@@ -493,7 +518,7 @@ app_outcome :: proc(app: ^App) {
 		}
 		body := FLOW_ERROR_TEXT[s.error]
 		fmt.eprintfln("cliche: %s", body)
-		if id, ok := platform.notify(app.anchor, {title = title, body = body, silent = true, replace = app.notice}); ok { app.notice = id }
+		app_announce(app, .Bad, title, body)
 	}
 	app_step(app, Flow_Reset{})
 }
@@ -649,6 +674,7 @@ app_prefs_changed :: proc(app: ^App) {
 	worker_send(&app.worker, Job_Write{path = strings.clone(prefs_file()), text = text})
 	settings_free(&app.settings)
 	app.settings = prefs_read(&app.prefs)
+	app.announcer.mode = prefs_page.messages_mode(&app.prefs)
 	app_shortcuts_follow_prefs(app)
 	app_integrate(app, force = false)
 	history_prefs_changed(app)

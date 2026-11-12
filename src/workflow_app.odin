@@ -247,9 +247,7 @@ workflow_run_end :: proc(app: ^App, run: ^Run) {
 	if !run.preview {
 		s := run_summary(run)
 		if s.failed { fmt.eprintfln("cliche: %s: %s", s.title, s.body) }
-		if s.notify || s.failed {
-			if id, ok := platform.notify(app.anchor, {title = s.title, body = s.body, silent = true, replace = app.notice}); ok { app.notice = id }
-		}
+		if s.notify || s.failed { app_announce(app, s.failed ? .Bad : .Good, s.title, s.body) }
 	}
 	workflow_view_run_ended(app, run)
 	for r, i in app.runs {
@@ -380,7 +378,7 @@ workflow_editor_closed :: proc(app: ^App) {
 workflow_no_workflow :: proc(app: ^App) {
 	body := FLOW_ERROR_TEXT[.No_Workflow]
 	fmt.eprintfln("cliche: %s", body)
-	if id, ok := platform.notify(app.anchor, {title = "Nothing ran", body = body, silent = true, replace = app.notice}); ok { app.notice = id }
+	app_announce(app, .Warn, "Nothing ran", body)
 }
 
 @(private = "file")
