@@ -41,6 +41,8 @@ Result_Desktop :: struct {
 	outputs:    []capture.Output,
 	windows:    []capture.Window,
 	have_rects: bool,
+	pointer_output: u64,   // the output the pointer is on (capture.pointer), when has_pointer_output
+	has_pointer_output: bool,
 }
 
 // A picture to act on (owned).

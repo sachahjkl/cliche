@@ -12,6 +12,8 @@ grab_desktop :: proc(s: ^capture.Session) -> Result_Desktop {
 	r.outputs = outputs_clone(capture.outputs(s))
 	r.windows = windows_clone(capture.windows(s))
 	r.have_rects = capture.windows_have_rects(s)
+	// (where the pointer is: the region's overlay opens on that screen)
+	if _, output, ok := capture.pointer(s); ok { r.pointer_output, r.has_pointer_output = output, true }
 	r.frame, r.error = capture.desktop(s)
 	return r
 }

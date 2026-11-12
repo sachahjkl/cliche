@@ -256,10 +256,9 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 			if ui.tags("weak") { ui.label(fmt.tprintf("%s###cmd", SHORTCUT_COMMANDS[a])) }
 			ui.spacer(ui.px(em * 0.6))
 			done := m.copied == SHORTCUT_COMMANDS[a]
-			ui.next({width = ui.px(em * 5.5), height = ui.px(math.round(em * 1.7)), radius = em * 0.35, font_size = math.round(em * 0.86)})
-			sig: ui.Signal
-			if ui.tags("ghost_button") { sig = ui.button(done ? "Copied###copy" : "Copy###copy") }
-			if sig.clicked {
+			// (one width for both words: the row does not move when it says Copied)
+			ui.next({font_size = math.round(em * 0.86)})
+			if ui.button_icon("###copy", done ? lucide.CHECK : lucide.COPY, done ? "Copied" : "Copy", width = ui.px(em * 6.5)).clicked {
 				platform.clipboard_set(app.history_window.host.win, {text = SHORTCUT_COMMANDS[a]})
 				m.copied = SHORTCUT_COMMANDS[a]
 			}

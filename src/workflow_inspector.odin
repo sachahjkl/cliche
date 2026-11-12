@@ -61,6 +61,7 @@ workflow_list_body :: proc(app: ^App, em: f32) {
 			ui.label("WORKFLOWS###wf_list_title")
 		}
 		if list_icon_button("new", lucide.PLUS, "New workflow", em, true) { workflow_new(app) }
+		if list_icon_button("rename", lucide.PENCIL, "Rename (or double-click its name)", em, m.shown != 0) { workflow_rename_start(app, m.shown) }
 		if list_icon_button("duplicate", lucide.COPY, "Duplicate", em, m.shown != 0) { workflow_duplicate(app, m.shown) }
 		if list_icon_button("delete", lucide.TRASH_2, "Delete…", em, m.shown != 0) {
 			m.delete_id = m.shown
@@ -123,6 +124,9 @@ workflow_list_item_body :: proc(app: ^App, wf: ^Workflow, em: f32) {
 		sig := ui.nav_item("###wf_name", wf.name, "", 0, shown, em)
 		if sig.clicked { workflow_show(app, wf.id) }
 		if sig.double_clicked { workflow_rename_start(app, wf.id) }
+		if ui.hovered_for(sig, 0.8) {
+			if ui.tooltip() { ui.tooltip_text("Double-click to rename") }
+		}
 	}
 	if ui.tags("weak") {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.4)), font_size = math.round(em * 0.8), text_pad = em * 0.6})

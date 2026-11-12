@@ -392,8 +392,9 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 		return
 	}
 	if d.error != .None {
+		error := flow_error_of(d.error)   // (read before desktop_free, which clears d)
 		desktop_free(&d)
-		app_step(app, Flow_Capture_Failed{flow_error_of(d.error)})
+		app_step(app, Flow_Capture_Failed{error})
 		if app.capture_record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
 		app_outcome(app)
 		return

@@ -50,17 +50,32 @@ Overlay :: struct {
 	has_hover: bool,
 	decision: Overlay_Decision,
 	chosen:   Rect,             // what Confirm takes
+	// a layer surface over one output (platform.open_overlay: no window animation, the keyboard at once), on `out`;
+	// false: a fullscreen window the compositor places (a desktop with no layer shell), whose output is guessed
+	layer:    bool,
 }
 
 // Opens (the first time) and shows the overlay over the desktop the worker read. False: no window could open.
 overlay_show :: proc(app: ^App) -> bool {
 	o := &app.overlay
 	if !app.has_desktop { return false }
+	out := overlay_pointer_output(app)
+	// (a layer surface stays on the output it was made for: another output, another surface; the renderer's own window
+	// stays, on its output)
+	if o.opened && o.layer && o.out != out && app.shared.main != &o.host {
+		app_wake_set(app, .Overlay, nil)
+		host.host_close(&o.host)
+		o.opened, o.visible = false, false
+	}
 	if !o.opened {
-		if !host.host_open(&o.host, &app.shared, {title = "cliche region", size = {1280, 720}}, overlay_build, app) {
+		area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}
+		layer := host.Open{title = "cliche region", size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area, overlay_keyboard = .Exclusive}
+		o.layer = out.w > 0 && host.host_open(&o.host, &app.shared, layer, overlay_build, app)
+		if !o.layer && !host.host_open(&o.host, &app.shared, {title = "cliche region", size = {1280, 720}}, overlay_build, app) {
 			fmt.eprintln("cliche: the region's window cannot open")
 			return false
 		}
+		if o.layer { o.out = out }
 		o.opened = true
 		o.host.input = overlay_input
 		o.host.after_input = 2
@@ -81,16 +96,16 @@ overlay_show :: proc(app: ^App) -> bool {
 	o.decision = .None
 	o.has_hover = false
 	o.has_pointer = false
-	o.out = overlay_output(app)
+	if !o.layer { o.out = overlay_output(app) }
 	selection_reset(&o.sel, o.out)
 	token := app_take_token(app)
 	defer delete(token)
-	platform.set_fullscreen(o.host.win, true)
+	if !o.layer { platform.set_fullscreen(o.host.win, true) }
 	if !o.visible {
 		host.host_show(&o.host)
 		o.visible = true
 	}
-	platform.raise_window_token(o.host.win, token)
+	if !o.layer { platform.raise_window_token(o.host.win, token) }   // (a layer surface has the keyboard from its showing)
 	o.host.settle = max(o.host.settle, 3)
 	return true
 }
@@ -113,6 +128,7 @@ overlay_destroy :: proc(app: ^App) {
 // Before the frame: the output the window covers now (its size is known once it is fullscreen).
 overlay_prepare :: proc(app: ^App) {
 	o := &app.overlay
+	if o.layer { return }   // (a layer surface is on the output it was made for)
 	out := overlay_output(app)
 	if out != o.out {
 		o.out = out
@@ -132,6 +148,17 @@ overlay_after_frame :: proc(app: ^App) {
 		o.decision = .None
 		app_region_cancelled(app)
 	}
+}
+
+// The output the pointer is on, as the capture session said; else the first. What a layer surface is made over.
+@(private = "file")
+overlay_pointer_output :: proc(app: ^App) -> Rect {
+	outs := app.desktop.outputs
+	if len(outs) == 0 { return {} }
+	if app.desktop.has_pointer_output {
+		for o in outs { if o.id == app.desktop.pointer_output { return o.rect } }
+	}
+	return outs[0].rect
 }
 
 // The output the window covers: from its size (logical) and the pointer, as output_for_window decides.

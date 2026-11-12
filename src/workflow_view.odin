@@ -425,9 +425,9 @@ workflow_graph_make :: proc(app: ^App, wf: ^Workflow, em: f32) {
 		for p, i in def.inputs { append(&m.ports, ui.Graph_Port{id = u32(i), name = p.name, kind = u8(p.kind), side = .In, multiple = p.multiple}) }
 		middle := len(m.ports)
 		for p, i in def.outputs { append(&m.ports, ui.Graph_Port{id = u32(i), name = p.name, kind = u8(p.kind), side = .Out}) }
-		subtitle := strings.clone(node_summary(&n))
+		// (owned: the nodes are kept from one frame to the next, the temporary allocator is not)
+		subtitle := strings.clone(n.kind == .Capture ? workflow_triggers_text(wf) : node_summary(&n))
 		append(&m.subtitles, subtitle)
-		if n.kind == .Capture { subtitle = workflow_triggers_text(wf) }
 		l := m.last[n.id]
 		c := GROUP_COLORS[def.group]
 		append(&m.nodes, ui.Graph_Node{
