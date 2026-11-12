@@ -6,7 +6,7 @@ package clichetool
 //                                shared; <out> is what is published
 //   site check [--site folder] [--shot file.png] [--browser program]
 //                                the pages in a real browser, served on this machine
-// {{version}} in the home page is the last version.
+// {{version}} in the home page is the last version: its download links name the files of that release.
 
 import "core:fmt"
 import tk_site "gt:site"
@@ -48,9 +48,16 @@ site_meta :: proc() -> tk_site.Meta {
 	return m
 }
 
+// The home page's download button, one per system the release workflow builds for (the reader's shown).
+@(rodata)
+SITE_DOWNLOADS := [?]tk_site.Download{
+	{os = "linux", label = "Linux", href = "https://github.com/sachahjkl/cliche/releases/download/v{{version}}/cliche-{{version}}-linux-x64.tar.gz", detail = "v{{version}} · x64 · .tar.gz · Wayland"},
+	{os = "windows", label = "Windows", href = "https://github.com/sachahjkl/cliche/releases/download/v{{version}}/cliche-{{version}}-windows-x64.zip", detail = "v{{version}} · Windows 10 / 11 · x64 · .zip"},
+}
+
 @(private = "file")
 site_changelog :: proc(site, out: string) -> bool {
-	return tk_site.build_changelog(site, out, {changes = CHANGELOG, version_mark = VERSION_MARK})
+	return tk_site.build_changelog(site, out, {changes = CHANGELOG, version_mark = VERSION_MARK, downloads = SITE_DOWNLOADS[:]})
 }
 
 run_site :: proc(args: []string) -> int {

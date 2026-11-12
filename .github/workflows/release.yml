@@ -1,0 +1,77 @@
+name: Release
+
+# A version tag vX.Y.Z (clichetool ship makes it) builds cliche and publishes it: the Linux and the Windows archives, each
+# with its SHA-256, on a GitHub release whose notes are the changelog's section of that version. The Linux job makes the
+# release as a draft; the Windows job adds its files and publishes it. The tag must be APP_VERSION's (clichetool package
+# checks).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    container: debian:bookworm
+    timeout-minutes: 40
+    steps:
+      # Debian 12 (bookworm): its glibc 2.36, the oldest a Linux build then needs. First: checkout needs git for the
+      # submodules.
+      - name: Debian's packages
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends git ca-certificates curl jq xz-utils zstd unzip clang lld binutils libfontconfig-dev libfreetype-dev gh >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      # (the container's root does not own the runner's checkout: git, and gh through it, refuse it otherwise)
+      - name: The checkout trusted
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: ./.github/actions/setup-odin-linux
+      - name: Build and test
+        run: |
+          odin build tools/clichetool -collection:gt=ext/gui_toolkit/src -out:build/clichetool -vet
+          build/clichetool check
+      - name: Package
+        run: build/clichetool package ${{ github.ref_name }}
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build/clichetool notes ${{ github.ref_name }} > build/notes.md
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" build/dist/* --clobber
+          else
+            gh release create "${{ github.ref_name }}" build/dist/* --draft --title "cliche ${GITHUB_REF_NAME#v}" --notes-file build/notes.md
+          fi
+
+  windows:
+    needs: release
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./ext/gui_toolkit/.github/actions/setup-odin
+      - name: Build, test, package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          odin build tools/clichetool -collection:gt=ext/gui_toolkit/src -out:build/clichetool.exe -vet
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          build/clichetool.exe check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          build/clichetool.exe package ${{ github.ref_name }}
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.ref_name }}" (Get-ChildItem build/dist/*).FullName --clobber
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # (public once both systems' files are there)
+          gh release edit "${{ github.ref_name }}" --draft=false --latest
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

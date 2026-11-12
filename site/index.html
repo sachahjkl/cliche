@@ -26,10 +26,10 @@
     <h1>cliche</h1>
     <p class="lead">Fast screenshots and screen recordings, shared at once.</p>
     <div class="actions">
-      <a class="btn accent" href="#download">Get cliche v{{version}}</a>
+      <!-- download -->
       <a class="btn" href="https://github.com/sachahjkl/cliche">Source on GitHub</a>
     </div>
-    <p class="small">With Nix: <code>nix run git+https://github.com/sachahjkl/cliche</code> &nbsp;·&nbsp; MIT</p>
+    <p class="small"><!-- download-others --> &nbsp;·&nbsp; With Nix: <code>nix run git+https://github.com/sachahjkl/cliche</code> &nbsp;·&nbsp; MIT</p>
   </section>
 
   <figure class="shot wide">
@@ -118,10 +118,20 @@
     <h2>Download</h2>
     <div class="cols">
       <div class="well">
+        <h3>Linux</h3>
+        <p>One program for Linux x64: unpack it and start it. Needs a Wayland desktop (KDE, GNOME, Hyprland, ShojiWM),
+          Vulkan and fontconfig; VA-API or OpenH264 to record a video, Tesseract to read text.</p>
+        <code><a href="https://github.com/sachahjkl/cliche/releases/download/v{{version}}/cliche-{{version}}-linux-x64.tar.gz">cliche-{{version}}-linux-x64.tar.gz</a></code>
+      </div>
+      <div class="well">
+        <h3>Windows</h3>
+        <p>One program for Windows 10 and 11, x64: unpack it and start it. It waits in the notification area.</p>
+        <code><a href="https://github.com/sachahjkl/cliche/releases/download/v{{version}}/cliche-{{version}}-windows-x64.zip">cliche-{{version}}-windows-x64.zip</a></code>
+      </div>
+      <div class="well">
         <h3>Nix</h3>
         <p>The flake builds cliche from source with everything it needs. Add <code>packages.x86_64-linux.default</code>
-          to your configuration, or install it. Needs a Wayland desktop (KDE, GNOME, Hyprland, ShojiWM) and
-          Vulkan; Tesseract to read text.</p>
+          to your configuration, or install it.</p>
         <code>nix profile add git+https://github.com/sachahjkl/cliche</code>
       </div>
       <div class="well">

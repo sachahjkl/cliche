@@ -28,6 +28,7 @@ COMMANDS :: [?]Command{
 	{name = "shots", about = "[folder]: the settings' pages, the editor, the history and the workflows drawn offscreen, as PNG files (default build/shots)", run = run_shots},
 	{name = "changelog", about = "new <type> <text> | check | preview: the fragments of changelog.d/", run = run_changelog},
 	{name = "site", about = "build <site> <out> | check [--site folder] [--shot file.png] [--browser program]: the site's pages", run = run_site},
+	{name = "package", about = "[version]: build/dist: the archive of a release build and its SHA-256", run = run_package},
 	{name = "notes", about = "<version>: the changelog's section of that version", run = run_notes},
 	{name = "ship", about = "<version> [--dry-run]: from a clean master, the fragments into the changelog, APP_VERSION, a commit, the tag, the push", run = run_ship},
 }
