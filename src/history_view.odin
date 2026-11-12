@@ -40,6 +40,10 @@ HISTORY_THUMBS_IN_FLIGHT :: 6
 HISTORY_THUMB_KEEP_FRAMES :: 30
 // The side of a thumbnail's cell per step of history.thumbnail_size, in ems.
 HISTORY_CELL_EM := [3]f32{7, 10, 14}
+// A row of the list per step of history.thumbnail_size, in ems: its thumbnail as high, less a margin.
+HISTORY_ROW_EM := [3]f32{2.6, 3.6, 5}
+// A list's thumbnail is this much wider than high (most screens' shape).
+HISTORY_ROW_THUMB_ASPECT :: 1.6
 // The preview's pane, in ems.
 HISTORY_PREVIEW_EM     :: 26   // the preview pane's width at first, in ems (history.preview_width)
 HISTORY_PREVIEW_MIN_EM :: 14
@@ -273,7 +277,6 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw.table.vl.multi = true
 	hw.table.lead = history_table_lead
 	hw.table.lead_user = app
-	hw.table.lead_em = 2.2
 	hw.grid.sel = -1
 	hw.grid.no_typeahead = true
 	hw.table.vl.no_typeahead = true
@@ -538,7 +541,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 			hw.shown_due = true
 		}
 		ui.spacer(ui.px(em * 0.8))
-		if app.settings.history_view == .Grid {
+		{
 			sizes := [3]string{"S", "M", "L"}
 			tips := [3]string{"Small thumbnails", "Medium thumbnails", "Large thumbnails"}
 			step := app.settings.history_thumbnail
@@ -580,13 +583,13 @@ history_main :: proc(app: ^App, em: f32) {
 		keys := shortcut_keys(app, .Region)
 		note := keys != "" ? fmt.tprintf("Press %s, or click cliche's icon in the notification area: each capture comes here.", keys) : "Click cliche's icon in the notification area, or run cliche --region: each capture comes here."
 		if !hw.loaded { note = "Reading the history…" }
-		if ui.empty_state("empty", {icon = lucide.HISTORY, title = "No capture yet", note = note, actions = {"Capture a region"}}) == 0 {
+		if ui.empty_state("empty", {icon = lucide.HISTORY, title = "No capture yet", note = note, actions = {{text = "Capture a region", icon = lucide.SCISSORS, intent = .Primary}}}) == 0 {
 			history_action(app, .Capture_Region)
 		}
 		return
 	}
 	if len(hw.shown_ids) == 0 {
-		if ui.empty_state("nothing", {icon = lucide.SEARCH, title = "Nothing matches", note = "No capture has these words, or is of this kind.", actions = {"Clear the search"}}) == 0 {
+		if ui.empty_state("nothing", {icon = lucide.SEARCH, title = "Nothing matches", note = "No capture has these words, or is of this kind.", actions = {{text = "Clear the search", icon = lucide.X}}}) == 0 {
 			ui.field_set(&hw.search, "")
 			hw.filter = .All
 			hw.shown_due = true
@@ -787,6 +790,9 @@ history_textures_drop :: proc(app: ^App) {
 history_list :: proc(app: ^App, em: f32) {
 	hw := &app.history_window
 	t := &hw.table
+	// (the thumbnails' size of the grid is the list's too: rows as high, the lead as wide as a thumbnail)
+	t.row_em = HISTORY_ROW_EM[clamp(app.settings.history_thumbnail, 0, 2)]
+	t.lead_em = (t.row_em - 0.5) * HISTORY_ROW_THUMB_ASPECT + 0.4
 	if hw.table_due {
 		hw.table_due = false
 		ui.table_data_reset(&hw.table_data, len(History_Column))
@@ -853,6 +859,16 @@ history_table_lead :: proc(t: ^ui.Table, row: int, size: f32) {
 	hw := &app.history_window
 	if row < 0 || row >= len(hw.shown) { return }
 	e := hw.history.entries[hw.shown[row]]
+	box := [2]f32{math.round(size * HISTORY_ROW_THUMB_ASPECT), math.round(size)}
+	if e.kind != .Qr && e.kind != .Text {
+		if th := history_thumb(app, e); th != nil && th.state == .Ready {
+			d := ui.frame_new(History_Thumb_Draw)
+			d^ = {tex = th.tex, size = {f32(th.size.x), f32(th.size.y)}, radius = size * 0.08, dim = e.missing}
+			ui.next({width = ui.px(box.x), height = ui.px(box.y)})
+			ui.custom("###thumb", history_thumb_draw, d)
+			return
+		}
+	}
 	glyph := lucide.IMAGE
 	switch e.kind {
 	case .Region, .Screen, .Window: glyph = lucide.IMAGE
@@ -860,9 +876,10 @@ history_table_lead :: proc(t: ^ui.Table, row: int, size: f32) {
 	case .Qr:                       glyph = lucide.QR_CODE
 	case .Text:                     glyph = lucide.FILE_TEXT
 	}
-	fg: Maybe(ui.Color)
-	if e.missing { fg = ui.color("weak text") }
-	ui.icon(glyph, size, fg)
+	if e.missing { glyph = lucide.FILE }
+	// (no thumbnail, or not yet: the kind's icon where it will be, so the text does not move when it comes)
+	ui.next({width = ui.px(box.x), height = ui.px(box.y), font = hw.icons, font_size = math.round(min(size * 0.6, ui.font_size() * 1.5)), text_align = .Center, fg = e.missing ? ui.color("weak text") : nil})
+	ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###thumb", glyph))
 }
 
 ////////////////////////////////

@@ -366,7 +366,7 @@ workflow_graph :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
 	wf := workflows_find(&app.workflows, m.shown)
 	if wf == nil {
-		switch ui.empty_state("no_workflow", {icon = lucide.GIT_FORK, title = "No workflow", note = "A workflow says what happens after a capture: the steps the picture goes through, and where it goes.", actions = {"New workflow", "The default workflows"}}) {
+		switch ui.empty_state("no_workflow", {icon = lucide.GIT_FORK, title = "No workflow", note = "A workflow says what happens after a capture: the steps the picture goes through, and where it goes.", actions = {{text = "New workflow", icon = lucide.PLUS, intent = .Primary}, {text = "The default workflows", icon = lucide.ROTATE_CCW}}}) {
 		case 0: workflow_new(app)
 		case 1: workflow_defaults_back(app)
 		}
