@@ -439,7 +439,7 @@ app_chain :: proc(app: ^App, shot: Shot) {
 		worker_send(&app.worker, Job_Ocr{shot, strings.clone(app.settings.ocr_languages)})
 		return
 	case .Edit:
-		editor_open_shot(app, shot, shot.scale > 0 ? shot.scale : 1)   // (the editor owns the shot; its Done runs this chain with the edited picture)
+		app_hand_to_editor(app, shot)
 		return
 	case .Record:
 		// (a recording's region goes to the recorder from the overlay: no shot comes here)
@@ -448,32 +448,78 @@ app_chain :: proc(app: ^App, shot: Shot) {
 		return
 	case .Picture:
 		if app.settings.edit_after {
-			editor_open_shot(app, shot, shot.scale > 0 ? shot.scale : 1)
+			app_hand_to_editor(app, shot)
 			return
 		}
 	}
 	app_chain_run(app, shot)
 }
 
-// The chain itself: copy here, save and upload on the worker (the editor's Done comes here with its picture).
-app_chain_run :: proc(app: ^App, shot: Shot) {
+// The picture goes to the editor, which owns it from now on: the capture is over (Flow_Handed), and another may start
+// while the editor is open. Its Done runs the chain on its own (app_chain_run, edited).
+@(private = "file")
+app_hand_to_editor :: proc(app: ^App, shot: Shot) {
+	// (the editor's picture has changes: they are not dropped for this one, which goes through the chain at once)
+	if app.editor.visible && app.editor.has_picture && edit_changed(&app.editor.model) {
+		app_chain_run(app, shot)
+		return
+	}
+	if editor_open_shot(app, shot, shot.scale > 0 ? shot.scale : 1) {
+		app_step(app, Flow_Handed{})
+	} else {
+		app_step(app, Flow_Save_Failed{.Failed})
+		app_outcome(app, "")
+	}
+}
+
+// The chain itself: copy here, save and upload on the worker. `edited`: the editor's Done, whose picture is told on
+// its own (app_edited_saved), outside the capture's flow.
+app_chain_run :: proc(app: ^App, shot: Shot, edited := false) {
 	actions := app.settings.actions & AFTER_CAPTURE_DONE
+	copied := false
 	if .Copy in actions {
 		// (gt:platform encodes the clipboard's PNG on this thread, at its fast level: it takes no encoded file)
-		app.copied = platform.clipboard_set_image(app.anchor, {rgba = shot.rgba, size = shot.size})
-		if !app.copied { fmt.eprintln("cliche: the picture cannot go to the clipboard") }
+		copied = platform.clipboard_set_image(app.anchor, {rgba = shot.rgba, size = shot.size})
+		if !copied { fmt.eprintln("cliche: the picture cannot go to the clipboard") }
 	}
+	if !edited { app.copied = copied }
 	worker_send(&app.worker, Job_Save{
 		shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern),
 		save = .Save in actions, fast = app.settings.fast_png, reveal = app.settings.reveal,
 		upload = .Upload in actions, uploader = strings.clone(app.settings.uploader),
+		edited = edited, copied = copied,
 	})
+}
+
+// What the editor's Done gave: the address on the clipboard, the history, a notification. Not the flow's: it may be at
+// another capture now.
+@(private = "file")
+app_edited_saved :: proc(app: ^App, r: Result_Saved) {
+	copied := r.copied
+	if r.url != "" { copied = platform.clipboard_set(app.anchor, {text = r.url}) }
+	if r.error == .None && (r.path != "" || r.url != "") {
+		app.notice_entry = history_note(app, {kind = history_kind_of(r.source), path = r.path, url = r.url, size = r.size, bytes = r.bytes})
+	}
+	title, body: string
+	switch {
+	case r.error != .None:      title, body = "No screenshot", r.upload_problem != "" ? r.upload_problem : FLOW_ERROR_TEXT[r.error]
+	case r.url != "":           title, body = r.path != "" ? "Screenshot saved and uploaded" : "Screenshot uploaded", r.url
+	case r.upload_problem != "": title, body = "Screenshot saved, not uploaded", r.upload_problem
+	case r.path != "" && copied: title, body = "Screenshot saved and copied", r.path
+	case r.path != "":          title, body = "Screenshot saved", r.path
+	case copied:                title, body = "Screenshot copied to the clipboard", ""
+	}
+	if r.error != .None { fmt.eprintfln("cliche: %s", body) }
+	if title != "" && app.settings.notify {
+		if id, ok := platform.notify(app.anchor, {title = title, body = body, silent = true, replace = app.notice}); ok { app.notice = id }
+	}
 }
 
 @(private = "file")
 app_saved :: proc(app: ^App, r: Result_Saved) {
 	defer { delete(r.path); delete(r.url); delete(r.upload_problem) }
 	if r.from_editor { editor_saved(app, r.path, r.error); return }   // (the editor's Ctrl+S: the capture goes on)
+	if r.edited { app_edited_saved(app, r); return }
 	if _, encoding := app.flow.(Flow_Encoding); !encoding { return }
 	// (an upload's address takes the picture's place on the clipboard, as ShareX does)
 	if r.url != "" { app.copied = platform.clipboard_set(app.anchor, {text = r.url}) }

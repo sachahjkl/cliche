@@ -49,12 +49,14 @@ busy_flow_refuses_a_trigger :: proc(t: ^testing.T) {
 	}
 }
 
-// The editor closed without Done: the capture is given up, the next one can start.
+// The picture went to the editor: the capture is over, the next one can start while the editor is open.
 @(test)
-editor_closed_returns_to_idle :: proc(t: ^testing.T) {
+a_picture_handed_to_the_editor_frees_the_flow :: proc(t: ^testing.T) {
 	f: Flow = Flow_Encoding{.Region}
-	f = step(t, f, Flow_Cancelled{}, Flow_Idle{})
+	f = step(t, f, Flow_Handed{}, Flow_Idle{})
 	f = step(t, f, Flow_Trigger{.Screen}, Flow_Capturing{.Screen})
+	_, ok := flow_step(Flow_Encoding{.Region}, Flow_Cancelled{})
+	testing.expect(t, !ok)   // (an editor closed later cancels nothing)
 }
 
 @(test)

@@ -20,6 +20,9 @@ Saved :: struct {
 	url:            string,
 	upload_problem: string,   // owned: why the upload failed ("" none)
 	from_editor:    bool,     // the editor's Ctrl+S: told to the editor, not to the capture's flow
+	edited:         bool,     // the editor's Done: told on its own, not to the capture's flow (which is over)
+	copied:         bool,     // the picture went to the clipboard before the job (an edited picture's chain says it)
+	source:         Source,
 	size:           [2]int,   // the picture's, in pixels (the history keeps it)
 	bytes:          i64,      // the PNG's
 	error:          Flow_Error,
@@ -29,12 +32,13 @@ Saved :: struct {
 // asks (a failed upload keeps the file: the flow does not fail for it).
 save_shot :: proc(j: ^Job_Save) -> (out: Saved) {
 	defer job_free_save(j)
+	out.from_editor, out.edited, out.copied, out.source = j.from_editor, j.edited, j.copied, j.shot.source
+	out.size = j.shot.size
 	if !j.save && !j.upload { return }
 	file := png.encode(j.shot.rgba, j.shot.size.x, j.shot.size.y, j.fast ? .Fast : .Small)
 	defer delete(file)
 	if file == nil { out.error = .Empty; return }
 	out.size, out.bytes = j.shot.size, i64(len(file))
-	out.from_editor = j.from_editor
 	name := name_expand(j.pattern, stamp_now(), j.shot.source, context.temp_allocator)
 	if j.save {
 		out.path, out.error = save_file(file, j.folder, name, j.reveal)

@@ -283,9 +283,7 @@ editor_after_frame :: proc(app: ^App) {
 	if ed.exporting { editor_export_poll(app) }
 	if ed.close_due {
 		ed.close_due = false
-		editor_close(app)
-		// (a capture waiting on the editor is given up: nothing is copied, saved or told)
-		app_step(app, Flow_Cancelled{})
+		editor_close(app)   // (the picture goes: nothing is copied, saved or told; the capture's flow was over already)
 	}
 }
 
@@ -630,7 +628,7 @@ editor_export_start :: proc(app: ^App, purpose: Edit_Export_Purpose) {
 		ed.shot, ed.has_picture = {}, false
 		edit_model_destroy(&ed.model)
 		editor_close(app)
-		app_chain_run(app, shot)
+		app_chain_run(app, shot, edited = true)
 		return
 	}
 	edit_export_begin(&ed.export, purpose, &m.doc)
@@ -664,7 +662,7 @@ editor_export_poll :: proc(app: ^App) {
 	switch purpose {
 	case .Done:
 		editor_close(app)
-		app_chain_run(app, shot)
+		app_chain_run(app, shot, edited = true)
 	case .Copy:
 		// (the clipboard is the anchor's, as the chain's copy is: it outlives this window)
 		ok := platform.clipboard_set_image(app.anchor, {rgba = shot.rgba, size = shot.size})

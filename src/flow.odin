@@ -63,13 +63,15 @@ Flow_Trigger        :: struct { source: Source }   // a command, a hotkey, the t
 Flow_Captured       :: struct {}                   // the worker has the picture
 Flow_Capture_Failed :: struct { error: Flow_Error }
 Flow_Confirmed      :: struct {}                   // the user took a rectangle
-Flow_Cancelled      :: struct {}                   // Escape, a close
+Flow_Cancelled      :: struct {}
+Flow_Handed         :: struct {}                                      // the picture went to the editor: the capture is over                   // Escape, a close
 Flow_Saved          :: struct {}                   // every action of the chain ran
 Flow_Save_Failed    :: struct { error: Flow_Error }
 Flow_Reset          :: struct {}                   // the outcome was told: ready for the next
 
 Flow_Event :: union {
-	Flow_Trigger, Flow_Captured, Flow_Capture_Failed, Flow_Confirmed, Flow_Cancelled, Flow_Saved, Flow_Save_Failed, Flow_Reset,
+	Flow_Trigger, Flow_Captured, Flow_Capture_Failed, Flow_Confirmed, Flow_Cancelled, Flow_Handed, Flow_Saved, Flow_Save_Failed,
+	Flow_Reset,
 }
 
 // The state after `e` in `f`. ok false: `e` means nothing in `f` (a trigger while busy, a late result), and `f` stays.
@@ -99,7 +101,9 @@ flow_step :: proc(f: Flow, e: Flow_Event) -> (next: Flow, ok: bool) {
 	case Flow_Encoding:
 		#partial switch v in e {
 		case Flow_Saved:       return Flow_Done{s.source}, true
-		case Flow_Cancelled:   return Flow_Idle{}, true   // (the editor closed without Done: the picture goes)
+		// (the editor holds the picture now, as a document of its own: its Done saves it outside this flow, and the next
+		// capture may start while it is open)
+		case Flow_Handed:      return Flow_Idle{}, true
 		case Flow_Save_Failed: return Flow_Failed{s.source, v.error}, true
 		}
 	}

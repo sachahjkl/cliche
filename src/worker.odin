@@ -16,7 +16,7 @@ import "gt:platform"
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
 Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
-Job_Save      :: struct { shot: Shot, folder, pattern, uploader: string, save, fast, reveal, upload, from_editor: bool }   // owned by the job
+Job_Save      :: struct { shot: Shot, folder, pattern, uploader: string, save, fast, reveal, upload, from_editor, edited, copied: bool }   // owned by the job
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences); owned
 Job_Qr        :: struct { shot: Shot }                        // the QR code in the picture, read; owned
 Job_Ocr       :: struct { shot: Shot, languages: string }   // the text in the picture, read; owned ("": the user's languages)
