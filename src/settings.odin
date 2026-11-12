@@ -95,7 +95,7 @@ Settings :: struct {
 }
 
 prefs_file :: proc(allocator := context.temp_allocator) -> string {
-	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/prefs"}, allocator)
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/prefs"}, allocator)
 }
 
 // The registry with the user's file and `args`' --pref read in. Returns the arguments that are not preferences.

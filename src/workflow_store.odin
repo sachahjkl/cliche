@@ -23,7 +23,7 @@ import "gt:platform"
 WORKFLOWS_FILE_VERSION :: 1
 
 workflows_file :: proc(allocator := context.temp_allocator) -> string {
-	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/workflows.json"}, allocator)
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/workflows.json"}, allocator)
 }
 
 // The workflows of the file, or the defaults (on the worker: it reads the disk). problem: why the file was not used

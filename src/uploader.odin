@@ -402,7 +402,7 @@ UPLOADER_EXTENSION :: ".sxcu"
 
 // <config dir>/cliche/uploaders.
 uploaders_folder :: proc(allocator := context.temp_allocator) -> string {
-	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/uploaders"}, allocator)
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/uploaders"}, allocator)
 }
 
 // The built-in uploader, then those of the folder, sorted by file name. problems: one line per file that cannot be used
