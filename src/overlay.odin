@@ -10,7 +10,8 @@ package cliche
 //
 // What the user does:
 //   drag                 a rectangle; it stays, the keys adjust it (region.confirm_on_release: taken at the release)
-//   click                the window framed under the pointer (when the system says where windows are); inside a rectangle
+//   click                the window framed under the pointer (region.frame_windows, when the system says where windows
+//                        are); inside a rectangle
 //                        already chosen: that rectangle
 //   Enter, Space         the rectangle chosen, else the whole output
 //   arrows / Shift       move the rectangle a pixel (ten with Ctrl) / grow or shrink it from its bottom-right corner
@@ -30,7 +31,6 @@ MAGNIFIER_SIDE_PX :: 15    // logical pixels of the picture the magnifier shows,
 MAGNIFIER_ZOOM    :: 8     // how much it enlarges them
 MAGNIFIER_GAP_PX  :: 24    // between the pointer and the magnifier
 NUDGE_FAST        :: 10    // pixels a step with Ctrl
-DIM_ALPHA         :: 0.45  // how dark the picture is outside what is chosen
 OUTLINE_PX        :: 1     // the outline of what is chosen, in the window's pixels (scaled)
 
 Overlay_Decision :: enum u8 { None, Confirm, Cancel }
@@ -185,7 +185,7 @@ overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Eve
 			p := overlay_point(o, e.pos)
 			switch selection_release(&o.sel, p) {
 			case .Click:
-				if r, ok := frame_pick(app.desktop.windows, p, o.out, app.desktop.have_rects); ok { overlay_confirm(o, r) }
+				if r, ok := frame_pick(app.desktop.windows, p, o.out, app.desktop.have_rects && app.settings.frame_windows); ok { overlay_confirm(o, r) }
 			case .Rect:
 				if app.settings.confirm_on_release { overlay_confirm(o, o.sel.rect) }
 			case .None:
@@ -197,7 +197,7 @@ overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Eve
 	// (the window framed under the pointer, while no rectangle is chosen or dragged)
 	o.has_hover = false
 	if o.has_pointer && !o.sel.dragging && !o.sel.has_rect {
-		o.hover, o.has_hover = frame_pick(app.desktop.windows, o.pointer, o.out, app.desktop.have_rects)
+		o.hover, o.has_hover = frame_pick(app.desktop.windows, o.pointer, o.out, app.desktop.have_rects && app.settings.frame_windows)
 	}
 	return nil   // (the overlay's interface is its picture: nothing goes to widgets)
 }
@@ -243,6 +243,7 @@ Overlay_Draw :: struct {
 	frame:      Frame_Place,
 	out:        Rect,
 	win_scale:  f32,
+	dim:        f32,       // how dark the picture is outside what is chosen (region.dim)
 	lit:        Rect,      // what is chosen or framed (empty: none)
 	has_lit:    bool,
 	pointer:    Point,
@@ -261,7 +262,7 @@ overlay_build :: proc(h: ^host.Host, size: ui.Vec2) {
 	app := (^App)(h.user)
 	o := &app.overlay
 	d := ui.frame_new(Overlay_Draw)
-	d^ = {tex = o.tex, frame = {app.desktop.frame.origin, app.desktop.frame.scale}, out = o.out, win_scale = overlay_scale(o),
+	d^ = {tex = o.tex, frame = {app.desktop.frame.origin, app.desktop.frame.scale}, out = o.out, win_scale = overlay_scale(o), dim = app.settings.dim,
 		pointer = o.pointer, magnifier = app.settings.magnifier && o.has_pointer, font = app.shared.font, font_size = ui.font_size()}
 	switch {
 	case o.sel.has_rect:  d.lit, d.has_lit = o.sel.rect, true
@@ -297,7 +298,7 @@ overlay_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	if d.tex == 0 { return }
 	win := to_window(d, d.out)
 	draw.image(dc, d.tex, win, to_picture(d, d.out))
-	dim := draw.Color{0, 0, 0, DIM_ALPHA}
+	dim := draw.Color{0, 0, 0, d.dim}
 	if !d.has_lit {
 		draw.rect(dc, win, dim)
 	} else {

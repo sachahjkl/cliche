@@ -19,11 +19,12 @@ import capture "gt:capture"
 import config "gt:config"
 import "gt:host"
 import instance "gt:instance"
+import shortcuts "gt:shortcuts"
 import "gt:platform"
 import "gt:render"
 
 // The tray menu's items.
-Tray_Item :: enum { None, Region, Screen, Window, Qr, Settings, Quit }
+Tray_Item :: enum { None, Region, Screen, Window, Qr, Ocr, Record, Record_Gif, Settings, Quit }
 
 // A command another start handed over (token owned).
 Inbox_Item :: struct { verb: Verb, token: string }
@@ -50,10 +51,17 @@ App :: struct {
 	has_desktop: bool,
 	copied:     bool,                                      // the shot of this capture went to the clipboard
 	purpose:    Purpose,                                   // what this capture is for (actions.odin)
+	upload:     struct { url, problem: string },           // what the upload of this capture gave, while app_outcome tells it (not owned)
+	record:     Record_Flow,                               // the recording's state (record.odin)
+	recorder:   Recorder,                                  // its thread, while one runs
+	uploaders:  Result_Uploaders,                          // the uploaders found, for the settings (owned)
 	token:      string,                                    // the activation token of the next window shown (owned)
 	backend:    capture.Backend,                           // the session's, once open
 	notice:     platform.Notification_Id,                  // the last notification: the next one replaces it
-	hotkeys:    Hotkeys,                                   // hotkeys_*.odin
+	shortcuts:  ^shortcuts.Service,                        // shortcuts.odin
+	shortcuts_bound: [Shortcut_Action]string,              // the keys the service was given last (owned)
+	default_folder: string,                                // where screenshots go when save.folder is empty (the worker's, owned)
+	integrated: [2]bool,                                   // general.menu and general.autostart as applied last
 	quit:       bool,
 }
 
@@ -64,6 +72,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	prefs^ = {}
 	app.settings = prefs_read(&app.prefs)
 	app.flow = Flow_Idle{}
+	app.record = Record_Idle{}
 
 	platform.set_app_id(APP_NAME)
 	platform.notify_set_app({name = "cliche"})
@@ -84,7 +93,8 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	worker_send(&app.worker, Job_Open{})
 	app.server = instance.serve_start(owner, app_message, app)
 	app_tray_open(app)
-	app_hotkeys(app)
+	app_shortcuts_start(app)
+	app_integrate(app, force = true)
 	app_command(app, first.verb, first.token)
 
 	for !app.quit {
@@ -93,10 +103,14 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 		app_inbox(app)
 		app_tray(app)
 		app_results(app)
+		app_shortcuts_take(app)
+		app_record_messages(app)
 		app_frames(app)
 	}
 
 	instance.serve_stop(app.server)
+	app_shortcuts_stop(app)
+	recorder_join(&app.recorder)   // (a recording running is stopped, its file closed)
 	worker_stop(&app.worker)   // (before the desktop goes: a cut may be reading it)
 	if app.has_desktop { desktop_free(&app.desktop) }
 	app_windows_close(app)
@@ -110,7 +124,9 @@ app_free :: proc(app: ^App) {
 	for item in app.inbox { delete(item.token) }
 	delete(app.inbox)
 	delete(app.token)
-	hotkeys_free(&app.hotkeys)
+	for k in app.shortcuts_bound { delete(k) }
+	uploaders_result_free(&app.uploaders)
+	delete(app.default_folder)
 	settings_free(&app.settings)
 	config.prefs_destroy(&app.prefs)
 }
@@ -197,6 +213,9 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Screen:   app_trigger(app, .Screen)
 	case .Window:   app_trigger(app, .Window)
 	case .Qr:       app_trigger(app, .Region, .Qr)
+	case .Ocr:      app_trigger(app, .Region, .Text)
+	case .Record:     app_record_trigger(app, .Mp4)
+	case .Record_Gif: app_record_trigger(app, .Gif)
 	case .Settings: settings_window_show(app)
 	case .Quit:     app.quit = true
 	}
@@ -216,13 +235,17 @@ app_step :: proc(app: ^App, e: Flow_Event) -> bool {
 	return ok
 }
 
-app_trigger :: proc(app: ^App, source: Source, purpose := Purpose.Picture) {
-	if !app_step(app, Flow_Trigger{source}) { return }   // (one capture at a time)
+// A capture starts. False: one is already being taken (one at a time).
+app_trigger :: proc(app: ^App, source: Source, purpose := Purpose.Picture) -> bool {
+	if !app_step(app, Flow_Trigger{source}) { return false }
 	app.copied = false
 	app.purpose = purpose
 	// (the renderer's device made while the desktop is read: the overlay's first show does not wait for the driver)
 	if source == .Region && app.shared.main == nil && render.device_preload_state() == .Not_Started { render.preload_device() }
-	worker_send(&app.worker, Job_Grab{source})
+	// (a region's picture is frozen while it is chosen: no delay; a screen or a window waits, for a menu to open)
+	delay := source == .Region ? 0 : app.settings.delay_s * 1000
+	worker_send(&app.worker, Job_Grab{source, delay})
+	return true
 }
 
 // The worker's results, in order.
@@ -232,7 +255,17 @@ app_results :: proc(app: ^App) {
 		switch v in r {
 		case Result_Opened:
 			app.backend = v.backend
+			delete(app.default_folder)
+			app.default_folder = v.default_folder
 			if v.error != .None { fmt.eprintfln("cliche: no capture here: %s", FLOW_ERROR_TEXT[flow_error_of(v.error)]) }
+		case Result_Folder:
+			if v.path != "" && config.set_from_string(&app.prefs, "save.folder", v.path, .User) == .None { app_prefs_changed(app) }
+			delete(v.path)
+		case Result_Uploaders:
+			app_uploaders(app, v)
+		case Result_Integrated:
+			if v.problem != "" { fmt.eprintfln("cliche: %s", v.problem) }
+			delete(v.problem)
 		case Result_Desktop:
 			app_desktop(app, v)
 		case Result_Shot:
@@ -258,6 +291,7 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 	if d.error != .None {
 		desktop_free(&d)
 		app_step(app, Flow_Capture_Failed{flow_error_of(d.error)})
+		if app.purpose == .Record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
 		app_outcome(app, "")
 		return
 	}
@@ -266,6 +300,7 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 	if !overlay_show(app) {
 		app_desktop_drop(app)
 		app_step(app, Flow_Capture_Failed{.Failed})
+		if app.purpose == .Record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
 		app_outcome(app, "")
 	}
 }
@@ -277,6 +312,11 @@ app_desktop_drop :: proc(app: ^App) {
 
 // What the overlay decided, after its frame.
 app_region_confirmed :: proc(app: ^App, r: Rect) {
+	if app.purpose == .Record {
+		overlay_hide(app)
+		app_record_chosen(app, r)
+		return
+	}
 	if !app_step(app, Flow_Confirmed{}) { return }
 	overlay_hide(app)
 	// (the desktop stays until the cut comes back: the worker reads it)
@@ -287,6 +327,7 @@ app_region_cancelled :: proc(app: ^App) {
 	app_step(app, Flow_Cancelled{})
 	overlay_hide(app)
 	app_desktop_drop(app)
+	if app.purpose == .Record { app_record_abandoned(app, failed = false) }
 }
 
 @(private = "file")
@@ -318,9 +359,19 @@ app_shot :: proc(app: ^App, r: Result_Shot) {
 // The action chain: the clipboard here (it is the window's thread's), the file on the worker. The shot goes with the job.
 @(private = "file")
 app_chain :: proc(app: ^App, shot: Shot) {
-	if app.purpose == .Qr {
+	switch app.purpose {
+	case .Qr:
 		worker_send(&app.worker, Job_Qr{shot})
 		return
+	case .Text:
+		worker_send(&app.worker, Job_Ocr{shot, strings.clone(app.settings.ocr_languages)})
+		return
+	case .Record:
+		// (a recording's region goes to the recorder from the overlay: no shot comes here)
+		shot := shot
+		shot_free(&shot)
+		return
+	case .Picture:
 	}
 	actions := app.settings.actions & AFTER_CAPTURE_DONE
 	if .Copy in actions {
@@ -330,14 +381,19 @@ app_chain :: proc(app: ^App, shot: Shot) {
 	}
 	worker_send(&app.worker, Job_Save{
 		shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern),
-		save = .Save in actions,
+		save = .Save in actions, fast = app.settings.fast_png, reveal = app.settings.reveal,
+		upload = .Upload in actions, uploader = strings.clone(app.settings.uploader),
 	})
 }
 
 @(private = "file")
 app_saved :: proc(app: ^App, r: Result_Saved) {
-	defer delete(r.path)
+	defer { delete(r.path); delete(r.url); delete(r.upload_problem) }
 	if _, encoding := app.flow.(Flow_Encoding); !encoding { return }
+	// (an upload's address takes the picture's place on the clipboard, as ShareX does)
+	if r.url != "" { app.copied = platform.clipboard_set(app.anchor, {text = r.url}) }
+	app.upload = {url = r.url, problem = r.upload_problem}
+	defer app.upload = {}
 	if r.error != .None { app_step(app, Flow_Save_Failed{r.error}) } else { app_step(app, Flow_Saved{}) }
 	app_outcome(app, r.path)
 }
@@ -366,14 +422,19 @@ app_outcome :: proc(app: ^App, detail: string) {
 	#partial switch s in app.flow {
 	case Flow_Done:
 		switch {
-		case app.purpose == .Qr && app.copied: title, body = "QR code copied", notice_text(detail)
-		case app.purpose == .Qr:               title, body = "QR code read", notice_text(detail)
+		case app.purpose == .Qr && app.copied:   title, body = "QR code copied", notice_text(detail)
+		case app.purpose == .Qr:                 title, body = "QR code read", notice_text(detail)
+		case app.purpose == .Text && app.copied: title, body = "Text copied", notice_text(detail)
+		case app.purpose == .Text:               title, body = "Text read", notice_text(detail)
+		case app.upload.url != "":     title, body = path != "" ? "Screenshot saved and uploaded" : "Screenshot uploaded", app.upload.url
+		case app.upload.problem != "": title, body = "Screenshot saved, not uploaded", app.upload.problem
 		case path != "" && app.copied: title, body = "Screenshot saved and copied", path
 		case path != "":               title, body = "Screenshot saved", path
 		case app.copied:               title, body = "Screenshot copied to the clipboard", ""
 		}
 	case Flow_Failed:
-		title, body = app.purpose == .Qr ? "No QR code" : "No screenshot", FLOW_ERROR_TEXT[s.error]
+		title = app.purpose == .Qr ? "No QR code" : app.purpose == .Text ? "No text" : "No screenshot"
+		body = app.upload.problem != "" ? app.upload.problem : FLOW_ERROR_TEXT[s.error]
 		fmt.eprintfln("cliche: %s", body)
 	}
 	if title != "" && app.settings.notify {
@@ -382,13 +443,10 @@ app_outcome :: proc(app: ^App, detail: string) {
 	app_step(app, Flow_Reset{})
 }
 
-// The anchor's events: the hotkeys (Windows).
+// The anchor's events: the shortcuts' presses (Windows: a hotkey is a window's event).
 @(private = "file")
 app_anchor_events :: proc(app: ^App) {
-	for e in platform.poll_events(app.anchor, false) {
-		if e.kind != .Hotkey { continue }
-		if source, ok := hotkey_source(e.hotkey); ok { app_trigger(app, source) }
-	}
+	for e in platform.poll_events(app.anchor, false) { shortcuts.feed(app.shortcuts, e) }
 }
 
 @(private = "file")
@@ -397,11 +455,19 @@ app_tray_open :: proc(app: ^App) {
 	if app.tray == nil { return }   // (no notification area: the commands still work)
 	icon := tray_icon_rgba(TRAY_ICON_SIZE, context.temp_allocator)
 	platform.tray_set_icon_rgba(app.tray, icon, {TRAY_ICON_SIZE, TRAY_ICON_SIZE})
+	app_tray_menu(app)
+}
+
+// The tray's menu at rest (record_app.odin shows another while a recording runs).
+app_tray_menu :: proc(app: ^App) {
 	platform.tray_set_menu(app.tray, {
 		{id = int(Tray_Item.Region), text = "Capture a region", default = true},
 		{id = int(Tray_Item.Screen), text = "Capture the screen"},
 		{id = int(Tray_Item.Window), text = "Capture the window in front"},
 		{id = int(Tray_Item.Qr), text = "Read a QR code"},
+		{id = int(Tray_Item.Ocr), text = "Read the text"},
+		{id = int(Tray_Item.Record), text = "Record a video"},
+		{id = int(Tray_Item.Record_Gif), text = "Record a GIF"},
 		{kind = .Separator},
 		{id = int(Tray_Item.Settings), text = "Settings"},
 		{id = int(Tray_Item.Quit), text = "Quit cliche"},
@@ -413,13 +479,26 @@ app_tray :: proc(app: ^App) {
 	if app.tray == nil { return }
 	for e in platform.tray_poll(app.tray) {
 		#partial switch e.kind {
-		case .Click: app_trigger(app, .Region)
+		case .Click:
+			if record_running(app.record) { app_record_trigger(app, .Mp4); continue }   // (a click stops the recording)
+			switch app.settings.tray_click {
+			case .Region:   app_trigger(app, .Region)
+			case .Screen:   app_trigger(app, .Screen)
+			case .Window:   app_trigger(app, .Window)
+			case .Qr:       app_trigger(app, .Region, .Qr)
+			case .Ocr:      app_trigger(app, .Region, .Text)
+			case .Record:   app_record_trigger(app, .Mp4)
+			case .Settings: settings_window_show(app)
+			}
 		case .Menu_Item:
 			switch Tray_Item(e.item) {
 			case .Region:   app_trigger(app, .Region)
 			case .Screen:   app_trigger(app, .Screen)
 			case .Window:   app_trigger(app, .Window)
 			case .Qr:       app_trigger(app, .Region, .Qr)
+			case .Ocr:      app_trigger(app, .Region, .Text)
+			case .Record:     app_record_trigger(app, .Mp4)
+			case .Record_Gif: app_record_trigger(app, .Gif)
 			case .Settings: settings_window_show(app)
 			case .Quit:     app.quit = true
 			case .None:
@@ -434,5 +513,24 @@ app_prefs_changed :: proc(app: ^App) {
 	worker_send(&app.worker, Job_Write{path = strings.clone(prefs_file()), text = text})
 	settings_free(&app.settings)
 	app.settings = prefs_read(&app.prefs)
-	app_hotkeys(app)
+	app_shortcuts_follow_prefs(app)
+	app_integrate(app, force = false)
+}
+
+// cliche's launcher and its start with the session as the preferences say: at the start (the files may have gone),
+// then when one of the two changes.
+app_integrate :: proc(app: ^App, force: bool) {
+	want := [2]bool{app.settings.menu, app.settings.autostart}
+	if !force && want == app.integrated { return }
+	app.integrated = want
+	worker_send(&app.worker, Job_Integrate{menu = want[0], autostart = want[1]})
+}
+
+// The uploaders found (the settings' list); one just imported becomes the one used.
+@(private = "file")
+app_uploaders :: proc(app: ^App, r: Result_Uploaders) {
+	uploaders_result_free(&app.uploaders)
+	app.uploaders = r
+	if r.imported != "" && config.set_from_string(&app.prefs, "upload.uploader", r.imported, .User) == .None { app_prefs_changed(app) }
+	if r.import_problem != "" { fmt.eprintfln("cliche: %s", r.import_problem) }
 }

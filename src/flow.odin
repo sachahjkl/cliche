@@ -31,6 +31,9 @@ Flow_Error :: enum u8 {
 	Empty,         // nothing to take: no output, no window, an empty rectangle
 	Not_Saved,     // the file could not be written
 	No_Qr,         // the picture holds no QR code that reads
+	No_Text,       // no text could be read in the picture
+	Not_Uploaded,  // the upload failed, and nothing was saved
+	No_Ocr,        // no engine reads text here (gt:ocr: Tesseract on Linux, Windows' own)
 }
 
 FLOW_ERROR_TEXT := [Flow_Error]string{
@@ -42,6 +45,9 @@ FLOW_ERROR_TEXT := [Flow_Error]string{
 	.Empty       = "there is nothing to capture",
 	.Not_Saved   = "the picture could not be saved",
 	.No_Qr       = "no QR code could be read in the picture",
+	.Not_Uploaded = "the picture could not be uploaded",
+	.No_Text     = "no text could be read in the picture",
+	.No_Ocr      = "this system reads no text: install Tesseract and its languages (Linux), or a Windows language with text recognition",
 }
 
 Flow_Idle      :: struct {}

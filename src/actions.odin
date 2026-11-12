@@ -9,17 +9,18 @@ import "core:strings"
 After_Capture :: enum u8 {
 	Copy,          // the picture on the clipboard
 	Save,          // a PNG file in save.folder, named by save.name
-	Upload,        // (to come) a custom HTTP uploader
+	Upload,        // to a host: ShareX's custom uploaders (uploader.odin), the URL to the clipboard
 	Open_Editor,   // (to come) the picture opened in cliche's editor
 }
 
 After_Capture_Set :: bit_set[After_Capture; u8]
 
 // The actions this version runs; a set asks for the others in vain.
-AFTER_CAPTURE_DONE :: After_Capture_Set{.Copy, .Save}
+AFTER_CAPTURE_DONE :: After_Capture_Set{.Copy, .Save, .Upload}
 
-// What a capture is for: a picture, through the chain; or the text of the QR code in it (cliche --qr), copied.
-Purpose :: enum u8 { Picture, Qr }
+// What a capture is for: a picture, through the chain; or the text of the QR code in it (cliche --qr), or the text it
+// shows (cliche --ocr), copied; or the region of a recording (cliche --record: record_app.odin).
+Purpose :: enum u8 { Picture, Qr, Text, Record }
 
 // A picture taken: straight RGBA, rows from the top, no padding. The worker makes it; the chain reads it.
 Shot :: struct {

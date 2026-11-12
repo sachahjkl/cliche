@@ -5,22 +5,32 @@ package cliche
 // encodes PNG files and writes them, and writes the preferences. The interface's thread hands it jobs and takes its
 // results, in order; the worker wakes the interface's loop (Worker.wake) after each result.
 
+import "core:os"
 import "core:strings"
 import "core:sync"
 import "core:thread"
+import "core:time"
 import capture "gt:capture"
+import "gt:platform"
 
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
-Job_Grab      :: struct { source: Source }                    // the desktop (Region), or a shot (Screen, Window)
+Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
-Job_Save      :: struct { shot: Shot, folder, pattern: string, save: bool }   // owned by the job
+Job_Save      :: struct { shot: Shot, folder, pattern, uploader: string, save, fast, reveal, upload: bool }   // owned by the job
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences); owned
 Job_Qr        :: struct { shot: Shot }                        // the QR code in the picture, read; owned
+Job_Ocr       :: struct { shot: Shot, languages: string }   // the text in the picture, read; owned ("": the user's languages)
+Job_Reveal    :: struct { path: string }                     // a file shown in its folder; owned
+Job_Uploaders :: struct {}                                    // the uploaders found, for the settings
+Job_Import_Uploader :: struct {}                              // a .sxcu file chosen in the system's dialog, copied in
+Job_Pick_Folder :: struct { start: string }                   // the system's dialog for the save folder; owned
+Job_Open_Folder :: struct { folder: string }                  // the save folder in the file manager ("": the default); owned
+Job_Integrate :: struct { menu, autostart: bool }             // cliche's launcher and its start with the session (integration.odin)
 
-Job :: union { Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write, Job_Qr }
+Job :: union { Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write, Job_Qr, Job_Ocr, Job_Pick_Folder, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Reveal }
 
-// The session is open (or why not).
-Result_Opened :: struct { error: capture.Error, backend: capture.Backend }
+// The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
+Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
 
 // The desktop for a region: its picture (RGBA after the worker's swap), the outputs and the windows (owned).
 Result_Desktop :: struct {
@@ -34,15 +44,24 @@ Result_Desktop :: struct {
 // A picture to act on (owned).
 Result_Shot :: struct { error: Flow_Error, shot: Shot }
 
-// The file is written (path owned; "" when nothing was saved).
-Result_Saved :: struct { error: Flow_Error, path: string }
+// The file is written, the picture uploaded (save.odin's Saved, its strings owned).
+Result_Saved :: struct { using saved: Saved }
+
+// The uploaders found (owned) and what was wrong with the others; `imported`: the name of one just imported.
+Result_Uploaders :: struct { names: []string, problems: []string, imported: string, import_problem: string }
 
 Result_Written :: struct { ok: bool, path: string }   // (path owned)
 
 // The text of the QR code read (owned, UTF-8).
 Result_Qr :: struct { error: Flow_Error, text: string }
 
-Result :: union { Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written, Result_Qr }
+// The folder chosen in the system's dialog (owned; "": none chosen).
+Result_Folder :: struct { path: string }
+
+// What went wrong putting cliche on the desktop (owned; "": nothing).
+Result_Integrated :: struct { problem: string }
+
+Result :: union { Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written, Result_Qr, Result_Folder, Result_Integrated, Result_Uploaders }
 
 Worker :: struct {
 	thread:    ^thread.Thread,
@@ -132,8 +151,10 @@ worker_do :: proc(w: ^Worker, j: Job) {
 	switch v in j {
 	case Job_Open:
 		worker_session(w)
-		worker_post(w, Result_Opened{w.session_error, w.session != nil ? w.session.backend : .None})
+		worker_post(w, Result_Opened{w.session_error, w.session != nil ? w.session.backend : .None, save_folder_default()})
 	case Job_Grab:
+		// (a screen or a window waits: a menu opened meanwhile is in the picture; the worker has nothing else to do then)
+		if v.delay_ms > 0 { time.sleep(time.Duration(v.delay_ms) * time.Millisecond) }
 		if !worker_session(w) {
 			if v.source == .Region { worker_post(w, Result_Desktop{error = w.session_error}) } else { worker_post(w, Result_Shot{error = flow_error_of(w.session_error)}) }
 			return
@@ -149,8 +170,7 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		worker_post(w, Result_Shot{shot = shot_of_frame(&out, .Region, bgra = false)})
 	case Job_Save:
 		job := v
-		path, err := save_shot(&job)
-		worker_post(w, Result_Saved{err, path})
+		worker_post(w, Result_Saved{save_shot(&job)})
 	case Job_Write:
 		ok := write_file(v.path, transmute([]u8)v.text)
 		delete(v.text)
@@ -160,6 +180,40 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		text, ok := qr_read(shot)
 		shot_free(&shot)
 		worker_post(w, Result_Qr{error = ok ? .None : .No_Qr, text = text})
+	case Job_Ocr:
+		shot := v.shot
+		text, err := ocr_read(shot, v.languages)
+		shot_free(&shot)
+		delete(v.languages)
+		// (the same result as a QR code's: a text for the clipboard)
+		worker_post(w, Result_Qr{error = err, text = text})
+	case Job_Pick_Folder:
+		r := platform.pick_folder_dialog({title = "The folder of the screenshots", start_dir = v.start})
+		delete(v.start)
+		path := r.status == .Chosen && len(r.paths) > 0 ? strings.clone(r.paths[0]) : ""
+		platform.dialog_result_destroy(&r)
+		worker_post(w, Result_Folder{path})
+	case Job_Open_Folder:
+		folder := v.folder != "" ? v.folder : save_folder_default(context.temp_allocator)
+		_ = os.make_directory_all(folder)
+		_ = platform.open_path(folder)
+		delete(v.folder)
+	case Job_Reveal:
+		_ = platform.reveal_in_folder(v.path)
+		delete(v.path)
+	case Job_Uploaders:
+		worker_post(w, uploaders_result("", ""))
+	case Job_Import_Uploader:
+		patterns := []string{"*.sxcu"}
+		filters := []platform.File_Filter{{"ShareX uploaders", patterns}}
+		r := platform.open_file_dialog({title = "A ShareX uploader", filters = filters})
+		defer platform.dialog_result_destroy(&r)
+		if r.status != .Chosen || len(r.paths) == 0 { worker_post(w, uploaders_result("", "")); break }
+		name, problem := uploader_import(r.paths[0], context.temp_allocator)
+		worker_post(w, uploaders_result(name, problem))
+	case Job_Integrate:
+		problem := integration_apply(v.menu, v.autostart)
+		worker_post(w, Result_Integrated{problem != "" ? strings.clone(problem) : ""})
 	}
 }
 
@@ -182,6 +236,15 @@ job_free :: proc(j: ^Job) {
 		delete(v.text)
 	case Job_Qr:
 		shot_free(&v.shot)
+	case Job_Ocr:
+		shot_free(&v.shot)
+		delete(v.languages)
+	case Job_Pick_Folder:
+		delete(v.start)
+	case Job_Open_Folder:
+		delete(v.folder)
+	case Job_Reveal:
+		delete(v.path)
 	}
 }
 
@@ -189,9 +252,13 @@ result_free :: proc(r: ^Result) {
 	#partial switch &v in r {
 	case Result_Desktop: desktop_free(&v)
 	case Result_Shot:    shot_free(&v.shot)
-	case Result_Saved:   delete(v.path)
+	case Result_Saved:   delete(v.path); delete(v.url); delete(v.upload_problem)
+	case Result_Uploaders: uploaders_result_free(&v)
 	case Result_Written: delete(v.path)
 	case Result_Qr:      delete(v.text)
+	case Result_Opened:  delete(v.default_folder)
+	case Result_Folder:  delete(v.path)
+	case Result_Integrated: delete(v.problem)
 	}
 }
 
@@ -222,4 +289,26 @@ windows_clone :: proc(wins: []capture.Window) -> []capture.Window {
 		out[i].app_id = strings.clone(wi.app_id)
 	}
 	return out
+}
+
+// The names of the uploaders found, for the settings (worker), with what an import gave.
+@(private = "file")
+uploaders_result :: proc(imported, import_problem: string) -> Result_Uploaders {
+	list, problems := uploaders_load(context.temp_allocator)
+	r := Result_Uploaders{names = make([]string, len(list)), problems = make([]string, len(problems))}
+	for u, i in list { r.names[i] = strings.clone(u.name) }
+	for p, i in problems { r.problems[i] = strings.clone(p) }
+	r.imported = strings.clone(imported)
+	r.import_problem = strings.clone(import_problem)
+	return r
+}
+
+uploaders_result_free :: proc(r: ^Result_Uploaders) {
+	for n in r.names { delete(n) }
+	delete(r.names)
+	for p in r.problems { delete(p) }
+	delete(r.problems)
+	delete(r.imported)
+	delete(r.import_problem)
+	r^ = {}
 }

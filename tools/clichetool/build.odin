@@ -179,3 +179,13 @@ check_root_make :: proc(real: string) -> bool {
 	if os.write_entire_file(lib, []u8{}) != nil { fmt.eprintfln("clichetool: %s cannot be written", lib); return false }
 	return true
 }
+
+// The settings' pages, drawn offscreen by a build of the program with CLICHE_SHOTS (src/shots.odin): no window opens.
+run_shots :: proc(args: []string) -> int {
+	folder := len(args) > 0 ? args[0] : "build/shots"
+	if !build_text() { return 1 }
+	_ = os.make_directory_all(folder)
+	out := fmt.tprintf("build/cliche-shots%s", ODIN_OS == .Windows ? ".exe" : "")
+	if !toolbox.run(odin_cmd("build", "src", {fmt.tprintf("-out:%s", out), "-debug", "-o:none", fmt.tprintf("-define:CLICHE_SHOTS=%s", folder)}), {echo = true}) { return 1 }
+	return toolbox.run({out}, {echo = true}) ? 0 : 1
+}
