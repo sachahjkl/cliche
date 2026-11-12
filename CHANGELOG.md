@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.1.1] - 2026-11-12
+
+### Added
+- **cliche for Linux and Windows, ready to download**: each release has a Linux archive and a Windows one, with their SHA-256, and the site offers the one of your system.
+
 ## [0.1.0] - 2026-11-12
 
 ### Added
@@ -53,4 +58,5 @@ and the versions follow [semantic versioning](https://semver.org/).
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.1.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.1.0
