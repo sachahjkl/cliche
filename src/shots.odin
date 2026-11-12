@@ -30,7 +30,7 @@ shots_run :: proc(folder: string, which: string) -> int {
 	app.settings = prefs_read(&app.prefs)
 	app.flow = Flow_Idle{}
 	app.record = Record_Idle{}
-	defer { settings_free(&app.settings); config.prefs_destroy(&app.prefs) }
+	defer { settings_free(&app.settings); config.prefs_destroy(&app.prefs); delete(app.editors); delete(app.wakes) }
 	_ = os.make_directory_all(folder)
 	switch which {
 	case "settings", "": return shots_settings(app, folder)
@@ -86,9 +86,9 @@ shots_settings :: proc(app: ^App, folder: string) -> int {
 // A made-up screenshot (a window on a gradient) with an arrow, a box, a text, step numbers and a pixelated part.
 @(private = "file")
 shots_editor :: proc(app: ^App, folder: string) -> int {
-	if !editor_open(app, headless = true) { return 1 }
-	ed := &app.editor
-	defer { editor_destroy(app); editor_free(app); host.host_close(&ed.host) }
+	ed := editor_open(app, headless = true)
+	if ed == nil { return 1 }
+	defer editor_dispose(ed)
 	W, H :: 1200, 720
 	px := make([]u8, W * H * 4)
 	for y in 0 ..< H {
@@ -105,7 +105,7 @@ shots_editor :: proc(app: ^App, folder: string) -> int {
 			p[3] = 255
 		}
 	}
-	if !editor_open_shot(app, {rgba = px, size = {W, H}, source = .Region, scale = 1}) { return 1 }
+	if !editor_open_shot(ed, {rgba = px, size = {W, H}, source = .Region, scale = 1}) { return 1 }
 	m := &ed.model
 	st := EDIT_STYLE_DEFAULT
 	edit_add(m, {kind = .Arrow, a = {880, 560}, b = {640, 330}, style = st})

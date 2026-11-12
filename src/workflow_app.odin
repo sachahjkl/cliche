@@ -2,14 +2,15 @@ package cliche
 
 // The app's part of the workflows: a capture's picture starts a run of the workflow its trigger runs; the run's tasks
 // go where each must be done (workflow_run.odin says which are ready): the worker for pixels, files and the network
-// (Job_Node, workflow_ops.odin), this thread for the clipboard and the history, the editor for Annotate. Several runs may
-// be in flight: a capture while a run waits on the editor. A run that ends says what it did in one notification.
+// (Job_Node, workflow_ops.odin), this thread for the clipboard and the history, an editor of its own for each Annotate.
+// Several runs may be in flight: a capture while a run waits on its editor. A run that ends says what it did in one
+// notification.
 
 import "core:fmt"
 import "core:strings"
 import "gt:platform"
 
-// An Annotate node of a run, waiting for the editor (run 0: none, as for a picture of the history).
+// The Annotate node of a run an editor's picture is for (Editor.ask; run 0: none, as for a picture of the history).
 Annotate_Ask :: struct {
 	run:  u64,
 	node: int,
@@ -27,7 +28,6 @@ workflows_stop :: proc(app: ^App) {
 		free(run)
 	}
 	delete(app.runs)
-	delete(app.annotate_queue)
 	workflows_free(&app.workflows)
 	delete(app.workflows_problem)
 }
@@ -60,7 +60,7 @@ workflows_save :: proc(app: ^App) {
 	worker_send(&app.worker, Job_Write{path = strings.clone(workflows_file()), text = workflows_text(&app.workflows)})
 }
 
-// Whether the editor is opened ahead (app_prewarm): a screenshot's workflow opens it.
+// Whether an editor is opened ahead (app_prewarm): a screenshot's workflow opens one.
 workflows_want_editor :: proc(app: ^App) -> bool {
 	for t in ([]Trigger{.Region, .Screen, .Window}) {
 		if wf := workflows_for(&app.workflows, t); wf != nil && workflow_has(wf, .Annotate) { return true }
@@ -130,7 +130,7 @@ workflow_pump :: proc(app: ^App, run: ^Run) {
 				// (its message is a constant: run_finish keeps a copy)
 				run_finish(run, task.node, workflow_interface_task(app, run, task))
 			case .Editor:
-				workflow_annotate_ask(app, run, task)
+				workflow_annotate_open(app, run, task.node)
 			case .Run:
 			}
 		}
@@ -285,44 +285,31 @@ workflow_preview_picture :: proc(app: ^App, r: Result_Picture) {
 }
 
 ////////////////////////////////
-// Annotate: the editor
+// Annotate: an editor for each picture
 
-// An Annotate node waits for the editor: shown now when the editor is free, else when the picture it holds is done.
+// An Annotate node opens its picture in an editor of its own, at once: any number are open together, and none waits
+// for another's Done. The editor's Done or close ends this node (workflow_editor_done, workflow_editor_closed).
 @(private = "file")
-workflow_annotate_ask :: proc(app: ^App, run: ^Run, task: Run_Task) {
-	append(&app.annotate_queue, Annotate_Ask{run.id, task.node})
-	workflow_annotate_next(app)
-	// (the editor is busy with another picture: this one waits its turn, and the editor says so)
-	if n := len(app.annotate_queue); n > 0 { editor_note_waiting(app, n) }
-}
-
-// The editor takes the next Annotate waiting when it is free: no picture, or one of the history left unchanged.
-workflow_annotate_next :: proc(app: ^App) {
-	ed := &app.editor
-	for len(app.annotate_queue) > 0 {
-		if app.editor_for.run != 0 { return }
-		if ed.has_picture && edit_changed(&ed.model) { return }
-		ask := app.annotate_queue[0]
-		ordered_remove(&app.annotate_queue, 0)
-		run := workflow_run_find(app, ask.run)
-		if run == nil || ask.node >= len(run.nodes) || run.nodes[ask.node].state != .Waiting { continue }
-		v := workflow_annotate_input(run, ask.node)
-		if v.picture == nil {
-			run_finish(run, ask.node, {message = "no picture came in"})
-			workflow_pump(app, run)
-			continue
-		}
-		// (the editor owns a copy: the run's picture may feed other branches meanwhile)
-		shot := v.picture.shot
-		shot.rgba = clone_bytes(shot.rgba)
-		app.editor_for = ask
-		if !editor_open_shot(app, shot, shot.scale > 0 ? shot.scale : 1) {
-			app.editor_for = {}
-			run_finish(run, ask.node, {message = "the editor cannot open"})
-			workflow_pump(app, run)
-		}
+workflow_annotate_open :: proc(app: ^App, run: ^Run, node: int) {
+	v := workflow_annotate_input(run, node)
+	if v.picture == nil {
+		run_finish(run, node, {message = "no picture came in"})
 		return
 	}
+	// (the editor owns a copy: the run's picture may feed other branches meanwhile)
+	shot := v.picture.shot
+	shot.rgba = clone_bytes(shot.rgba)
+	ed := editor_take(app)
+	if ed == nil {
+		shot_free(&shot)
+		run_finish(run, node, {message = "the editor cannot open"})
+		return
+	}
+	if !editor_open_shot(ed, shot, shot.scale > 0 ? shot.scale : 1) {
+		run_finish(run, node, {message = "the editor cannot open"})
+		return
+	}
+	ed.ask = {run.id, node}
 }
 
 // The value that comes into Annotate node `node` (its single input).
@@ -337,11 +324,9 @@ workflow_annotate_input :: proc(run: ^Run, node: int) -> Run_Value {
 	return {}
 }
 
-// The editor's Done: its picture (taken) goes on in the run that asked for it; a picture of the history runs the
-// workflow of "Capture a region and edit" (its Annotate passes the picture on: it is annotated already).
-workflow_editor_done :: proc(app: ^App, shot: Shot) {
-	ask := app.editor_for
-	app.editor_for = {}
+// An editor's Done: its picture (taken) goes on in the run's branch it came for (`ask`); a picture of the history runs
+// the workflow of "Capture a region and edit" (its Annotate passes the picture on: it is annotated already).
+workflow_editor_done :: proc(app: ^App, ask: Annotate_Ask, shot: Shot) {
 	if ask.run == 0 {
 		wf := workflows_for(&app.workflows, .Edit)
 		if wf == nil { wf = workflows_for(&app.workflows, .Region) }
@@ -361,17 +346,12 @@ workflow_editor_done :: proc(app: ^App, shot: Shot) {
 		shot := shot
 		shot_free(&shot)
 	}
-	workflow_annotate_next(app)
 }
 
-// The editor closed without Done: its branch of the run stops there.
-workflow_editor_closed :: proc(app: ^App) {
-	ask := app.editor_for
-	app.editor_for = {}
-	if ask.run != 0 {
-		if run := workflow_run_find(app, ask.run); run != nil && run_cancel(run, ask.node, "closed without Done") { workflow_pump(app, run) }
-	}
-	workflow_annotate_next(app)
+// An editor closed without Done: the branch of the run it came for (`ask`) stops there.
+workflow_editor_closed :: proc(app: ^App, ask: Annotate_Ask) {
+	if ask.run == 0 { return }
+	if run := workflow_run_find(app, ask.run); run != nil && run_cancel(run, ask.node, "closed without Done") { workflow_pump(app, run) }
 }
 
 // No workflow runs for this capture: said, so the user knows where to choose one.

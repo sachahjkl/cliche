@@ -1,11 +1,17 @@
 package cliche
 
-// The editor: a window of its own where a picture just taken gets arrows, boxes, text and the rest: a workflow's
-// Annotate step (workflow_app.odin) waits for it. Every annotation stays an object (editor_model.odin) until the picture is done: it is
+// The editor: a window where a picture just taken gets arrows, boxes, text and the rest: a workflow's Annotate step
+// (workflow_app.odin) waits for it. Every annotation stays an object (editor_model.odin) until the picture is done: it is
 // selected, moved, resized, recoloured or deleted, and every change is undone and redone.
 //
-// The window follows the settings' model (settings_view.odin): a host of its own, opened at the first picture and then
-// hidden, not closed; the theme of appearance.theme; the command palette (Ctrl+K) and the sheet of its keys (F1).
+// Each picture has an editor of its own (app.editors), any number open together: a second screenshot never waits for
+// the first one's Done. An editor is known by its id (Editor.id): what the worker gives back for it (a copy's PNG, a
+// save) carries that id, and finds it, or finds it gone. An editor closed is freed (editors_sweep), but for one kept
+// hidden for the next picture (its window and surface ready: it shows at once) and the renderer's own window, which
+// the other windows need.
+//
+// The window follows the settings' model (settings_view.odin): a host of its own; the theme of appearance.theme; the
+// command palette (Ctrl+K) and the sheet of its keys (F1).
 //
 //   the bar      the tools (each an icon, a tooltip and a key), the properties of the tool or of the selection, then
 //                undo, redo, copy, save and Done
@@ -121,9 +127,12 @@ Editor_Load_Work :: struct {
 	app:  ^App,
 }
 
+// The heap's (app.editors holds the pointers): its host must stay where it is while the window is open.
 Editor :: struct {
+	app:         ^App,
+	id:          u64,          // stable for its life: what the worker's results for it name (never 0)
+	ask:         Annotate_Ask, // the run and node its picture is for (run 0: none, as for a picture of the history)
 	host:        host.Host,
-	opened:      bool,
 	visible:     bool,
 	icons:       font.Font_Id,
 	theme_shown: ui.Theme_Shown,
@@ -132,6 +141,7 @@ Editor :: struct {
 	width_field: ui.Slider_Field,   // the bar's width: its slider's field
 	asking:      bool,       // the question before the changes are dropped
 	close_due:   bool,       // closed in a frame: acted on after it (editor_after_frame)
+	done_due:    bool,       // Done with nothing changed, in a frame: acted on after it (what follows may open a window)
 
 	model:       Edit_Model,
 	has_picture: bool,
@@ -165,19 +175,14 @@ Editor :: struct {
 	scale:       f32,
 }
 
-// Shows `shot` (taken: the editor owns it now) in the editor. `scale`: the picture's pixels per logical pixel (2 for a
-// picture of a screen at 200 %). False: no window could open; the shot is freed.
-editor_open_shot :: proc(app: ^App, shot: Shot, scale: f32 = 1) -> bool {
-	ed := &app.editor
+// Shows `shot` (taken: the editor owns it now) in `ed`. `scale`: the picture's pixels per logical pixel (2 for a
+// picture of a screen at 200 %). False: the picture cannot be held; the shot is freed.
+editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
+	app := ed.app
 	shot := shot
-	timing_mark("editor asked")
-	if !ed.opened && !editor_open(app, headless = false) {
-		shot_free(&shot)
-		return false
-	}
 	timing_mark("editor window open")
-	editor_picture_drop(app)
-	editor_load_stop(app)
+	editor_picture_drop(ed)
+	editor_load_stop(ed)
 	ed.load_problem = ""
 	r := &app.shared.r
 	w, h := shot.size.x, shot.size.y
@@ -200,9 +205,17 @@ editor_open_shot :: proc(app: ^App, shot: Shot, scale: f32 = 1) -> bool {
 	ed.shot, ed.has_picture = shot, true
 	edit_model_init(&ed.model, shot.size, scale, editor_measure, app)
 	ed.field_typing = 0
-	ed.asking, ed.close_due, ed.exporting = false, false, false
-	editor_mosaic_start(app, int(math.round(EDIT_PIXELATE_CELL * ed.model.doc.scale)))
-	token := app_take_token(app)
+	ed.asking, ed.close_due, ed.done_due, ed.exporting = false, false, false, false
+	editor_mosaic_start(ed, int(math.round(EDIT_PIXELATE_CELL * ed.model.doc.scale)))
+	editor_show(ed)
+	timing_mark("editor shown")
+	return true
+}
+
+// Shown, or brought to the front, with the activation token of the command that asked for it.
+@(private = "file")
+editor_show :: proc(ed: ^Editor) {
+	token := app_take_token(ed.app)
 	defer delete(token)
 	if !ed.visible {
 		host.host_show(&ed.host)
@@ -210,22 +223,29 @@ editor_open_shot :: proc(app: ^App, shot: Shot, scale: f32 = 1) -> bool {
 	}
 	platform.raise_window_token(ed.host.win, token)
 	ed.host.settle = max(ed.host.settle, 3)
-	timing_mark("editor shown")
-	return true
 }
 
-// Shows the editor with the PNG file at `path` (not kept), read and decoded on a thread of the editor's: the window
+// An editor for a new picture: the one kept hidden for it, else a new window. nil: no window can open.
+editor_take :: proc(app: ^App) -> ^Editor {
+	timing_mark("editor asked")
+	for ed in app.editors {
+		if editor_free_for_picture(ed) { return ed }
+	}
+	return editor_open(app, headless = false)
+}
+
+// Hidden, with no picture and none being read: closed, or opened ahead of its first picture.
+@(private = "file")
+editor_free_for_picture :: proc(ed: ^Editor) -> bool {
+	return !ed.visible && !ed.has_picture && ed.load_work == nil
+}
+
+// The PNG file at `path` (not kept) in an editor of its own, read and decoded on a thread of the editor's: the window
 // says so meanwhile, and says why when the file cannot be read.
 editor_open_file :: proc(app: ^App, path: string) {
-	ed := &app.editor
-	if !ed.opened && !editor_open(app, headless = false) { return }
-	if ed.has_picture && (edit_changed(&ed.model) || app.editor_for.run != 0) {
-		// (a picture with changes, or one a workflow waits for, is not dropped for another)
-		platform.raise_window_token(ed.host.win, "")
-		return
-	}
-	editor_picture_drop(app)
-	editor_load_stop(app)
+	ed := editor_take(app)
+	if ed == nil { return }
+	ed.ask = {}
 	ed.load_problem = ""
 	work := new(Editor_Load_Work)
 	work^ = {path = strings.clone(path), app = app}
@@ -249,50 +269,95 @@ editor_open_file :: proc(app: ^App, path: string) {
 		ed.load_work, ed.load_thread = work, t
 		thread.start(t)
 	}
-	token := app_take_token(app)
-	defer delete(token)
-	if !ed.visible {
-		host.host_show(&ed.host)
-		ed.visible = true
-	}
-	platform.raise_window_token(ed.host.win, token)
-	ed.host.settle = max(ed.host.settle, 3)
+	editor_show(ed)
 }
 
-// Opens the window (hidden). `headless`: offscreen, on the software renderer (shots, tests).
-editor_open :: proc(app: ^App, headless: bool) -> bool {
-	ed := &app.editor
-	if !host.host_open(&ed.host, &app.shared, {title = "cliche editor", size = EDITOR_SIZE, headless = headless}, editor_build, app) {
+// Opens a new editor's window (hidden) and adds it to app.editors. `headless`: offscreen, on the software renderer
+// (shots, tests). nil: the window cannot open.
+editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
+	ed := new(Editor)
+	app.editor_next_id += 1
+	ed.app, ed.id = app, app.editor_next_id
+	if !host.host_open(&ed.host, &app.shared, {title = "cliche editor", size = EDITOR_SIZE, headless = headless}, editor_build, ed) {
 		fmt.eprintln("cliche: the editor's window cannot open")
-		return false
+		free(ed)
+		return nil
 	}
-	ed.opened = true
 	ed.host.input = editor_input
 	ed.host.params = editor_params
 	ed.host.after_input = 3
 	ed.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	ed.host.state.icon_font = ed.icons
-	app_wake_set(app, .Editor, ed.host.win)
-	return true
+	append(&app.editors, ed)
+	app_wake_add(app, ed.host.win)
+	return ed
 }
 
-// After a frame of the editor: a file read, the mosaic made, the flattened picture read, a close acted on.
-editor_after_frame :: proc(app: ^App) {
-	ed := &app.editor
-	editor_load_take(app)
-	editor_mosaic_take(app)
-	if ed.exporting { editor_export_poll(app) }
+// The editor of id `id`; nil: it is closed and freed (a result of the worker for it comes too late).
+editor_find :: proc(app: ^App, id: u64) -> ^Editor {
+	for ed in app.editors { if ed.id == id { return ed } }
+	return nil
+}
+
+// After a frame of the editor: a file read, the mosaic made, the flattened picture read, a close acted on. What its
+// picture was for goes on last: that may give this editor a new picture (editor_take).
+editor_after_frame :: proc(ed: ^Editor) {
+	editor_load_take(ed)
+	editor_mosaic_take(ed)
+	if ed.exporting { editor_export_poll(ed) }
+	if ed.done_due {
+		// (the picture as it was taken: nothing to draw)
+		ed.done_due = false
+		shot := ed.shot
+		ed.shot, ed.has_picture = {}, false
+		edit_model_destroy(&ed.model)
+		editor_done(ed, shot)
+		return
+	}
 	if ed.close_due {
 		ed.close_due = false
-		editor_close(app)   // (the picture goes: nothing is copied, saved or told; the capture's flow was over already)
-		workflow_editor_closed(app)   // (its run's branch stops; the next Annotate waiting comes)
+		ask := ed.ask
+		editor_close(ed)   // (the picture goes: nothing is copied, saved or told; the capture's flow was over already)
+		workflow_editor_closed(ed.app, ask)   // (its run's branch stops)
 	}
+}
+
+// The editors closed since the last turn are freed, but for one kept hidden for the next picture (it shows at once)
+// and the renderer's own window (the other windows draw with its renderer: it is hidden, never closed). Not inside a
+// frame of an editor.
+editors_sweep :: proc(app: ^App) {
+	kept := false
+	for ed in app.editors {
+		// (closed while its file was read: the read is let go once done, without a wait here)
+		if !ed.visible { editor_load_take(ed) }
+		if editor_free_for_picture(ed) && app.shared.main == &ed.host { kept = true }
+	}
+	for i := len(app.editors) - 1; i >= 0; i -= 1 {
+		ed := app.editors[i]
+		if !editor_free_for_picture(ed) || app.shared.main == &ed.host { continue }
+		if !kept { kept = true; continue }
+		editor_dispose(ed)
+	}
+}
+
+// The editor's window closed and its state freed; it leaves app.editors. Not for the renderer's own window while
+// another window is open.
+editor_dispose :: proc(ed: ^Editor) {
+	app := ed.app
+	for e, i in app.editors {
+		if e == ed { ordered_remove(&app.editors, i); break }
+	}
+	// (no other thread wakes a window about to go)
+	app_wake_remove(app, ed.host.win)
+	editor_destroy(ed)
+	host.host_close(&ed.host)
+	editor_free(ed)
+	free(ed)
 }
 
 // The file, once its thread is done: shown, or why not.
 @(private = "file")
-editor_load_take :: proc(app: ^App) {
-	ed := &app.editor
+editor_load_take :: proc(ed: ^Editor) {
 	work := ed.load_work
 	if work == nil || !sync.atomic_load(&work.done) { return }
 	thread.join(ed.load_thread)
@@ -301,18 +366,21 @@ editor_load_take :: proc(app: ^App) {
 	delete(work.path)
 	ok, rgba, size := work.ok, work.rgba, work.size
 	free(work)
+	if !ed.visible {
+		delete(rgba)   // (closed while the file was read: nobody waits for it)
+		return
+	}
 	if !ok {
 		ed.load_problem = "The picture cannot be read: it is not a PNG file, or it is gone."
 		ed.host.settle = max(ed.host.settle, 2)
 		return
 	}
-	editor_open_shot(app, {rgba = rgba, size = size, source = .Region})
+	editor_open_shot(ed, {rgba = rgba, size = size, source = .Region})
 }
 
 // Before the window closes for good: a file being read is waited for, then dropped.
 @(private = "file")
-editor_load_stop :: proc(app: ^App) {
-	ed := &app.editor
+editor_load_stop :: proc(ed: ^Editor) {
 	if ed.load_thread == nil { return }
 	thread.join(ed.load_thread)
 	thread.destroy(ed.load_thread)
@@ -322,48 +390,53 @@ editor_load_stop :: proc(app: ^App) {
 	ed.load_work, ed.load_thread = nil, nil
 }
 
-// What the worker said of a save asked from the editor (Ctrl+S): told as cliche tells (app_announce). `path` is not kept.
-editor_saved :: proc(app: ^App, path: string, error: Flow_Error) {
-	ed := &app.editor
-	window := ed.visible ? &ed.host : nil
-	if error != .None { app_announce(app, .Bad, "Not saved", FLOW_ERROR_TEXT[error], window) } else { app_announce(app, .Good, "Saved", path, window) }
+// What the worker said of a save asked from an editor (Ctrl+S): told as cliche tells (app_announce), in that editor
+// when it is still shown. The file is written either way: a closed editor's save is still said.
+editor_saved :: proc(app: ^App, r: Result_Saved) {
+	defer delete(r.path)
+	window := editor_window(app, r.editor)
+	if r.error != .None { app_announce(app, .Bad, "Not saved", FLOW_ERROR_TEXT[r.error], window) } else { app_announce(app, .Good, "Saved", r.path, window) }
+}
+
+// Where a message for editor `id` is shown: its window while it is shown; nil (cliche's usual place) once it is not.
+@(private = "file")
+editor_window :: proc(app: ^App, id: u64) -> ^host.Host {
+	ed := editor_find(app, id)
+	return ed != nil && ed.visible ? &ed.host : nil
 }
 
 // The texture goes with the renderer: before the windows close.
-editor_destroy :: proc(app: ^App) {
-	ed := &app.editor
-	editor_picture_drop(app)
-	if ed.tex != 0 { render.destroy_texture(&app.shared.r, ed.tex) }
+editor_destroy :: proc(ed: ^Editor) {
+	editor_picture_drop(ed)
+	if ed.tex != 0 { render.destroy_texture(&ed.app.shared.r, ed.tex) }
 	ed.tex = 0
 }
 
-editor_free :: proc(app: ^App) {
-	ed := &app.editor
-	editor_load_stop(app)
-	editor_picture_drop(app)
+editor_free :: proc(ed: ^Editor) {
+	editor_load_stop(ed)
+	editor_picture_drop(ed)
 	ui.palette_destroy(&ed.palette)
 	ui.field_destroy(&ed.field)
 	ui.slider_field_destroy(&ed.width_field)
 }
 
-// The window hidden, the picture and its shapes let go.
+// The window hidden, the picture and its shapes let go: editors_sweep frees it, or keeps it for the next picture.
 @(private = "file")
-editor_close :: proc(app: ^App) {
-	ed := &app.editor
+editor_close :: proc(ed: ^Editor) {
 	ed.palette.open = false
 	ed.sheet_open = false
 	ed.asking = false
+	ed.ask = {}
 	if ed.visible {
 		host.host_hide(&ed.host)
 		ed.visible = false
 	}
-	editor_picture_drop(app)
+	editor_picture_drop(ed)
 }
 
 @(private = "file")
-editor_picture_drop :: proc(app: ^App) {
-	ed := &app.editor
-	editor_mosaic_stop(app)
+editor_picture_drop :: proc(ed: ^Editor) {
+	editor_mosaic_stop(ed)
 	edit_mosaic_free(&ed.mosaic)
 	edit_export_free(&ed.export)
 	ed.exporting = false
@@ -385,10 +458,9 @@ editor_measure :: proc(user: rawptr, text: string, size: f32) -> Edit_Vec {
 // The mosaic's thread
 
 @(private = "file")
-editor_mosaic_start :: proc(app: ^App, cell: int) {
-	ed := &app.editor
+editor_mosaic_start :: proc(ed: ^Editor, cell: int) {
 	work := new(Editor_Mosaic_Work)
-	work^ = {rgba = ed.shot.rgba, size = ed.shot.size, cell = cell, app = app}
+	work^ = {rgba = ed.shot.rgba, size = ed.shot.size, cell = cell, app = ed.app}
 	t := thread.create(proc(t: ^thread.Thread) {
 		work := (^Editor_Mosaic_Work)(t.data)
 		work.out = edit_mosaic_make(work.rgba, work.size, work.cell, &work.cancel)
@@ -407,8 +479,7 @@ editor_mosaic_start :: proc(app: ^App, cell: int) {
 
 // The mosaic, once its thread is done.
 @(private = "file")
-editor_mosaic_take :: proc(app: ^App) {
-	ed := &app.editor
+editor_mosaic_take :: proc(ed: ^Editor) {
 	if ed.mosaic_work == nil || !sync.atomic_load(&ed.mosaic_work.done) { return }
 	thread.join(ed.mosaic_thread)
 	thread.destroy(ed.mosaic_thread)
@@ -421,8 +492,7 @@ editor_mosaic_take :: proc(app: ^App) {
 
 // Before the picture goes: the thread reads it. Told to stop, it ends within a row of cells.
 @(private = "file")
-editor_mosaic_stop :: proc(app: ^App) {
-	ed := &app.editor
+editor_mosaic_stop :: proc(ed: ^Editor) {
 	if ed.mosaic_thread == nil { return }
 	sync.atomic_store(&ed.mosaic_work.cancel, true)
 	thread.join(ed.mosaic_thread)
@@ -438,8 +508,8 @@ editor_mosaic_stop :: proc(app: ^App) {
 // Each build: the theme, as the main window has it.
 @(private = "file")
 editor_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
-	app := (^App)(h.user)
-	ed := &app.editor
+	ed := (^Editor)(h.user)
+	app := ed.app
 	a := app.settings.appearance
 	choice := prefs_page.appearance_choice(a)
 	choice.glow = 1
@@ -453,8 +523,7 @@ editor_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 // dialog or menu open, and not on the text field; a release, a move or the wheel when a gesture goes on.
 @(private = "file")
 editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
-	app := (^App)(h.user)
-	ed := &app.editor
+	ed := (^Editor)(h.user)
 	m := &ed.model
 	out := make([dynamic]platform.Event, 0, len(events), context.temp_allocator)
 	if !ed.has_picture {
@@ -471,7 +540,7 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 		#partial switch e.kind {
 		case .Close:
 			platform.cancel_close(h.win)
-			editor_close_asked(app)
+			editor_close_asked(ed)
 			continue
 		case .Key_Press:
 			if e.key == .Space && !typing && !blocked && !e.repeat { ed.space = true }
@@ -480,7 +549,7 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 		case .Mouse_Move:
 			ed.pointer, ed.has_pointer = e.pos, true
 			if !edit_idle(m) && !typing { edit_step(m, Edit_Move{at = e.pos, shift = .Shift in e.mods}) }
-			editor_hover(app)
+			editor_hover(ed)
 		case .Mouse_Leave:
 			ed.has_pointer = false
 		case .Mouse_Press:
@@ -499,14 +568,14 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 			if button == .Left { ed.last_press, ed.last_press_at = e.stamp, e.pos }
 			edit_step(m, Edit_Press{at = e.pos, button = button, shift = .Shift in e.mods, pan = ed.space, double = double})
 			_, typing = m.mode.(Edit_Typing)
-			editor_hover(app)
+			editor_hover(ed)
 			continue
 		case .Mouse_Release:
 			if edit_idle(m) || typing { break }
 			button := Edit_Button.Left
 			if e.button == .Middle { button = .Middle } else if e.button == .Right { button = .Right }
 			edit_step(m, Edit_Release{at = e.pos, button = button, shift = .Shift in e.mods})
-			editor_hover(app)
+			editor_hover(ed)
 			continue
 		case .Scroll:
 			if blocked || !edit_box_contains(m.view.canvas, e.pos) { break }
@@ -520,8 +589,7 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 
 // The cursor of the canvas where the pointer is: what a press there would do. (On a move, not at each frame.)
 @(private = "file")
-editor_hover :: proc(app: ^App) {
-	ed := &app.editor
+editor_hover :: proc(ed: ^Editor) {
 	m := &ed.model
 	switch s in m.mode {
 	case Edit_Panning:  ed.hover = .Grabbing; return
@@ -566,10 +634,9 @@ handle_cursor :: proc(h: Edit_Handle) -> platform.Cursor {
 // Actions
 
 @(private = "file")
-editor_action_enabled :: proc(app: ^App, a: Editor_Action) -> bool {
-	ed := &app.editor
+editor_action_enabled :: proc(ed: ^Editor, a: Editor_Action) -> bool {
 	m := &ed.model
-	if !ed.has_picture || ed.exporting { return a == .Close || a == .Palette || a == .Keys }
+	if !ed.has_picture || ed.exporting || ed.done_due { return a == .Close || a == .Palette || a == .Keys }
 	#partial switch a {
 	case .Undo:                         return edit_can_undo(m)
 	case .Redo:                         return edit_can_redo(m)
@@ -580,8 +647,7 @@ editor_action_enabled :: proc(app: ^App, a: Editor_Action) -> bool {
 }
 
 @(private = "file")
-editor_action :: proc(app: ^App, a: Editor_Action) {
-	ed := &app.editor
+editor_action :: proc(ed: ^Editor, a: Editor_Action) {
 	m := &ed.model
 	switch a {
 	case .Tool_Select, .Tool_Rectangle, .Tool_Ellipse, .Tool_Arrow, .Tool_Line, .Tool_Pen, .Tool_Text, .Tool_Highlighter,
@@ -595,39 +661,34 @@ editor_action :: proc(app: ^App, a: Editor_Action) {
 	case .Zoom_In:     edit_view_zoom_centre(m, EDIT_ZOOM_STEP)
 	case .Zoom_Out:    edit_view_zoom_centre(m, 1 / EDIT_ZOOM_STEP)
 	case .Zoom_Fit:    edit_view_fit(m)
-	case .Copy:        editor_export_start(app, .Copy)
-	case .Save:        editor_export_start(app, .Save)
-	case .Done:        editor_export_start(app, .Done)
-	case .Close:       editor_close_asked(app)
+	case .Copy:        editor_export_start(ed, .Copy)
+	case .Save:        editor_export_start(ed, .Save)
+	case .Done:        editor_export_start(ed, .Done)
+	case .Close:       editor_close_asked(ed)
 	case .Palette:     ui.palette_open(&ed.palette)
 	case .Keys:        ed.sheet_open = true
 	case .Nudge:       edit_nudge(m, {1, 0})
 	}
-	editor_hover(app)
+	editor_hover(ed)
 }
 
 // A close asked (the window's button, Escape, Ctrl+W): at once with nothing changed, else after the question.
-editor_close_asked :: proc(app: ^App) {
-	ed := &app.editor
-	if ed.exporting { return }
+editor_close_asked :: proc(ed: ^Editor) {
+	if ed.exporting || ed.done_due { return }
 	if ed.has_picture && edit_changed(&ed.model) { ed.asking = true } else { ed.close_due = true }
 }
 
 // The picture flattened for `purpose`. A text being typed is kept first. Done with nothing changed hands the picture as
 // it was taken: nothing to draw.
 @(private = "file")
-editor_export_start :: proc(app: ^App, purpose: Edit_Export_Purpose) {
-	ed := &app.editor
+editor_export_start :: proc(ed: ^Editor, purpose: Edit_Export_Purpose) {
 	m := &ed.model
-	if !ed.has_picture || ed.exporting { return }
+	if !ed.has_picture || ed.exporting || ed.done_due { return }
 	if _, typing := m.mode.(Edit_Typing); typing { edit_step(m, Edit_Type_End{keep = true}) }
 	if !edit_idle(m) { return }
 	if purpose == .Done && !edit_changed(m) {
-		shot := ed.shot
-		ed.shot, ed.has_picture = {}, false
-		edit_model_destroy(&ed.model)
-		editor_close(app)
-		workflow_editor_done(app, shot)
+		// (after the frame, not in this build: the run may open another editor's window)
+		ed.done_due = true
 		return
 	}
 	edit_export_begin(&ed.export, purpose, &m.doc)
@@ -637,8 +698,8 @@ editor_export_start :: proc(app: ^App, purpose: Edit_Export_Purpose) {
 
 // The flattened picture, once read back: to the workflow, the clipboard or a file.
 @(private = "file")
-editor_export_poll :: proc(app: ^App) {
-	ed := &app.editor
+editor_export_poll :: proc(ed: ^Editor) {
+	app := ed.app
 	shot, status := edit_export_poll(&app.shared.r, &ed.export, ed.shot.source)
 	switch status {
 	case .Pending, .None:
@@ -657,14 +718,22 @@ editor_export_poll :: proc(app: ^App) {
 	ed.exporting = false
 	switch purpose {
 	case .Done:
-		editor_close(app)
-		workflow_editor_done(app, shot)
+		editor_done(ed, shot)
 	case .Copy:
 		// (its PNG is made on the worker: editor_copied puts it on the clipboard)
-		worker_send(&app.worker, Job_Copy_Encode{shot = shot})
+		worker_send(&app.worker, Job_Copy_Encode{editor = ed.id, shot = shot})
 	case .Save:
-		worker_send(&app.worker, Job_Save{shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern)})
+		worker_send(&app.worker, Job_Save{editor = ed.id, shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern)})
 	}
+}
+
+// Done: the editor closes, and its picture (`shot`, taken) goes on in the run's branch it came for. Last: the run may
+// give this editor its next picture.
+@(private = "file")
+editor_done :: proc(ed: ^Editor, shot: Shot) {
+	ask := ed.ask
+	editor_close(ed)
+	workflow_editor_done(ed.app, ask, shot)
 }
 
 ////////////////////////////////
@@ -672,11 +741,10 @@ editor_export_poll :: proc(app: ^App) {
 
 @(private = "file")
 editor_build :: proc(h: ^host.Host, size: host.Vec2) {
-	app := (^App)(h.user)
-	ed := &app.editor
+	ed := (^Editor)(h.user)
 	em := ui.font_size()
 	if !ed.has_picture {
-		editor_waiting(app, em)
+		editor_waiting(ed, em)
 		return
 	}
 	m := &ed.model
@@ -687,28 +755,28 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	dialog := ed.palette.open || ed.sheet_open || ed.asking
 	if !dialog && !typing && !ed.exporting {
 		if ui.key_press(.Escape) {
-			if !edit_deselect(m) { editor_close_asked(app) }
+			if !edit_deselect(m) { editor_close_asked(ed) }
 		}
-		editor_nudge_keys(app)
+		editor_nudge_keys(ed)
 		for a in Editor_Action {
 			if a == .Nudge { continue }
-			if ui.command_pressed(EDITOR_ACTIONS[a], editor_action_enabled(app, a)) { editor_action(app, a); break }
+			if ui.command_pressed(EDITOR_ACTIONS[a], editor_action_enabled(ed, a)) { editor_action(ed, a); break }
 		}
 	}
 
 	canvas: ui.Rect
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###editor") {   // (the theme's surface: the host only clears to black)
-		editor_bar(app, em)
+		editor_bar(ed, em)
 		ui.next({width = ui.fill(), height = ui.fill(), cursor = ed.hover, bg = ui.color("well")})
 		b := ui.build_box({.Clickable, .Clip, .Draw_Background}, "###canvas")
-		b.custom, b.custom_user = editor_canvas_draw, app
+		b.custom, b.custom_user = editor_canvas_draw, ed
 		_ = ui.signal(b)
 		canvas = b.rect   // (last frame's layout: where the canvas is)
 	}
 	// (after the canvas: drawn over it, and first for the pointer)
-	editor_text_field(app, em)
-	editor_dialogs(app)
+	editor_text_field(ed, em)
+	editor_dialogs(ed)
 	// (the toasts at the bottom of the canvas: over the bar they hid the buttons just pressed)
 	if canvas.max.x > canvas.min.x { ui.set_toast_area(canvas) }
 	ui.set_toast_position(&ed.host.state, .Bottom_Center)
@@ -717,8 +785,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 
 // No picture yet: a file is read, or could not be. Escape closes.
 @(private = "file")
-editor_waiting :: proc(app: ^App, em: f32) {
-	ed := &app.editor
+editor_waiting :: proc(ed: ^Editor, em: f32) {
 	if ui.key_press(.Escape) || ui.command_pressed(EDITOR_ACTIONS[.Close]) { ed.close_due = true }
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, cross = .Center})
 	if ui.column(id = "###waiting") {
@@ -732,8 +799,8 @@ editor_waiting :: proc(app: ^App, em: f32) {
 }
 
 @(private = "file")
-editor_nudge_keys :: proc(app: ^App) {
-	m := &app.editor.model
+editor_nudge_keys :: proc(ed: ^Editor) {
+	m := &ed.model
 	if !edit_idle(m) || !edit_has_selection(m) { return }
 	@(static, rodata) dirs := [4]platform.Key{.Left, .Right, .Up, .Down}
 	@(static, rodata) steps := [4]Edit_Vec{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
@@ -745,8 +812,8 @@ editor_nudge_keys :: proc(app: ^App) {
 
 // The field of the text being typed, over the canvas where the text is.
 @(private = "file")
-editor_text_field :: proc(app: ^App, em: f32) {
-	ed := &app.editor
+editor_text_field :: proc(ed: ^Editor, em: f32) {
+	app := ed.app
 	m := &ed.model
 	s, typing := m.mode.(Edit_Typing)
 	if !typing {
@@ -783,8 +850,7 @@ editor_text_field :: proc(app: ^App, em: f32) {
 
 // The bar: the tools, the properties, then what is done with the picture.
 @(private = "file")
-editor_bar :: proc(app: ^App, em: f32) {
-	ed := &app.editor
+editor_bar :: proc(ed: ^Editor, em: f32) {
 	m := &ed.model
 	side := math.round(em * 2.2)
 	ui.next({width = ui.fill(), height = ui.px(side + math.round(em * 0.8)), axis = .X, cross = .Center})
@@ -792,19 +858,19 @@ editor_bar :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.5))
 		for t in Edit_Tool {
 			a := Editor_Action(int(Editor_Action.Tool_Select) + int(t))
-			if bar_icon(fmt.tprintf("tool%d", int(t)), EDITOR_ACTIONS[a], side, active = m.tool == t, enabled = true) { editor_action(app, a) }
+			if bar_icon(fmt.tprintf("tool%d", int(t)), EDITOR_ACTIONS[a], side, active = m.tool == t, enabled = true) { editor_action(ed, a) }
 		}
 		bar_separator(em, side)
-		editor_properties(app, em, side)
+		editor_properties(ed, em, side)
 		ui.spacer(ui.fill())
 		for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save}) {
-			if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(app, a)) { editor_action(app, a) }
+			if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(ed, a)) { editor_action(ed, a) }
 		}
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
 		sig: ui.Signal
 		if ui.tags("accent_button") { sig = ui.button("Done###done") }
-		if sig.clicked && editor_action_enabled(app, .Done) { editor_action(app, .Done) }
+		if sig.clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
 		if ui.hovered_for(sig, 0.4) { if ui.tooltip() { ui.tooltip_text(ui.command_tip(EDITOR_ACTIONS[.Done])) } }
 		ui.spacer(ui.px(em * 0.5))
 	}
@@ -812,8 +878,8 @@ editor_bar :: proc(app: ^App, em: f32) {
 
 // The properties of the selection, else of the tool: what applies to its kind only.
 @(private = "file")
-editor_properties :: proc(app: ^App, em: f32, side: f32) {
-	m := &app.editor.model
+editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
+	m := &ed.model
 	style, props := edit_style_shown(m)
 	if props == {} { return }
 	before := style
@@ -827,7 +893,7 @@ editor_properties :: proc(app: ^App, em: f32, side: f32) {
 	if .Width in props {
 		// (a slider for the feel, its field for the exact width)
 		ui.next({width = ui.px(math.round(em * 13)), height = ui.px(math.round(side * 0.85))})
-		ui.slider_field("###width", &app.editor.width_field, &style.width, EDIT_WIDTH_MIN, EDIT_WIDTH_MAX, 1, unit = "px")
+		ui.slider_field("###width", &ed.width_field, &style.width, EDIT_WIDTH_MIN, EDIT_WIDTH_MAX, 1, unit = "px")
 		ui.spacer(ui.px(em * 0.5))
 	}
 	if .Text_Size in props {
@@ -901,14 +967,13 @@ swatch :: proc(id: string, rgb: u32, name: string, chosen: bool, side: f32) -> b
 
 // The palette (every action but the arrows), the sheet of keys, the question before the changes are dropped.
 @(private = "file")
-editor_dialogs :: proc(app: ^App) {
-	ed := &app.editor
+editor_dialogs :: proc(ed: ^Editor) {
 	all := slice.enumerated_array(&EDITOR_ACTIONS)
 	if ed.palette.open {
 		listed := all[:len(all) - 1]   // (Nudge: its keys are the arrows)
 		enabled := make([]bool, len(listed), context.temp_allocator)
-		for i in 0 ..< len(listed) { enabled[i] = editor_action_enabled(app, Editor_Action(i)) }
-		if i, _ := ui.palette(&ed.palette, listed, enabled); i >= 0 { editor_action(app, Editor_Action(i)) }
+		for i in 0 ..< len(listed) { enabled[i] = editor_action_enabled(ed, Editor_Action(i)) }
+		if i, _ := ui.palette(&ed.palette, listed, enabled); i >= 0 { editor_action(ed, Editor_Action(i)) }
 	}
 	ui.shortcuts_sheet("keys", all, &ed.sheet_open, "The editor's keys")
 	switch ui.confirm("drop", &ed.asking, {title = "Close the editor and drop the changes?", note = "The annotations on this picture are lost. Nothing is copied or saved.", act = "Drop the changes"}) {
@@ -923,8 +988,8 @@ editor_dialogs :: proc(app: ^App) {
 // The canvas' draw: the picture and its shapes, the crop, the selection's handles; then the export, when one is due.
 @(private = "file")
 editor_canvas_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	app := (^App)(user)
-	ed := &app.editor
+	ed := (^Editor)(user)
+	app := ed.app
 	m := &ed.model
 	if !ed.has_picture || ed.tex == 0 { return }
 	// (the view follows the canvas of this frame: the next input is placed by it)
@@ -979,25 +1044,13 @@ canvas_selection :: proc(dc: ^draw.Context, m: ^Edit_Model, accent: draw.Color, 
 	}
 }
 
-// The editor's Ctrl+C, its PNG made on the worker: on the clipboard (the anchor's, as a workflow's Copy step: it outlives
-// this window), and said in the editor.
+// An editor's Ctrl+C, its PNG made on the worker: on the clipboard (the anchor's, as a workflow's Copy step: it outlives
+// the editor's window), and said in that editor while it is shown. A copy asked before its editor closed still goes
+// on the clipboard: the person asked for it.
 editor_copied :: proc(app: ^App, r: Result_Copy_Encoded) {
 	r := r
 	defer { shot_free(&r.shot); delete(r.png) }
-	ed := &app.editor
 	ok := len(r.png) > 0 && platform.clipboard_set_image(app.anchor, {rgba = r.shot.rgba, size = r.shot.size, png = r.png})
-	window := ed.visible ? &ed.host : nil
+	window := editor_window(app, r.editor)
 	if ok { app_announce(app, .Good, "Copied to the clipboard", "", window) } else { app_announce(app, .Bad, "The picture cannot go to the clipboard", "", window) }
-}
-
-// Pictures wait for the editor (a workflow's Annotate steps while it holds another): said in the editor, where the
-// person is, with what makes the next one come.
-editor_note_waiting :: proc(app: ^App, waiting: int) {
-	ed := &app.editor
-	if !ed.visible { return }
-	if waiting == 1 {
-		app_announce(app, .Info, "Another picture waits for the editor", "It opens after Done, or when you close this one.", &ed.host)
-	} else {
-		app_announce(app, .Info, fmt.tprintf("%d pictures wait for the editor", waiting), "Each opens after Done, or when you close this one.", &ed.host)
-	}
 }

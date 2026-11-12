@@ -280,7 +280,7 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw.grid.sel = -1
 	hw.grid.no_typeahead = true
 	hw.table.vl.no_typeahead = true
-	app_wake_set(app, .History, hw.host.win)
+	app_wake_add(app, hw.host.win)
 	return true
 }
 

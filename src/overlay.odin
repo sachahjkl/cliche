@@ -63,7 +63,7 @@ overlay_show :: proc(app: ^App) -> bool {
 	// (a layer surface stays on the output it was made for: another output, another surface; the renderer's own window
 	// stays, on its output)
 	if o.opened && o.layer && o.out != out && app.shared.main != &o.host {
-		app_wake_set(app, .Overlay, nil)
+		app_wake_remove(app, o.host.win)
 		host.host_close(&o.host)
 		o.opened, o.visible = false, false
 	}
@@ -79,7 +79,7 @@ overlay_show :: proc(app: ^App) -> bool {
 		o.opened = true
 		o.host.input = overlay_input
 		o.host.after_input = 2
-		app_wake_set(app, .Overlay, o.host.win)
+		app_wake_add(app, o.host.win)
 	}
 	f := app.desktop.frame
 	r := &app.shared.r

@@ -55,6 +55,11 @@ one workflow. Recording is not a workflow.
   works on a copy. What must run on the interface's thread (the clipboard, the history) and the editor (Annotate: the run
   waits for Done; a close stops that branch) are `src/workflow_app.odin`'s, which also starts the runs (several may be
   in flight) and tells their end.
+- **The editors** (`src/editor.odin`): each Annotate opens its picture at once in an editor of its own (`app.editors`),
+  any number open together. An editor holds the run and node its picture is for (`Editor.ask`): its Done or its close
+  ends that node, and that node only. Its id (`Editor.id`) goes with its Ctrl+C and Ctrl+S to the worker and back; a
+  result whose editor has closed is said where cliche says things. A closed editor is freed, but for one kept hidden
+  for the next picture and the renderer's own window.
 - **The store** (`src/workflow_store.odin`): `<config dir>/cliche/workflows.json`, read on the worker at the start, written
   on the worker after each change (at the end of a gesture). A broken file is kept aside as `workflows.json.broken`, and
   the defaults take its place.

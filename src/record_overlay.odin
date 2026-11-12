@@ -60,7 +60,7 @@ record_overlay_show :: proc(app: ^App, headless := false) -> bool {
 		ro.host.after_input = 2
 		if ro.icons == 0 { ro.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA) }
 		ro.host.state.icon_font = ro.icons
-		app_wake_set(app, .Record_Overlay, ro.host.win)
+		app_wake_add(app, ro.host.win)
 	}
 	ro.decision = .None
 	ro.bar, ro.bar_set = {}, {}
@@ -86,7 +86,7 @@ record_overlay_close :: proc(app: ^App) {
 		return
 	}
 	// (no other thread wakes a window about to go)
-	app_wake_set(app, .Record_Overlay, nil)
+	app_wake_remove(app, ro.host.win)
 	host.host_close(&ro.host)
 	ro.opened, ro.visible = false, false
 }

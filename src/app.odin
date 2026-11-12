@@ -7,8 +7,8 @@ package cliche
 // it comes back at once.
 //
 // The windows: the region's overlay (overlay.odin), the main window with the history, the workflows and the settings
-// (history_view.odin, workflow_view.odin, settings_view.odin), the editor (editor.odin), and the record overlay over the
-// other programs while a recording is ready or runs (record_overlay.odin).
+// (history_view.odin, workflow_view.odin, settings_view.odin), the editors, one per picture (editor.odin), and the record
+// overlay over the other programs while a recording is ready or runs (record_overlay.odin).
 //
 // A capture's picture goes to a run of the workflow its trigger runs (workflow_app.odin): the flow of the capture ends
 // there, and the run goes on beside the next captures.
@@ -38,9 +38,6 @@ Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, E
 // A command another start handed over (token owned).
 Inbox_Item :: struct { verb: Verb, token: string }
 
-// The windows other threads wake.
-Window_Slot :: enum u8 { Anchor, Overlay, History, Editor, Record_Overlay }
-
 App :: struct {
 	prefs:      config.Prefs,
 	settings:   Settings,
@@ -50,13 +47,15 @@ App :: struct {
 	worker:     Worker,
 	inbox_lock: sync.Mutex,
 	inbox:      [dynamic]Inbox_Item,                       // guarded by `inbox_lock`
-	wakes:      [Window_Slot]^platform.Window,             // atomic: written by this thread, read by the others
+	wake_lock:  sync.Mutex,
+	wakes:      [dynamic]^platform.Window,                 // guarded by `wake_lock`: every open window (app_wake)
 	shared:     host.Shared,                               // the renderer, from the first window that needs it
 	overlay:    Overlay,                                   // overlay.odin
 	history_window: History_Window,                        // history_view.odin: the main window, with the settings
-	editor:     Editor,                                    // editor.odin
+	editors:    [dynamic]^Editor,                          // editor.odin: one per picture, and one kept hidden for the next
+	editor_next_id: u64,
 	record_overlay: Record_Overlay,                        // record_overlay.odin
-	prewarmed:  bool,                                      // the editor was opened ahead (app_prewarm)
+	prewarmed:  bool,                                      // an editor was opened ahead (app_prewarm)
 	notice_entry: u64,                                     // the history's entry of the last notification (a click shows it)
 
 	flow:       Flow,                                      // flow.odin
@@ -70,8 +69,6 @@ App :: struct {
 	workflows_save_due: bool,                              // a change is not written yet
 	runs:       [dynamic]^Run,                             // the runs in flight (workflow_app.odin)
 	run_next_id: u64,
-	annotate_queue: [dynamic]Annotate_Ask,                 // Annotate nodes waiting for the editor
-	editor_for: Annotate_Ask,                              // the run and node the editor's picture is for (run 0: none)
 	record:     Record_Flow,                               // the recording's state (record.odin)
 	recorder:   Recorder,                                  // its thread, while one runs
 	record_region: Rect,                                   // its region, logical
@@ -106,7 +103,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 		app_free(app)
 		return 1
 	}
-	app_wake_set(app, .Anchor, app.anchor)
+	app_wake_add(app, app.anchor)
 	if !worker_start(&app.worker, app_wake, app) {
 		fmt.eprintln("cliche: the worker's thread cannot start")
 		platform.destroy_window(app.anchor)
@@ -161,14 +158,15 @@ app_free :: proc(app: ^App) {
 	delete(app.default_folder)
 	settings_free(&app.settings)
 	config.prefs_destroy(&app.prefs)
+	delete(app.wakes)
 }
 
-// The editor opened hidden before its first picture, when a screenshot's workflow opens it (Annotate): its window, its
-// surface and the graphics driver are then ready, and a shortcut shows it at once. The driver is loaded on a thread
-// first (its done wakes this loop): the interface's thread never waits for it.
+// An editor opened hidden before the first picture, when a screenshot's workflow opens one (Annotate): its window, its
+// surface and the graphics driver are then ready, and a shortcut shows it at once (editor_take). The driver is loaded
+// on a thread first (its done wakes this loop): the interface's thread never waits for it.
 @(private = "file")
 app_prewarm :: proc(app: ^App) {
-	if app.editor.opened || app.prewarmed || !workflows_want_editor(app) { return }
+	if len(app.editors) > 0 || app.prewarmed || !workflows_want_editor(app) { return }
 	if app.shared.main == nil {
 		#partial switch render.device_preload_state() {
 		case .Not_Started: render.preload_device(done = app_wake, user = app); return
@@ -176,7 +174,7 @@ app_prewarm :: proc(app: ^App) {
 		}
 	}
 	app.prewarmed = true   // (once: a window that cannot open is not asked again at every turn)
-	editor_open(app, headless = false)
+	_ = editor_open(app, headless = false)
 }
 
 // The shown windows' frames, else the anchor: what ends the wait is a wake of any window (app_wake), input, the tray.
@@ -185,7 +183,7 @@ app_wait :: proc(app: ^App) {
 	shown := make([dynamic]^host.Host, 0, 4, context.temp_allocator)
 	if app.overlay.visible { append(&shown, &app.overlay.host) }
 	if app.history_window.visible { append(&shown, &app.history_window.host) }
-	if app.editor.visible { append(&shown, &app.editor.host) }
+	for ed in app.editors { if ed.visible { append(&shown, &ed.host) } }
 	if app.record_overlay.visible { append(&shown, &app.record_overlay.host) }
 	if len(shown) > 0 { host.hosts_wait(shown[:]) } else { platform.wait_event(app.anchor, 0) }
 }
@@ -205,15 +203,19 @@ app_frames :: proc(app: ^App) {
 		if app_close_asked(&app.history_window.host) { app.history_window.hide_due = true }
 		history_after_frame(app)
 	}
-	if app.editor.visible {
-		host.host_frame(&app.editor.host)
+	// (by index: an editor's Done may open another editor, appended meanwhile; the pointers stay)
+	for i := 0; i < len(app.editors); i += 1 {
+		ed := app.editors[i]
+		if !ed.visible { continue }
+		host.host_frame(&ed.host)
 		timing_mark("editor frame")
-		if app_close_asked(&app.editor.host) {
-			editor_close_asked(app)
-			app.editor.host.settle = max(app.editor.host.settle, 2)   // (its question, when it asks one, is drawn)
+		if app_close_asked(&ed.host) {
+			editor_close_asked(ed)
+			ed.host.settle = max(ed.host.settle, 2)   // (its question, when it asks one, is drawn)
 		}
-		editor_after_frame(app)
+		editor_after_frame(ed)
 	}
+	editors_sweep(app)   // (after every frame: none of them is inside its own)
 	if app.record_overlay.visible {
 		host.host_frame(&app.record_overlay.host)
 		if app_close_asked(&app.record_overlay.host) { app.record_overlay.decision = .Cancel }
@@ -234,27 +236,51 @@ app_close_asked :: proc(h: ^host.Host) -> bool {
 // The windows with a renderer close in the order the host asks: the renderer's own window last.
 @(private = "file")
 app_windows_close :: proc(app: ^App) {
+	// (no other thread wakes a window about to go; the anchor goes after them)
+	sync.mutex_lock(&app.wake_lock)
+	clear(&app.wakes)
+	sync.mutex_unlock(&app.wake_lock)
 	overlay_destroy(app)
 	// (textures go while the renderer is there: before any host closes)
 	history_window_free(app)
-	editor_destroy(app)
-	hosts := [4]^host.Host{&app.overlay.host, &app.history_window.host, &app.editor.host, &app.record_overlay.host}
-	opened := [4]bool{app.overlay.opened, app.history_window.opened, app.editor.opened, app.record_overlay.opened}
-	for h, i in hosts { if opened[i] && app.shared.main != h { host.host_close(h) } }
-	for h, i in hosts { if opened[i] && app.shared.main == h { host.host_close(h) } }
-	editor_free(app)
+	for ed in app.editors { editor_destroy(ed) }
+	hosts := make([dynamic]^host.Host, 0, 3 + len(app.editors), context.temp_allocator)
+	if app.overlay.opened { append(&hosts, &app.overlay.host) }
+	if app.history_window.opened { append(&hosts, &app.history_window.host) }
+	for ed in app.editors { append(&hosts, &ed.host) }
+	if app.record_overlay.opened { append(&hosts, &app.record_overlay.host) }
+	for h in hosts { if app.shared.main != h { host.host_close(h) } }
+	for h in hosts { if app.shared.main == h { host.host_close(h) } }
+	for ed in app.editors {
+		editor_free(ed)
+		free(ed)
+	}
+	delete(app.editors)
 }
 
-// Wakes the interface's loop, from any thread.
+// Wakes the interface's loop, from any thread. Every open window is woken: on Linux the loop hears the wake of the one
+// window it waits on (host.hosts_wait: the first shown), and which one that is changes from turn to turn.
 app_wake :: proc(user: rawptr) {
 	app := (^App)(user)
-	for slot in Window_Slot {
-		if w := sync.atomic_load(&app.wakes[slot]); w != nil { platform.wake(w) }
-	}
+	sync.mutex_lock(&app.wake_lock)
+	defer sync.mutex_unlock(&app.wake_lock)
+	for w in app.wakes { platform.wake(w) }
 }
 
-app_wake_set :: proc(app: ^App, slot: Window_Slot, w: ^platform.Window) {
-	sync.atomic_store(&app.wakes[slot], w)
+// A window opened: other threads wake it from now on.
+app_wake_add :: proc(app: ^App, w: ^platform.Window) {
+	sync.mutex_lock(&app.wake_lock)
+	defer sync.mutex_unlock(&app.wake_lock)
+	append(&app.wakes, w)
+}
+
+// Before a window is destroyed: once this returns, no other thread wakes it (a wake under way ends first: the lock).
+app_wake_remove :: proc(app: ^App, w: ^platform.Window) {
+	sync.mutex_lock(&app.wake_lock)
+	defer sync.mutex_unlock(&app.wake_lock)
+	for x, i in app.wakes {
+		if x == w { unordered_remove(&app.wakes, i); return }
+	}
 }
 
 // A message of another start, on the instance's thread: queued for the interface's.
@@ -376,7 +402,7 @@ app_results :: proc(app: ^App) {
 		case Result_Shot:
 			app_shot(app, v)
 		case Result_Saved:
-			app_saved(app, v)
+			editor_saved(app, v)
 		case Result_Written:
 			if !v.ok { fmt.eprintfln("cliche: %s cannot be written", v.path) }
 			delete(v.path)
@@ -479,15 +505,8 @@ app_chain :: proc(app: ^App, shot: Shot) {
 	app_outcome(app)
 }
 
-// What the worker said of the editor's Ctrl+S: told in the editor.
-@(private = "file")
-app_saved :: proc(app: ^App, r: Result_Saved) {
-	defer delete(r.path)
-	editor_saved(app, r.path, r.error)
-}
-
 // What cliche did (copied, saved, recorded), said as the person chose (general.messages): a notification of the
-// system, else a toast of `window` (where it was asked: the editor; nil: the main window when it is shown). With no
+// system, else a toast of `window` (where it was asked: an editor; nil: the main window when it is shown). With no
 // window to show a toast in, the console only.
 app_announce :: proc(app: ^App, kind: ui.Toast_Kind, title: string, body := "", window: ^host.Host = nil) {
 	h := window

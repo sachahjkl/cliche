@@ -17,8 +17,8 @@ import "gt:platform"
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
 Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
-Job_Save      :: struct { shot: Shot, folder, pattern: string }   // the editor's Ctrl+S; owned by the job
-Job_Copy_Encode :: struct { shot: Shot }                      // the editor's Ctrl+C: its PNG for the clipboard, made here (owned)
+Job_Save      :: struct { editor: u64, shot: Shot, folder, pattern: string }   // an editor's Ctrl+S (Editor.id); owned by the job
+Job_Copy_Encode :: struct { editor: u64, shot: Shot }         // an editor's Ctrl+C (Editor.id): its PNG for the clipboard, made here (owned)
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences, the workflows); owned
 Job_Workflows_Load :: struct {}                               // the workflows' file, read at the start (workflow_store.odin)
 Job_Picture_Load :: struct { path: string, workflow: u64 }    // a PNG of the history decoded, for a preview run of `workflow`; owned
@@ -48,11 +48,11 @@ Result_Desktop :: struct {
 // A picture to act on (owned).
 Result_Shot :: struct { error: Flow_Error, shot: Shot }
 
-// The editor's Ctrl+C: the picture and its PNG, which the interface's thread puts on the clipboard (owned).
-Result_Copy_Encoded :: struct { shot: Shot, png: []u8 }
+// An editor's Ctrl+C (`editor`: its Editor.id): the picture and its PNG, which the interface's thread puts on the clipboard (owned).
+Result_Copy_Encoded :: struct { editor: u64, shot: Shot, png: []u8 }
 
-// The editor's Ctrl+S is written (save.odin's Saved, its path owned).
-Result_Saved :: struct { using saved: Saved }
+// An editor's Ctrl+S is written (`editor`: its Editor.id; save.odin's Saved, its path owned).
+Result_Saved :: struct { editor: u64, using saved: Saved }
 
 // The workflows read (workflow_store.odin): the list (owned), and why the file could not be used ("" none; owned).
 Result_Workflows :: struct { workflows: Workflows, problem: string }
@@ -184,12 +184,12 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		worker_post(w, Result_Shot{shot = shot_of_frame(&out, .Region)})
 	case Job_Save:
 		job := v
-		worker_post(w, Result_Saved{save_shot(&job)})
+		worker_post(w, Result_Saved{editor = v.editor, saved = save_shot(&job)})
 	case Job_Thumbnail:
 		job := v
 		worker_post(w, thumbnail_work(&job))
 	case Job_Copy_Encode:
-		worker_post(w, Result_Copy_Encoded{shot = v.shot, png = png.encode(v.shot.rgba, v.shot.size.x, v.shot.size.y, .Fast)})
+		worker_post(w, Result_Copy_Encoded{editor = v.editor, shot = v.shot, png = png.encode(v.shot.rgba, v.shot.size.x, v.shot.size.y, .Fast)})
 	case Job_Write:
 		ok := write_file(v.path, transmute([]u8)v.text)
 		delete(v.text)
