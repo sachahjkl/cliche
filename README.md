@@ -1,8 +1,8 @@
-<img src="assets/logo_128.png" alt="" width="96" align="right">
+<p align="center"><img src="assets/logo_128.png" alt="" width="96"></p>
 
-# cliche
+<h1 align="center">cliche</h1>
 
-Fast screenshots and screen recordings, shared at once.
+<p align="center">Fast screenshots and screen recordings, shared at once.</p>
 
 cliche lives in the notification area. A shortcut takes a picture at once: a region drawn on the frozen screen (the
 window under the pointer is framed for you), the screen under the pointer, or the window in front. The picture then goes
