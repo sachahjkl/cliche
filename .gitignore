@@ -1,0 +1,7 @@
+build/
+.odin-cache/
+result
+.direnv/
+*.exe
+*.pdb
+.pre-commit-config.yaml
