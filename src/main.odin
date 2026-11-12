@@ -22,6 +22,8 @@ USAGE :: `cliche: screenshots
   cliche --ocr                read the text in a region: it is copied
   cliche --record             record a region as an MP4 video; the same command again stops it
   cliche --record-gif         record a region as an animated GIF; the same command again stops it
+  cliche --edit               capture a region and open it in the editor
+  cliche --history            show the captures kept
   cliche --settings           open the settings
   cliche --quit               end the running cliche
   cliche version
@@ -35,7 +37,7 @@ main :: proc() {
 }
 
 run :: proc(all_args: []string) -> int {
-	when CLICHE_SHOTS != "" { return shots_run(CLICHE_SHOTS) }
+	when CLICHE_SHOTS != "" { return shots_run(CLICHE_SHOTS, len(all_args) > 0 ? all_args[0] : "") }
 	prefs: config.Prefs
 	args, problems := prefs_open(&prefs, all_args)
 	defer config.prefs_destroy(&prefs)

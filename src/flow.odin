@@ -99,6 +99,7 @@ flow_step :: proc(f: Flow, e: Flow_Event) -> (next: Flow, ok: bool) {
 	case Flow_Encoding:
 		#partial switch v in e {
 		case Flow_Saved:       return Flow_Done{s.source}, true
+		case Flow_Cancelled:   return Flow_Idle{}, true   // (the editor closed without Done: the picture goes)
 		case Flow_Save_Failed: return Flow_Failed{s.source, v.error}, true
 		}
 	}

@@ -14,7 +14,8 @@ Pictures can also be uploaded to a host, its address copied: a built-in one, or 
 
 `cliche --record` records a region as an MP4 video, `cliche --record-gif` as a GIF; the same command again stops it.
 
-To come: an editor.
+`cliche --edit` opens a region in the editor: arrows, boxes, text, step numbers, a pixelated part, red with a shadow by
+default; each one stays movable until Done. `cliche --history` shows the captures kept, as a grid or a list.
 
 ## Use
 

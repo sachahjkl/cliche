@@ -49,13 +49,21 @@ busy_flow_refuses_a_trigger :: proc(t: ^testing.T) {
 	}
 }
 
+// The editor closed without Done: the capture is given up, the next one can start.
+@(test)
+editor_closed_returns_to_idle :: proc(t: ^testing.T) {
+	f: Flow = Flow_Encoding{.Region}
+	f = step(t, f, Flow_Cancelled{}, Flow_Idle{})
+	f = step(t, f, Flow_Trigger{.Screen}, Flow_Capturing{.Screen})
+}
+
 @(test)
 late_events_are_refused :: proc(t: ^testing.T) {
 	_, ok := flow_step(Flow_Idle{}, Flow_Captured{})
 	testing.expect(t, !ok)
 	_, ok = flow_step(Flow_Idle{}, Flow_Reset{})
 	testing.expect(t, !ok)
-	_, ok = flow_step(Flow_Encoding{.Region}, Flow_Cancelled{})
+	_, ok = flow_step(Flow_Encoding{.Region}, Flow_Trigger{.Screen})
 	testing.expect(t, !ok)
 	_, ok = flow_step(Flow_Done{.Region}, Flow_Saved{})
 	testing.expect(t, !ok)

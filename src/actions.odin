@@ -3,14 +3,14 @@ package cliche
 import "core:strings"
 
 // What happens to a picture once it is taken: a chain of actions, run in this order. Copy and Save run now; the others
-// are the next layers (an uploader compatible with ShareX's .sxcu files, the editor). Reading a QR code is a capture of
-// its own (Purpose.Qr): its text, not the picture, is what it gives.
+// are an upload (ShareX's .sxcu uploaders) and the editor first (after.edit). Reading a QR code is a capture of its own
+// (Purpose.Qr): its text, not the picture, is what it gives.
 
 After_Capture :: enum u8 {
 	Copy,          // the picture on the clipboard
 	Save,          // a PNG file in save.folder, named by save.name
 	Upload,        // to a host: ShareX's custom uploaders (uploader.odin), the URL to the clipboard
-	Open_Editor,   // (to come) the picture opened in cliche's editor
+	Open_Editor,   // the picture opened in cliche's editor first (after.edit: Purpose.Edit)
 }
 
 After_Capture_Set :: bit_set[After_Capture; u8]
@@ -19,14 +19,16 @@ After_Capture_Set :: bit_set[After_Capture; u8]
 AFTER_CAPTURE_DONE :: After_Capture_Set{.Copy, .Save, .Upload}
 
 // What a capture is for: a picture, through the chain; or the text of the QR code in it (cliche --qr), or the text it
-// shows (cliche --ocr), copied; or the region of a recording (cliche --record: record_app.odin).
-Purpose :: enum u8 { Picture, Qr, Text, Record }
+// shows (cliche --ocr), copied; or the region of a recording (cliche --record: record_app.odin); or a picture for the
+// editor first (cliche --edit, after.edit), whose Done runs the chain.
+Purpose :: enum u8 { Picture, Qr, Text, Record, Edit }
 
 // A picture taken: straight RGBA, rows from the top, no padding. The worker makes it; the chain reads it.
 Shot :: struct {
 	rgba:   []u8,
 	size:   [2]int,
 	source: Source,
+	scale:  f32,   // physical pixels per logical one (the editor's strokes are logical: 0 is 1)
 }
 
 shot_free :: proc(s: ^Shot) {

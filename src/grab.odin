@@ -57,7 +57,7 @@ shot_of_frame :: proc(f: ^capture.Frame, source: Source, bgra: bool) -> Shot {
 		copy(rgba[y * w * 4:][:w * 4], f.pixels[y * int(f.stride):][:w * 4])
 	}
 	if bgra { bgra_to_rgba(rgba, f.width, f.height, f.width * 4) }
-	return {rgba = rgba, size = {w, h}, source = source}
+	return {rgba = rgba, size = {w, h}, source = source, scale = f.scale}
 }
 
 // Swaps blue and red in place.

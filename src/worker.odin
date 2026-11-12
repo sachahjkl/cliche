@@ -16,7 +16,7 @@ import "gt:platform"
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
 Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
-Job_Save      :: struct { shot: Shot, folder, pattern, uploader: string, save, fast, reveal, upload: bool }   // owned by the job
+Job_Save      :: struct { shot: Shot, folder, pattern, uploader: string, save, fast, reveal, upload, from_editor: bool }   // owned by the job
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences); owned
 Job_Qr        :: struct { shot: Shot }                        // the QR code in the picture, read; owned
 Job_Ocr       :: struct { shot: Shot, languages: string }   // the text in the picture, read; owned ("": the user's languages)
@@ -27,7 +27,7 @@ Job_Pick_Folder :: struct { start: string }                   // the system's di
 Job_Open_Folder :: struct { folder: string }                  // the save folder in the file manager ("": the default); owned
 Job_Integrate :: struct { menu, autostart: bool }             // cliche's launcher and its start with the session (integration.odin)
 
-Job :: union { Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write, Job_Qr, Job_Ocr, Job_Pick_Folder, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Reveal }
+Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write, Job_Qr, Job_Ocr, Job_Pick_Folder, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Reveal }
 
 // The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
@@ -61,7 +61,7 @@ Result_Folder :: struct { path: string }
 // What went wrong putting cliche on the desktop (owned; "": nothing).
 Result_Integrated :: struct { problem: string }
 
-Result :: union { Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written, Result_Qr, Result_Folder, Result_Integrated, Result_Uploaders }
+Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written, Result_Qr, Result_Folder, Result_Integrated, Result_Uploaders }
 
 Worker :: struct {
 	thread:    ^thread.Thread,
@@ -75,6 +75,7 @@ Worker :: struct {
 	pointer:   proc() -> (Point, bool),   // where the pointer is on the desktop, when the system says (pointer_*.odin)
 
 	// the worker's thread only
+	history:   History_Disk,       // the history's copy and its file (history.odin)
 	session:   ^capture.Session,
 	session_error: capture.Error,
 }
@@ -144,6 +145,7 @@ worker_run :: proc(t: ^thread.Thread) {
 	}
 	capture.close(w.session)
 	w.session = nil
+	history_disk_free(&w.history)
 }
 
 @(private = "file")
@@ -198,6 +200,8 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		_ = os.make_directory_all(folder)
 		_ = platform.open_path(folder)
 		delete(v.folder)
+	case Job_History:
+		if r, has := history_job_run(&w.history, v); has { worker_post(w, r) }
 	case Job_Reveal:
 		_ = platform.reveal_in_folder(v.path)
 		delete(v.path)
@@ -245,6 +249,8 @@ job_free :: proc(j: ^Job) {
 		delete(v.folder)
 	case Job_Reveal:
 		delete(v.path)
+	case Job_History:
+		history_job_free(&v)
 	}
 }
 
@@ -254,6 +260,7 @@ result_free :: proc(r: ^Result) {
 	case Result_Shot:    shot_free(&v.shot)
 	case Result_Saved:   delete(v.path); delete(v.url); delete(v.upload_problem)
 	case Result_Uploaders: uploaders_result_free(&v)
+	case Result_History: history_result_free(&v)
 	case Result_Written: delete(v.path)
 	case Result_Qr:      delete(v.text)
 	case Result_Opened:  delete(v.default_folder)

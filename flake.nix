@@ -56,6 +56,11 @@
       fontconfig
       freetype
       dbus
+      # (opened at run time: recordings, the text read in a region, uploads)
+      libva
+      openh264
+      tesseract
+      curl
     ];
 
     # APP_VERSION of src/main.odin
@@ -75,7 +80,7 @@
       # the crates of the toolkit's text library, vendored: cargo makes no request
       cargoDeps = pkgs.rustPlatform.importCargoLock {lockFile = ./ext/gui_toolkit/native/text/Cargo.lock;};
 
-      nativeBuildInputs = [odin pkgs.cargo pkgs.rustc pkgs.clang pkgs.lld pkgs.autoPatchelfHook pkgs.copyDesktopItems];
+      nativeBuildInputs = [odin pkgs.cargo pkgs.rustc pkgs.clang pkgs.lld pkgs.autoPatchelfHook pkgs.copyDesktopItems pkgs.makeWrapper];
       buildInputs = [pkgs.fontconfig pkgs.freetype pkgs.stdenv.cc.cc.lib];
       # what it opens with dlopen goes in its RUNPATH; the Vulkan driver is the system's (/run/opengl-driver)
       runtimeDependencies = runtime;
@@ -122,6 +127,8 @@
       installPhase = ''
         runHook preInstall
         install -Dm755 build/cliche $out/bin/cliche
+        # (the languages of the text read in a region; a TESSDATA_PREFIX of the user's wins)
+        wrapProgram $out/bin/cliche --set-default TESSDATA_PREFIX ${pkgs.tesseract}/share/tessdata
         install -Dm644 -t $out/share/doc/cliche LICENSE README.md CHANGELOG.md
         install -Dm644 ext/gui_toolkit/src/lucide/LICENSE.txt $out/share/doc/cliche/LUCIDE-LICENSE.txt
         for size in 16 32 64 128 256; do
@@ -170,6 +177,7 @@
         preCommitCheck.shellHook
         + ''
           export LD_LIBRARY_PATH=${lib.makeLibraryPath runtime}
+          export TESSDATA_PREFIX=${pkgs.tesseract}/share/tessdata
         '';
     };
   };

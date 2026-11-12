@@ -34,6 +34,7 @@ app_record_chosen :: proc(app: ^App, r: Rect) {
 	format := Record_Format.Mp4
 	if c, choosing := app.record.(Record_Choosing); choosing { format = c.format }
 	if !app_record_step(app, Record_Chosen{}) { return }
+	app.record_size = {int(r.w), int(r.h)}
 	s := &app.settings
 	job := Record_Job{
 		format = format, source = capture.Stream_Region{r}, kind = .Region,
@@ -85,6 +86,7 @@ app_record_told :: proc(app: ^App, path: string, bytes, length_ms: i64) {
 	#partial switch s in app.record {
 	case Record_Done:
 		title = s.format == .Gif ? "GIF saved" : "Recording saved"
+		app.notice_entry = history_note(app, {kind = s.format == .Gif ? .Gif : .Video, path = path, size = app.record_size, bytes = bytes, length_ms = length_ms})
 		body = record_notice_body(path, bytes, length_ms)
 	case Record_Failed:
 		title, body = "No recording", RECORD_ERROR_TEXT[s.error]
@@ -103,6 +105,7 @@ app_tray_recording :: proc(app: ^App, on: bool) {
 		platform.tray_set_menu(app.tray, {
 			{id = int(Tray_Item.Record), text = "Stop recording", default = true},
 			{kind = .Separator},
+			{id = int(Tray_Item.History), text = "History"},
 			{id = int(Tray_Item.Settings), text = "Settings"},
 			{id = int(Tray_Item.Quit), text = "Quit cliche"},
 		})

@@ -45,6 +45,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "after",      title = "After capture", icon = lucide.CLIPBOARD},
 	{category = "save",       title = "Save",          icon = lucide.SAVE},
 	{category = "upload",     title = "Upload",        icon = lucide.EXTERNAL_LINK},
+	{category = "history",    title = "History",       icon = lucide.HISTORY},
 }
 
 // The preferences with a control of cliche's own, under their words.
@@ -55,7 +56,7 @@ SETTINGS_CUSTOM := [?]string{"appearance.theme"}
 Settings_Action :: enum u8 {
 	Capture_Region, Capture_Screen, Capture_Window, Read_Qr, Read_Text, Record, Record_Gif,
 	Choose_Folder, Open_Folder, Open_Uploaders, Import_Uploader, Shortcuts_Page, System_Shortcuts,
-	Palette, Keys, Close, Quit,
+	History, Palette, Keys, Close, Quit,
 }
 
 SETTINGS_ACTIONS := [Settings_Action]ui.Command{
@@ -72,6 +73,7 @@ SETTINGS_ACTIONS := [Settings_Action]ui.Command{
 	.Import_Uploader  = {label = "Import a ShareX uploader…", group = "Upload", icon = lucide.EXTERNAL_LINK, tags = {"sxcu", "sharex", "host", "add"}},
 	.Shortcuts_Page   = {label = "Shortcuts", group = "Settings", icon = lucide.KEYBOARD, tags = {"hotkey", "keys", "keybinding"}},
 	.System_Shortcuts = {label = "The system's shortcut settings…", group = "Settings", icon = lucide.EXTERNAL_LINK, tags = {"hotkey", "portal", "keys"}},
+	.History          = {label = "Open the history", group = "Window", icon = lucide.HISTORY, tags = {"recent", "captures", "grid", "list"}},
 	.Palette          = {label = "Command palette", group = "Window", keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
 	.Keys             = {label = "Keyboard shortcuts", group = "Window", keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
 	.Close            = {label = "Close the settings", group = "Window", keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"hide"}},
@@ -202,6 +204,7 @@ settings_action :: proc(app: ^App, a: Settings_Action) {
 		delete(sw.page.current)
 		sw.page.current = strings.clone("shortcuts")
 	case .System_Shortcuts: shortcuts.configure(app.shortcuts)
+	case .History:          sw.hide_due = true; history_window_show(app)
 	case .Palette:          ui.palette_open(&sw.palette)
 	case .Keys:             sw.sheet_open = true
 	case .Close:            sw.hide_due = true
@@ -230,13 +233,21 @@ settings_options :: proc(app: ^App) -> prefs_page.Options {
 settings_choices :: proc(user: rawptr, name: string) -> (labels, values: []string) {
 	switch name {
 	case "general.tray_click":
-		@(static, rodata) l := [?]string{"Capture a region", "Capture the screen", "Capture the window", "Read a QR code", "Read the text", "Record a video", "Open the settings"}
-		@(static, rodata) v := [?]string{"region", "screen", "window", "qr", "ocr", "record", "settings"}
+		@(static, rodata) l := [?]string{"Capture a region", "Capture the screen", "Capture the window", "Read a QR code", "Read the text", "Record a video", "Open the history", "Open the settings"}
+		@(static, rodata) v := [?]string{"region", "screen", "window", "qr", "ocr", "record", "history", "settings"}
 		return l[:], v[:]
 	case "upload.uploader":
 		names := app_of(user).uploaders.names
 		if len(names) == 0 { return }
 		return names, names
+	case "history.view":
+		@(static, rodata) l := [?]string{"Grid", "List"}
+		@(static, rodata) v := [?]string{"grid", "list"}
+		return l[:], v[:]
+	case "history.thumbnail_size":
+		@(static, rodata) l := [?]string{"Small", "Medium", "Large"}
+		@(static, rodata) v := [?]string{"small", "medium", "large"}
+		return l[:], v[:]
 	case "save.compression":
 		@(static, rodata) l := [?]string{"Small files", "Fast saves"}
 		@(static, rodata) v := [?]string{"small", "fast"}

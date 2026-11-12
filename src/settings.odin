@@ -39,6 +39,11 @@ PREF_DEFS := [?]config.Def{
 	{name = "record.cursor", title = "Show the pointer", category = "record", description = "Show the pointer in recordings, where the desktop can draw it in.", kind = .Bool, default = {b = true}, tags = {"mouse", "pointer", "cursor"}},
 	{name = "record.max_length", title = "Longest recording", category = "record", description = "Stop a recording after this many seconds. 0: only when you stop it.", kind = .Int, default = {i = 0}, min = 0, max = 3600, bounded = true, unit = "s", tags = {"limit", "duration", "timer"}},
 
+	// History
+	{name = "history.size", title = "Captures kept", category = "history", description = "How many captures the history keeps: the oldest go first. The files stay where they are.", kind = .Int, default = {i = 1000}, min = 10, max = 100000, bounded = true, tags = {"history", "recent", "limit"}},
+	{name = "history.view", title = "View", category = "history", description = "How the history shows the captures: thumbnails in a grid, or a list with their details.", kind = .String, default = {s = "grid"}, tags = {"grid", "list", "thumbnails"}},
+	{name = "history.thumbnail_size", title = "Thumbnail size", category = "history", description = "The size of the thumbnails in the grid.", kind = .String, default = {s = "medium"}, tags = {"grid", "preview", "size"}},
+
 	// Region
 	{name = "region.confirm_on_release", title = "Take the rectangle on release", category = "region", description = "Take the rectangle as soon as the button is released. Off: adjust it with the arrow keys (Shift: resize), then press Enter or click inside it.", kind = .Bool, default = {b = true}, tags = {"fast", "enter", "adjust"}},
 	{name = "region.frame_windows", title = "Frame the window under the pointer", category = "region", description = "Frame the window under the pointer: a click takes it. Off: a click does nothing, only a drag chooses.", kind = .Bool, default = {b = true}, tags = {"window", "hover", "click", "snap"}},
@@ -46,6 +51,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "region.dim", title = "Shade around the selection", category = "region", description = "How dark the screen is outside what is chosen.", kind = .Int, default = {i = 45}, min = 0, max = 90, bounded = true, unit = "%", tags = {"shade", "darken", "overlay", "opacity"}},
 
 	// After capture
+	{name = "after.edit", title = "Open in the editor", category = "after", description = "Open each screenshot in the editor first: arrows, boxes, text; Done copies, saves and uploads it as the settings below say.", kind = .Bool, default = {b = false}, tags = {"annotate", "draw", "arrow", "markup"}},
 	{name = "after.copy", title = "Copy to the clipboard", category = "after", description = "Copy the picture to the clipboard.", kind = .Bool, default = {b = true}, tags = {"clipboard", "paste"}},
 	{name = "after.save", title = "Save as a file", category = "after", description = "Save the picture as a PNG file in the folder.", kind = .Bool, default = {b = true}, tags = {"file", "disk", "png"}},
 	{name = "after.reveal", title = "Show the file in its folder", category = "after", description = "Show the saved file in its folder, in the file manager.", kind = .Bool, default = {b = false}, tags = {"open", "folder", "explorer", "files"}},
@@ -71,9 +77,9 @@ PREF_DEFS := [?]config.Def{
 }
 
 // What a click on the tray icon does (general.tray_click).
-Tray_Click :: enum u8 { Region, Screen, Window, Qr, Ocr, Record, Settings }
+Tray_Click :: enum u8 { Region, Screen, Window, Qr, Ocr, Record, History, Settings }
 
-TRAY_CLICK_NAMES := [Tray_Click]string{.Region = "region", .Screen = "screen", .Window = "window", .Qr = "qr", .Ocr = "ocr", .Record = "record", .Settings = "settings"}
+TRAY_CLICK_NAMES := [Tray_Click]string{.Region = "region", .Screen = "screen", .Window = "window", .Qr = "qr", .Ocr = "ocr", .Record = "record", .History = "history", .Settings = "settings"}
 
 // The values the program reads, copied out of the registry (prefs_read).
 Settings :: struct {
@@ -86,6 +92,10 @@ Settings :: struct {
 	delay_s:            int,
 	record_fps, gif_fps, gif_width, record_max_s: int,
 	record_cursor:      bool,
+	history_size:       int,
+	history_view:       History_View_Mode,
+	history_thumbnail:  int,
+	edit_after:         bool,
 	ocr_languages:      string,
 	confirm_on_release: bool,
 	frame_windows:      bool,
@@ -130,6 +140,8 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.gif_width = int(config.int_of(p, "record.gif_width"))
 	s.record_max_s = int(config.int_of(p, "record.max_length"))
 	s.record_cursor = config.bool_of(p, "record.cursor")
+	s.history_size, s.history_view, s.history_thumbnail = history_settings_read(p)
+	s.edit_after = config.bool_of(p, "after.edit")
 	s.ocr_languages = strings.clone(strings.trim_space(config.string_of(p, "capture.ocr_languages")), allocator)
 	s.confirm_on_release = config.bool_of(p, "region.confirm_on_release")
 	s.frame_windows = config.bool_of(p, "region.frame_windows")

@@ -19,6 +19,9 @@ Saved :: struct {
 	path:           string,
 	url:            string,
 	upload_problem: string,   // owned: why the upload failed ("" none)
+	from_editor:    bool,     // the editor's Ctrl+S: told to the editor, not to the capture's flow
+	size:           [2]int,   // the picture's, in pixels (the history keeps it)
+	bytes:          i64,      // the PNG's
 	error:          Flow_Error,
 }
 
@@ -30,6 +33,8 @@ save_shot :: proc(j: ^Job_Save) -> (out: Saved) {
 	file := png.encode(j.shot.rgba, j.shot.size.x, j.shot.size.y, j.fast ? .Fast : .Small)
 	defer delete(file)
 	if file == nil { out.error = .Empty; return }
+	out.size, out.bytes = j.shot.size, i64(len(file))
+	out.from_editor = j.from_editor
 	name := name_expand(j.pattern, stamp_now(), j.shot.source, context.temp_allocator)
 	if j.save {
 		out.path, out.error = save_file(file, j.folder, name, j.reveal)

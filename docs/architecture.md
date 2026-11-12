@@ -32,7 +32,7 @@ the selection. This works the same on every compositor: no layer surface, no tra
 
 ## After a capture
 
-A chain of actions (`src/actions.odin`): copy, save; upload, QR, editor to come.
+A chain of actions (`src/actions.odin`): copy, save, upload; the editor first when after.edit asks (`src/editor*.odin`).
 
 ## Shortcuts
 

@@ -24,13 +24,13 @@ import "gt:platform"
 import "gt:render"
 
 // The tray menu's items.
-Tray_Item :: enum { None, Region, Screen, Window, Qr, Ocr, Record, Record_Gif, Settings, Quit }
+Tray_Item :: enum { None, Region, Screen, Window, Qr, Ocr, Record, Record_Gif, Edit, History, Settings, Quit }
 
 // A command another start handed over (token owned).
 Inbox_Item :: struct { verb: Verb, token: string }
 
 // The windows other threads wake.
-Window_Slot :: enum u8 { Anchor, Overlay, Settings }
+Window_Slot :: enum u8 { Anchor, Overlay, Settings, History, Editor }
 
 App :: struct {
 	prefs:      config.Prefs,
@@ -45,6 +45,10 @@ App :: struct {
 	shared:     host.Shared,                               // the renderer, from the first window that needs it
 	overlay:    Overlay,                                   // overlay.odin
 	settings_window: Settings_Window,                      // settings_view.odin
+	history_window: History_Window,                        // history_view.odin
+	editor:     Editor,                                    // editor.odin
+	notice_entry: u64,                                     // the history's entry of the last notification (a click shows it)
+	saved_info: struct { size: [2]int, bytes: i64 },       // the picture of this capture, while app_outcome tells it
 
 	flow:       Flow,                                      // flow.odin
 	desktop:    Result_Desktop,                            // the region's desktop, from Selecting to its cut (owned)
@@ -54,6 +58,7 @@ App :: struct {
 	upload:     struct { url, problem: string },           // what the upload of this capture gave, while app_outcome tells it (not owned)
 	record:     Record_Flow,                               // the recording's state (record.odin)
 	recorder:   Recorder,                                  // its thread, while one runs
+	record_size: [2]int,                                   // its region, logical (the history keeps it)
 	uploaders:  Result_Uploaders,                          // the uploaders found, for the settings (owned)
 	token:      string,                                    // the activation token of the next window shown (owned)
 	backend:    capture.Backend,                           // the session's, once open
@@ -91,6 +96,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	}
 	// (opened now, on the worker: the first capture does not wait for the compositor's protocols)
 	worker_send(&app.worker, Job_Open{})
+	history_start(app)
 	app.server = instance.serve_start(owner, app_message, app)
 	app_tray_open(app)
 	app_shortcuts_start(app)
@@ -134,9 +140,11 @@ app_free :: proc(app: ^App) {
 // The shown windows' frames, else the anchor: what ends the wait is a wake of any window (app_wake), input, the tray.
 @(private = "file")
 app_wait :: proc(app: ^App) {
-	shown := make([dynamic]^host.Host, 0, 2, context.temp_allocator)
+	shown := make([dynamic]^host.Host, 0, 4, context.temp_allocator)
 	if app.overlay.visible { append(&shown, &app.overlay.host) }
 	if app.settings_window.visible { append(&shown, &app.settings_window.host) }
+	if app.history_window.visible { append(&shown, &app.history_window.host) }
+	if app.editor.visible { append(&shown, &app.editor.host) }
 	if len(shown) > 0 { host.hosts_wait(shown[:]) } else { platform.wait_event(app.anchor, 0) }
 }
 
@@ -151,17 +159,29 @@ app_frames :: proc(app: ^App) {
 		host.host_frame(&app.settings_window.host)
 		settings_after_frame(app)
 	}
+	if app.history_window.visible {
+		host.host_frame(&app.history_window.host)
+		history_after_frame(app)
+	}
+	if app.editor.visible {
+		host.host_frame(&app.editor.host)
+		editor_after_frame(app)
+	}
 }
 
 // The windows with a renderer close in the order the host asks: the renderer's own window last.
 @(private = "file")
 app_windows_close :: proc(app: ^App) {
 	overlay_destroy(app)
-	hosts := [2]^host.Host{&app.overlay.host, &app.settings_window.host}
-	opened := [2]bool{app.overlay.opened, app.settings_window.opened}
+	// (textures go while the renderer is there: before any host closes)
+	history_window_free(app)
+	editor_destroy(app)
+	hosts := [4]^host.Host{&app.overlay.host, &app.settings_window.host, &app.history_window.host, &app.editor.host}
+	opened := [4]bool{app.overlay.opened, app.settings_window.opened, app.history_window.opened, app.editor.opened}
 	for h, i in hosts { if opened[i] && app.shared.main != h { host.host_close(h) } }
 	for h, i in hosts { if opened[i] && app.shared.main == h { host.host_close(h) } }
 	settings_window_free(app)
+	editor_free(app)
 }
 
 // Wakes the interface's loop, from any thread.
@@ -216,6 +236,8 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Ocr:      app_trigger(app, .Region, .Text)
 	case .Record:     app_record_trigger(app, .Mp4)
 	case .Record_Gif: app_record_trigger(app, .Gif)
+	case .Edit:     app_trigger(app, .Region, .Edit)
+	case .History:  history_window_show(app)
 	case .Settings: settings_window_show(app)
 	case .Quit:     app.quit = true
 	}
@@ -261,6 +283,8 @@ app_results :: proc(app: ^App) {
 		case Result_Folder:
 			if v.path != "" && config.set_from_string(&app.prefs, "save.folder", v.path, .User) == .None { app_prefs_changed(app) }
 			delete(v.path)
+		case Result_History:
+			history_result(app, v)
 		case Result_Uploaders:
 			app_uploaders(app, v)
 		case Result_Integrated:
@@ -366,13 +390,25 @@ app_chain :: proc(app: ^App, shot: Shot) {
 	case .Text:
 		worker_send(&app.worker, Job_Ocr{shot, strings.clone(app.settings.ocr_languages)})
 		return
+	case .Edit:
+		editor_open_shot(app, shot, shot.scale > 0 ? shot.scale : 1)   // (the editor owns the shot; its Done runs this chain with the edited picture)
+		return
 	case .Record:
 		// (a recording's region goes to the recorder from the overlay: no shot comes here)
 		shot := shot
 		shot_free(&shot)
 		return
 	case .Picture:
+		if app.settings.edit_after {
+			editor_open_shot(app, shot, shot.scale > 0 ? shot.scale : 1)
+			return
+		}
 	}
+	app_chain_run(app, shot)
+}
+
+// The chain itself: copy here, save and upload on the worker (the editor's Done comes here with its picture).
+app_chain_run :: proc(app: ^App, shot: Shot) {
 	actions := app.settings.actions & AFTER_CAPTURE_DONE
 	if .Copy in actions {
 		// (gt:platform encodes the clipboard's PNG on this thread, at its fast level: it takes no encoded file)
@@ -389,11 +425,13 @@ app_chain :: proc(app: ^App, shot: Shot) {
 @(private = "file")
 app_saved :: proc(app: ^App, r: Result_Saved) {
 	defer { delete(r.path); delete(r.url); delete(r.upload_problem) }
+	if r.from_editor { editor_saved(app, r.path, r.error); return }   // (the editor's Ctrl+S: the capture goes on)
 	if _, encoding := app.flow.(Flow_Encoding); !encoding { return }
 	// (an upload's address takes the picture's place on the clipboard, as ShareX does)
 	if r.url != "" { app.copied = platform.clipboard_set(app.anchor, {text = r.url}) }
 	app.upload = {url = r.url, problem = r.upload_problem}
-	defer app.upload = {}
+	app.saved_info = {r.size, r.bytes}
+	defer { app.upload = {}; app.saved_info = {} }
 	if r.error != .None { app_step(app, Flow_Save_Failed{r.error}) } else { app_step(app, Flow_Saved{}) }
 	app_outcome(app, r.path)
 }
@@ -432,6 +470,9 @@ app_outcome :: proc(app: ^App, detail: string) {
 		case path != "":               title, body = "Screenshot saved", path
 		case app.copied:               title, body = "Screenshot copied to the clipboard", ""
 		}
+	}
+	if s, done := app.flow.(Flow_Done); done { app_history_note(app, s.source, path, detail) }
+	#partial switch s in app.flow {
 	case Flow_Failed:
 		title = app.purpose == .Qr ? "No QR code" : app.purpose == .Text ? "No text" : "No screenshot"
 		body = app.upload.problem != "" ? app.upload.problem : FLOW_ERROR_TEXT[s.error]
@@ -446,7 +487,15 @@ app_outcome :: proc(app: ^App, detail: string) {
 // The anchor's events: the shortcuts' presses (Windows: a hotkey is a window's event).
 @(private = "file")
 app_anchor_events :: proc(app: ^App) {
-	for e in platform.poll_events(app.anchor, false) { shortcuts.feed(app.shortcuts, e) }
+	for e in platform.poll_events(app.anchor, false) {
+		if shortcuts.feed(app.shortcuts, e) { continue }
+		if e.kind == .Notification_Click {
+			// (the notification's activation token lets the history's window come to the front on Wayland)
+			delete(app.token)
+			app.token = strings.clone(platform.notify_activation_token(app.anchor))
+			history_window_show(app, app.notice_entry)
+		}
+	}
 }
 
 @(private = "file")
@@ -468,6 +517,9 @@ app_tray_menu :: proc(app: ^App) {
 		{id = int(Tray_Item.Ocr), text = "Read the text"},
 		{id = int(Tray_Item.Record), text = "Record a video"},
 		{id = int(Tray_Item.Record_Gif), text = "Record a GIF"},
+		{id = int(Tray_Item.Edit), text = "Capture a region and edit"},
+		{kind = .Separator},
+		{id = int(Tray_Item.History), text = "History"},
 		{kind = .Separator},
 		{id = int(Tray_Item.Settings), text = "Settings"},
 		{id = int(Tray_Item.Quit), text = "Quit cliche"},
@@ -488,6 +540,7 @@ app_tray :: proc(app: ^App) {
 			case .Qr:       app_trigger(app, .Region, .Qr)
 			case .Ocr:      app_trigger(app, .Region, .Text)
 			case .Record:   app_record_trigger(app, .Mp4)
+			case .History:  history_window_show(app)
 			case .Settings: settings_window_show(app)
 			}
 		case .Menu_Item:
@@ -499,6 +552,8 @@ app_tray :: proc(app: ^App) {
 			case .Ocr:      app_trigger(app, .Region, .Text)
 			case .Record:     app_record_trigger(app, .Mp4)
 			case .Record_Gif: app_record_trigger(app, .Gif)
+			case .Edit:     app_trigger(app, .Region, .Edit)
+			case .History:  history_window_show(app)
 			case .Settings: settings_window_show(app)
 			case .Quit:     app.quit = true
 			case .None:
@@ -515,6 +570,7 @@ app_prefs_changed :: proc(app: ^App) {
 	app.settings = prefs_read(&app.prefs)
 	app_shortcuts_follow_prefs(app)
 	app_integrate(app, force = false)
+	history_prefs_changed(app)
 }
 
 // cliche's launcher and its start with the session as the preferences say: at the start (the files may have gone),
@@ -533,4 +589,21 @@ app_uploaders :: proc(app: ^App, r: Result_Uploaders) {
 	app.uploaders = r
 	if r.imported != "" && config.set_from_string(&app.prefs, "upload.uploader", r.imported, .User) == .None { app_prefs_changed(app) }
 	if r.import_problem != "" { fmt.eprintfln("cliche: %s", r.import_problem) }
+}
+
+// What this capture gave, kept in the history (a QR code's or a text's words; a picture's file or address).
+@(private = "file")
+app_history_note :: proc(app: ^App, source: Source, path, detail: string) {
+	e := History_Entry{url = app.upload.url}
+	switch app.purpose {
+	case .Qr:     e.kind, e.text = .Qr, detail
+	case .Text:   e.kind, e.text = .Text, detail
+	case .Picture, .Edit:
+		if path == "" && app.upload.url == "" { return }   // (copied only: nothing to find again)
+		e.kind = history_kind_of(source)
+		e.path = path
+		e.size, e.bytes = app.saved_info.size, app.saved_info.bytes
+	case .Record: return
+	}
+	app.notice_entry = history_note(app, e)
 }
