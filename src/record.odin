@@ -5,8 +5,11 @@ package cliche
 // The recording flow is a state machine of its own, beside the capture flow (flow.odin), pure and tested without a
 // window (record_test.odin):
 //
-//   Idle -> Choosing -> Starting -> Recording -> Stopping -> Done | Failed -> Idle
-//             (the region on the frozen desktop, as a screenshot's)
+//   Idle -> Choosing -> Ready -> Starting -> Recording -> Stopping -> Done | Failed -> Idle
+//                         \-> Idle (cancelled)          \-> Discarding -> Idle (cancelled: the file deleted)
+//
+// Choosing: the region on the frozen desktop, as a screenshot's. Ready: the region is chosen and nothing records yet;
+// the record overlay (record_overlay.odin) frames it, with a Record button: the user starts the recording.
 //
 // The recorder runs on a thread of its own, not the worker's: a recording lasts, and the worker must stay free for
 // screenshots meanwhile. It opens its own capture session (gt:capture's session belongs to the thread that opened it),
@@ -58,33 +61,41 @@ RECORD_ERROR_TEXT := [Record_Error]string{
 ////////////////////////////////
 // The flow
 
-Record_Idle      :: struct {}
-Record_Choosing  :: struct { format: Record_Format }                  // the overlay shows the frozen desktop
-Record_Starting  :: struct { format: Record_Format }                  // the recorder opens the stream and the encoder
-Record_Recording :: struct { format: Record_Format, elapsed_ms: i64 }
-Record_Stopping  :: struct { format: Record_Format }                  // the last frames encoded, the file closed
-Record_Done      :: struct { format: Record_Format }
-Record_Failed    :: struct { format: Record_Format, error: Record_Error }
+Record_Idle       :: struct {}
+Record_Choosing   :: struct { format: Record_Format }                  // the overlay shows the frozen desktop
+Record_Ready      :: struct { format: Record_Format }                  // the region chosen: the Record button waits
+Record_Starting   :: struct { format: Record_Format }                  // the recorder opens the stream and the encoder
+Record_Recording  :: struct { format: Record_Format, elapsed_ms: i64 }
+Record_Stopping   :: struct { format: Record_Format }                  // the last frames encoded, the file closed
+Record_Discarding :: struct { format: Record_Format }                  // the recorder stops and deletes its file
+Record_Done       :: struct { format: Record_Format }
+Record_Failed     :: struct { format: Record_Format, error: Record_Error }
 
-Record_Flow :: union #no_nil { Record_Idle, Record_Choosing, Record_Starting, Record_Recording, Record_Stopping, Record_Done, Record_Failed }
+Record_Flow :: union #no_nil {
+	Record_Idle, Record_Choosing, Record_Ready, Record_Starting, Record_Recording, Record_Stopping, Record_Discarding,
+	Record_Done, Record_Failed,
+}
 
 Record_Trigger   :: struct { format: Record_Format }   // `cliche --record`, `--record-gif`, the tray, a shortcut
-Record_Chosen    :: struct {}                          // the user took a rectangle: the recorder starts
-Record_Cancelled :: struct {}                          // Escape on the overlay
+Record_Chosen    :: struct {}                          // the user took a rectangle: Ready
+Record_Format_Set :: struct { format: Record_Format }  // the format chosen on the overlay, while Ready
+Record_Start     :: struct {}                          // the Record button, the tray: the recorder starts
+Record_Cancelled :: struct {}                          // Escape on an overlay, Cancel while Ready
 Record_Started   :: struct {}                          // the recorder has its first frame
 Record_Progress  :: struct { elapsed_ms: i64 }
-Record_Stop      :: struct {}                          // the same command again, the tray
-Record_Finished  :: struct {}                          // the file is written (a stop, or the maximum length)
+Record_Stop      :: struct {}                          // the Stop button, the tray
+Record_Discard   :: struct {}                          // Cancel while recording: nothing is kept
+Record_Finished  :: struct {}                          // the recorder ended: the file written (a stop, the maximum length), or deleted
 Record_Fail      :: struct { error: Record_Error }
 Record_Reset     :: struct {}                          // the outcome was told
 
 Record_Event :: union {
-	Record_Trigger, Record_Chosen, Record_Cancelled, Record_Started, Record_Progress, Record_Stop, Record_Finished,
-	Record_Fail, Record_Reset,
+	Record_Trigger, Record_Chosen, Record_Format_Set, Record_Start, Record_Cancelled, Record_Started, Record_Progress,
+	Record_Stop, Record_Discard, Record_Finished, Record_Fail, Record_Reset,
 }
 
-// The state after `e` in `r`. ok false: `e` means nothing in `r`, and `r` stays. A trigger while a recording runs is a
-// stop: the same command starts and stops it.
+// The state after `e` in `r`. ok false: `e` means nothing in `r`, and `r` stays. The same command walks the flow: a
+// trigger chooses the region, again it starts the recording, again it stops it.
 record_step :: proc(r: Record_Flow, e: Record_Event) -> (next: Record_Flow, ok: bool) {
 	switch s in r {
 	case Record_Idle, Record_Done, Record_Failed:
@@ -96,37 +107,51 @@ record_step :: proc(r: Record_Flow, e: Record_Event) -> (next: Record_Flow, ok: 
 		}
 	case Record_Choosing:
 		#partial switch v in e {
-		case Record_Chosen:    return Record_Starting{s.format}, true
+		case Record_Chosen:    return Record_Ready{s.format}, true
 		case Record_Cancelled: return Record_Idle{}, true
 		case Record_Fail:      return Record_Failed{s.format, v.error}, true
 		}
+	case Record_Ready:
+		#partial switch v in e {
+		case Record_Format_Set:           return Record_Ready{v.format}, true
+		case Record_Start, Record_Trigger: return Record_Starting{s.format}, true
+		case Record_Cancelled:            return Record_Idle{}, true
+		case Record_Fail:                 return Record_Failed{s.format, v.error}, true
+		}
 	case Record_Starting:
 		#partial switch v in e {
-		case Record_Started:            return Record_Recording{s.format, 0}, true
+		case Record_Started:              return Record_Recording{s.format, 0}, true
 		case Record_Trigger, Record_Stop: return Record_Stopping{s.format}, true
-		case Record_Finished:           return Record_Done{s.format}, true
-		case Record_Fail:               return Record_Failed{s.format, v.error}, true
+		case Record_Discard:              return Record_Discarding{s.format}, true
+		case Record_Finished:             return Record_Done{s.format}, true
+		case Record_Fail:                 return Record_Failed{s.format, v.error}, true
 		}
 	case Record_Recording:
 		#partial switch v in e {
-		case Record_Progress:           return Record_Recording{s.format, max(v.elapsed_ms, s.elapsed_ms)}, true
+		case Record_Progress:             return Record_Recording{s.format, max(v.elapsed_ms, s.elapsed_ms)}, true
 		case Record_Trigger, Record_Stop: return Record_Stopping{s.format}, true
-		case Record_Finished:           return Record_Done{s.format}, true
-		case Record_Fail:               return Record_Failed{s.format, v.error}, true
+		case Record_Discard:              return Record_Discarding{s.format}, true
+		case Record_Finished:             return Record_Done{s.format}, true
+		case Record_Fail:                 return Record_Failed{s.format, v.error}, true
 		}
 	case Record_Stopping:
 		#partial switch v in e {
 		case Record_Finished: return Record_Done{s.format}, true
 		case Record_Fail:     return Record_Failed{s.format, v.error}, true
 		}
+	case Record_Discarding:
+		// (whatever the recorder says at its end: nothing was kept, nothing is told)
+		#partial switch _ in e {
+		case Record_Finished, Record_Fail: return Record_Idle{}, true
+		}
 	}
 	return r, false
 }
 
-// A recording is chosen, starting, running or ending: a trigger stops it rather than starting another.
+// A recording is chosen, ready, starting, running or ending: a trigger goes on with it rather than starting another.
 record_busy :: proc(r: Record_Flow) -> bool {
 	#partial switch _ in r {
-	case Record_Choosing, Record_Starting, Record_Recording, Record_Stopping: return true
+	case Record_Choosing, Record_Ready, Record_Starting, Record_Recording, Record_Stopping, Record_Discarding: return true
 	}
 	return false
 }
@@ -134,9 +159,31 @@ record_busy :: proc(r: Record_Flow) -> bool {
 // The recorder runs (the tray shows it, a trigger stops it).
 record_running :: proc(r: Record_Flow) -> bool {
 	#partial switch _ in r {
-	case Record_Starting, Record_Recording, Record_Stopping: return true
+	case Record_Starting, Record_Recording, Record_Stopping, Record_Discarding: return true
 	}
 	return false
+}
+
+// The region is chosen and the Record button waits.
+record_ready :: proc(r: Record_Flow) -> bool {
+	_, ready := r.(Record_Ready)
+	return ready
+}
+
+// The format of the recording under way (Mp4 at rest).
+record_format :: proc(r: Record_Flow) -> Record_Format {
+	switch s in r {
+	case Record_Idle:       return .Mp4
+	case Record_Choosing:   return s.format
+	case Record_Ready:      return s.format
+	case Record_Starting:   return s.format
+	case Record_Recording:  return s.format
+	case Record_Stopping:   return s.format
+	case Record_Discarding: return s.format
+	case Record_Done:       return s.format
+	case Record_Failed:     return s.format
+	}
+	return .Mp4
 }
 
 // The recording's error for a gt:capture error.
@@ -219,6 +266,13 @@ record_name :: proc(pattern: string, t: Stamp, source: Source, format: Record_Fo
 	return strings.concatenate({name, RECORD_FORMAT_EXTENSIONS[format]}, allocator)
 }
 
+// "00:07", "12:34", "1:02:03": the clock of a recording under way (the overlay, the tray's tooltip).
+record_clock_text :: proc(ms: i64, allocator := context.temp_allocator) -> string {
+	s := max(ms, 0) / 1000
+	if s >= 3600 { return fmt.aprintf("%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60, allocator = allocator) }
+	return fmt.aprintf("%02d:%02d", s / 60, s % 60, allocator = allocator)
+}
+
 // "0:07", "12:34", "1:02:03".
 record_elapsed_text :: proc(ms: i64, allocator := context.temp_allocator) -> string {
 	s := max(ms, 0) / 1000
@@ -266,7 +320,8 @@ Record_Job :: struct {
 Record_Opened :: struct { width, height: int }
 // The time since the first frame, and the bytes encoded so far.
 Record_Tick :: struct { elapsed_ms: i64, bytes: i64 }
-// The recording is over: its file (owned; "" when nothing was saved), its size and its length.
+// The recording is over: its file (owned; "" when nothing was saved, or when it was cancelled: then with no error), its
+// size and its length.
 Record_Ended :: struct { error: Record_Error, path: string, bytes: i64, length_ms: i64 }
 
 Record_Message :: union { Record_Opened, Record_Tick, Record_Ended }
@@ -275,6 +330,7 @@ Recorder :: struct {
 	thread:    ^thread.Thread,
 	job:       Record_Job,                // the recorder thread's
 	stop:      bool,                      // atomic: asked by the interface's thread
+	cancel:    bool,                      // atomic: with `stop`, the file is deleted, not saved
 	mutex:     sync.Mutex,
 	messages:  [dynamic]Record_Message,   // guarded by `mutex`
 	wake:      proc(user: rawptr),
@@ -286,6 +342,7 @@ recorder_start :: proc(r: ^Recorder, job: Record_Job, wake: proc(user: rawptr), 
 	if r.thread != nil { record_job_free(&r.job) }
 	r.job = job
 	sync.atomic_store(&r.stop, false)
+	sync.atomic_store(&r.cancel, false)
 	r.wake, r.wake_user = wake, wake_user
 	r.thread = thread.create(recorder_run)
 	if r.thread == nil {
@@ -299,6 +356,13 @@ recorder_start :: proc(r: ^Recorder, job: Record_Job, wake: proc(user: rawptr), 
 
 // Asks the recording to end: the recorder closes its file and posts Record_Ended. Returns at once.
 recorder_stop :: proc(r: ^Recorder) {
+	sync.atomic_store(&r.stop, true)
+}
+
+// Asks the recording to end with nothing kept: the recorder deletes its ".part" file and posts a Record_Ended with no
+// path and no error. Returns at once.
+recorder_cancel :: proc(r: ^Recorder) {
+	sync.atomic_store(&r.cancel, true)
 	sync.atomic_store(&r.stop, true)
 }
 
@@ -369,6 +433,7 @@ record :: proc(r: ^Recorder) -> Record_Ended {
 	// The first frame gives the size of the file's picture; the clock starts with it.
 	first: capture.Stream_Frame
 	for {
+		if sync.atomic_load(&r.cancel) { return {} }
 		if sync.atomic_load(&r.stop) { return {error = .Empty} }
 		f, ok, err := capture.stream_next(st, RECORD_POLL)
 		if err != .None { return {error = record_error_of(err)} }
@@ -408,6 +473,11 @@ record :: proc(r: ^Recorder) -> Record_Ended {
 			return {error = failed}
 		}
 		free_all(context.temp_allocator)
+	}
+	if sync.atomic_load(&r.cancel) {
+		sink_free(&k)
+		_ = os.remove(part)
+		return {}
 	}
 	end := i64(time.tick_since(started))
 	if failed = sink_close(&k, end); failed != .None {

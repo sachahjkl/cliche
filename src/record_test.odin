@@ -15,13 +15,38 @@ step :: proc(t: ^testing.T, r: Record_Flow, e: Record_Event, want: Record_Flow, 
 record_goes_from_choosing_to_done :: proc(t: ^testing.T) {
 	r: Record_Flow = Record_Idle{}
 	r = step(t, r, Record_Trigger{.Mp4}, Record_Choosing{.Mp4})
-	r = step(t, r, Record_Chosen{}, Record_Starting{.Mp4})
-	r = step(t, r, Record_Started{}, Record_Recording{.Mp4, 0})
-	r = step(t, r, Record_Progress{1500}, Record_Recording{.Mp4, 1500})
-	// (the same command again stops it)
-	r = step(t, r, Record_Trigger{.Mp4}, Record_Stopping{.Mp4})
-	r = step(t, r, Record_Finished{}, Record_Done{.Mp4})
+	// (the region chosen: nothing records until the Record button)
+	r = step(t, r, Record_Chosen{}, Record_Ready{.Mp4})
+	r = step(t, r, Record_Format_Set{.Gif}, Record_Ready{.Gif})
+	r = step(t, r, Record_Start{}, Record_Starting{.Gif})
+	r = step(t, r, Record_Started{}, Record_Recording{.Gif, 0})
+	r = step(t, r, Record_Progress{1500}, Record_Recording{.Gif, 1500})
+	r = step(t, r, Record_Stop{}, Record_Stopping{.Gif})
+	r = step(t, r, Record_Finished{}, Record_Done{.Gif})
 	r = step(t, r, Record_Reset{}, Record_Idle{})
+}
+
+@(test)
+record_the_same_keys_walk_the_flow :: proc(t: ^testing.T) {
+	// the shortcut chooses the region, then starts, then stops
+	r: Record_Flow = Record_Idle{}
+	r = step(t, r, Record_Trigger{.Mp4}, Record_Choosing{.Mp4})
+	r = step(t, r, Record_Chosen{}, Record_Ready{.Mp4})
+	r = step(t, r, Record_Trigger{.Mp4}, Record_Starting{.Mp4})
+	r = step(t, r, Record_Started{}, Record_Recording{.Mp4, 0})
+	r = step(t, r, Record_Trigger{.Mp4}, Record_Stopping{.Mp4})
+}
+
+@(test)
+record_cancels :: proc(t: ^testing.T) {
+	// before it starts: nothing to delete
+	step(t, Record_Ready{.Mp4}, Record_Cancelled{}, Record_Idle{})
+	step(t, Record_Choosing{.Gif}, Record_Cancelled{}, Record_Idle{})
+	// while it records: the file goes, nothing is told, whatever the recorder says at its end
+	r := step(t, Record_Recording{.Mp4, 4000}, Record_Discard{}, Record_Discarding{.Mp4})
+	step(t, r, Record_Finished{}, Record_Idle{})
+	step(t, r, Record_Fail{.Not_Saved}, Record_Idle{})
+	step(t, Record_Starting{.Gif}, Record_Discard{}, Record_Discarding{.Gif})
 }
 
 @(test)
@@ -37,6 +62,7 @@ record_failures_end_the_flow :: proc(t: ^testing.T) {
 	step(t, Record_Starting{.Mp4}, Record_Fail{.No_Encoder}, Record_Failed{.Mp4, .No_Encoder})
 	step(t, Record_Recording{.Mp4, 10}, Record_Fail{.Encoder}, Record_Failed{.Mp4, .Encoder})
 	step(t, Record_Stopping{.Gif}, Record_Fail{.Not_Saved}, Record_Failed{.Gif, .Not_Saved})
+	step(t, Record_Ready{.Mp4}, Record_Fail{.Failed}, Record_Failed{.Mp4, .Failed})
 	// (a stop before the first frame)
 	step(t, Record_Starting{.Gif}, Record_Stop{}, Record_Stopping{.Gif})
 }
@@ -47,8 +73,15 @@ record_refuses_what_means_nothing :: proc(t: ^testing.T) {
 		{Record_Idle{}, Record_Stop{}},
 		{Record_Idle{}, Record_Reset{}},
 		{Record_Idle{}, Record_Started{}},
-		{Record_Choosing{.Mp4}, Record_Trigger{.Gif}},   // (the overlay is up: Escape cancels)
+		{Record_Idle{}, Record_Start{}},
+		{Record_Choosing{.Mp4}, Record_Trigger{.Gif}},   // (the region's overlay is up: Escape cancels)
+		{Record_Choosing{.Mp4}, Record_Start{}},
+		{Record_Ready{.Mp4}, Record_Stop{}},
+		{Record_Ready{.Mp4}, Record_Discard{}},
+		{Record_Recording{.Mp4, 0}, Record_Format_Set{.Gif}},
 		{Record_Stopping{.Mp4}, Record_Trigger{.Mp4}},
+		{Record_Stopping{.Mp4}, Record_Discard{}},
+		{Record_Discarding{.Mp4}, Record_Stop{}},
 		{Record_Done{.Mp4}, Record_Progress{5}},
 	}
 	for c in cases {
@@ -65,9 +98,27 @@ record_refuses_what_means_nothing :: proc(t: ^testing.T) {
 record_busy_and_running :: proc(t: ^testing.T) {
 	testing.expect(t, !record_busy(Record_Idle{}))
 	testing.expect(t, record_busy(Record_Choosing{.Mp4}))
+	testing.expect(t, record_busy(Record_Ready{.Mp4}))
 	testing.expect(t, !record_running(Record_Choosing{.Mp4}))
+	testing.expect(t, !record_running(Record_Ready{.Mp4}))
 	testing.expect(t, record_running(Record_Recording{.Gif, 0}))
+	testing.expect(t, record_running(Record_Discarding{.Gif}))
 	testing.expect(t, !record_busy(Record_Failed{.Gif, .Gone}))
+	testing.expect_value(t, record_format(Record_Ready{.Gif}), Record_Format.Gif)
+}
+
+@(test)
+record_bar_goes_outside_the_region :: proc(t: ^testing.T) {
+	win := [2]f32{1000, 800}
+	bar := [2]f32{300, 40}
+	// below, centred on the region
+	testing.expect_value(t, record_bar_place({100, 100, 400, 300}, win, bar, 10), [2]f32{150, 410})
+	// no room below: above
+	testing.expect_value(t, record_bar_place({100, 500, 400, 280}, win, bar, 10), [2]f32{150, 450})
+	// the whole output: inside its bottom edge
+	testing.expect_value(t, record_bar_place({0, 0, 1000, 800}, win, bar, 10), [2]f32{350, 750})
+	// near a side: kept in the window
+	testing.expect_value(t, record_bar_place({900, 100, 100, 100}, win, bar, 10), [2]f32{700, 210})
 }
 
 @(test)
@@ -137,6 +188,8 @@ record_texts :: proc(t: ^testing.T) {
 	testing.expect_value(t, record_elapsed_text(7_400), "0:07")
 	testing.expect_value(t, record_elapsed_text(754_000), "12:34")
 	testing.expect_value(t, record_elapsed_text(3_723_000), "1:02:03")
+	testing.expect_value(t, record_clock_text(83_400), "01:23")
+	testing.expect_value(t, record_clock_text(3_723_000), "1:02:03")
 	testing.expect_value(t, size_text(340_000), "340 KB")
 	testing.expect_value(t, size_text(12_500_000), "12.5 MB")
 	testing.expect_value(t, record_notice_body("/p/a.mp4", 2_000_000, 65_000), "/p/a.mp4\n2.0 MB, 1:05")

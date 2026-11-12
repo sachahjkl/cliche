@@ -3,8 +3,12 @@ package cliche
 // The running cliche: one process for the session, in the notification area. What it holds at rest is small: a window
 // that is never shown (the anchor: the tray icon, the notifications, the hotkeys and the clipboard are a window's), the
 // worker's thread with the capture session, and the thread that hears other starts. The renderer is made at the first
-// window that needs one (the overlay of a region, the settings), and that window is then hidden, not closed, so that it
-// comes back at once.
+// window that needs one (the overlay of a region, the main window), and that window is then hidden, not closed, so that
+// it comes back at once.
+//
+// The windows: the region's overlay (overlay.odin), the main window with the history and the settings
+// (history_view.odin, settings_view.odin), the editor (editor.odin), and the record overlay over the other programs while
+// a recording is ready or runs (record_overlay.odin).
 //
 // The loop, on the interface's thread:
 //   wait     the shown windows' frames (host.hosts_wait), or the anchor alone when none is shown
@@ -23,14 +27,14 @@ import shortcuts "gt:shortcuts"
 import "gt:platform"
 import "gt:render"
 
-// The tray menu's items.
-Tray_Item :: enum { None, Region, Screen, Window, Qr, Ocr, Record, Record_Gif, Edit, History, Settings, Quit }
+// The tray menu's items. The first seven are Shortcut_Action's, in its order.
+Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, Edit, Record_Start, Record_Stop, Record_Cancel, History, Settings, Quit }
 
 // A command another start handed over (token owned).
 Inbox_Item :: struct { verb: Verb, token: string }
 
 // The windows other threads wake.
-Window_Slot :: enum u8 { Anchor, Overlay, Settings, History, Editor }
+Window_Slot :: enum u8 { Anchor, Overlay, History, Editor, Record_Overlay }
 
 App :: struct {
 	prefs:      config.Prefs,
@@ -44,9 +48,9 @@ App :: struct {
 	wakes:      [Window_Slot]^platform.Window,             // atomic: written by this thread, read by the others
 	shared:     host.Shared,                               // the renderer, from the first window that needs it
 	overlay:    Overlay,                                   // overlay.odin
-	settings_window: Settings_Window,                      // settings_view.odin
-	history_window: History_Window,                        // history_view.odin
+	history_window: History_Window,                        // history_view.odin: the main window, with the settings
 	editor:     Editor,                                    // editor.odin
+	record_overlay: Record_Overlay,                        // record_overlay.odin
 	notice_entry: u64,                                     // the history's entry of the last notification (a click shows it)
 	saved_info: struct { size: [2]int, bytes: i64 },       // the picture of this capture, while app_outcome tells it
 
@@ -58,13 +62,16 @@ App :: struct {
 	upload:     struct { url, problem: string },           // what the upload of this capture gave, while app_outcome tells it (not owned)
 	record:     Record_Flow,                               // the recording's state (record.odin)
 	recorder:   Recorder,                                  // its thread, while one runs
-	record_size: [2]int,                                   // its region, logical (the history keeps it)
+	record_region: Rect,                                   // its region, logical
+	record_output: Rect,                                   // the output that holds it, logical (the record overlay covers it)
 	uploaders:  Result_Uploaders,                          // the uploaders found, for the settings (owned)
 	token:      string,                                    // the activation token of the next window shown (owned)
 	backend:    capture.Backend,                           // the session's, once open
 	notice:     platform.Notification_Id,                  // the last notification: the next one replaces it
 	shortcuts:  ^shortcuts.Service,                        // shortcuts.odin
 	shortcuts_bound: [Shortcut_Action]string,              // the keys the service was given last (owned)
+	tray_keys:  [Shortcut_Action]string,                   // the keys the tray's menu shows (owned): built again when they change
+	tray_menu:  Tray_Menu,                                 // the menu shown
 	default_folder: string,                                // where screenshots go when save.folder is empty (the worker's, owned)
 	integrated: [2]bool,                                   // general.menu and general.autostart as applied last
 	quit:       bool,
@@ -111,6 +118,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 		app_results(app)
 		app_shortcuts_take(app)
 		app_record_messages(app)
+		app_tray_follow(app)
 		app_frames(app)
 	}
 
@@ -131,6 +139,7 @@ app_free :: proc(app: ^App) {
 	delete(app.inbox)
 	delete(app.token)
 	for k in app.shortcuts_bound { delete(k) }
+	for k in app.tray_keys { delete(k) }
 	uploaders_result_free(&app.uploaders)
 	delete(app.default_folder)
 	settings_free(&app.settings)
@@ -142,31 +151,50 @@ app_free :: proc(app: ^App) {
 app_wait :: proc(app: ^App) {
 	shown := make([dynamic]^host.Host, 0, 4, context.temp_allocator)
 	if app.overlay.visible { append(&shown, &app.overlay.host) }
-	if app.settings_window.visible { append(&shown, &app.settings_window.host) }
 	if app.history_window.visible { append(&shown, &app.history_window.host) }
 	if app.editor.visible { append(&shown, &app.editor.host) }
+	if app.record_overlay.visible { append(&shown, &app.record_overlay.host) }
 	if len(shown) > 0 { host.hosts_wait(shown[:]) } else { platform.wait_event(app.anchor, 0) }
 }
 
+// A frame of each shown window, then what it decided. A close the system asked for is read after the frame
+// (app_close_asked): each of these windows is hidden or given up, never closed by the system.
 @(private = "file")
 app_frames :: proc(app: ^App) {
 	if app.overlay.visible {
 		overlay_prepare(app)
 		host.host_frame(&app.overlay.host)
+		if app_close_asked(&app.overlay.host) { app.overlay.decision = .Cancel }
 		overlay_after_frame(app)
-	}
-	if app.settings_window.visible {
-		host.host_frame(&app.settings_window.host)
-		settings_after_frame(app)
 	}
 	if app.history_window.visible {
 		host.host_frame(&app.history_window.host)
+		if app_close_asked(&app.history_window.host) { app.history_window.hide_due = true }
 		history_after_frame(app)
 	}
 	if app.editor.visible {
 		host.host_frame(&app.editor.host)
+		if app_close_asked(&app.editor.host) {
+			editor_close_asked(app)
+			app.editor.host.settle = max(app.editor.host.settle, 2)   // (its question, when it asks one, is drawn)
+		}
 		editor_after_frame(app)
 	}
+	if app.record_overlay.visible {
+		host.host_frame(&app.record_overlay.host)
+		if app_close_asked(&app.record_overlay.host) { app.record_overlay.decision = .Cancel }
+		record_overlay_after_frame(app)
+	}
+}
+
+// The system asked to close `h`'s window (its title bar's button, Alt+F4): the ask is taken back, the caller hides it.
+// gt:host's frame ends at once on a window marked closed, before its input hook sees the .Close event: a window whose
+// hook alone cancels the close would stay shown, and every later frame of it would end there too.
+@(private = "file")
+app_close_asked :: proc(h: ^host.Host) -> bool {
+	if h.win == nil || !platform.is_closed(h.win) { return false }
+	platform.cancel_close(h.win)
+	return true
 }
 
 // The windows with a renderer close in the order the host asks: the renderer's own window last.
@@ -176,11 +204,10 @@ app_windows_close :: proc(app: ^App) {
 	// (textures go while the renderer is there: before any host closes)
 	history_window_free(app)
 	editor_destroy(app)
-	hosts := [4]^host.Host{&app.overlay.host, &app.settings_window.host, &app.history_window.host, &app.editor.host}
-	opened := [4]bool{app.overlay.opened, app.settings_window.opened, app.history_window.opened, app.editor.opened}
+	hosts := [4]^host.Host{&app.overlay.host, &app.history_window.host, &app.editor.host, &app.record_overlay.host}
+	opened := [4]bool{app.overlay.opened, app.history_window.opened, app.editor.opened, app.record_overlay.opened}
 	for h, i in hosts { if opened[i] && app.shared.main != h { host.host_close(h) } }
 	for h, i in hosts { if opened[i] && app.shared.main == h { host.host_close(h) } }
-	settings_window_free(app)
 	editor_free(app)
 }
 
@@ -238,7 +265,7 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Record_Gif: app_record_trigger(app, .Gif)
 	case .Edit:     app_trigger(app, .Region, .Edit)
 	case .History:  history_window_show(app)
-	case .Settings: settings_window_show(app)
+	case .Settings: settings_show(app)
 	case .Quit:     app.quit = true
 	}
 }
@@ -502,28 +529,93 @@ app_anchor_events :: proc(app: ^App) {
 app_tray_open :: proc(app: ^App) {
 	app.tray = platform.tray_create(app.anchor, nil, "cliche")
 	if app.tray == nil { return }   // (no notification area: the commands still work)
-	icon := tray_icon_rgba(TRAY_ICON_SIZE, context.temp_allocator)
-	platform.tray_set_icon_rgba(app.tray, icon, {TRAY_ICON_SIZE, TRAY_ICON_SIZE})
+	app_tray_icon(app, recording = false)
 	app_tray_menu(app)
 }
 
-// The tray's menu at rest (record_app.odin shows another while a recording runs).
+// The tray's icon: the corners of a selection, with a red dot while the recorder runs.
+app_tray_icon :: proc(app: ^App, recording: bool) {
+	if app.tray == nil { return }
+	icon := recording ? tray_icon_recording_rgba(TRAY_ICON_SIZE, context.temp_allocator) : tray_icon_rgba(TRAY_ICON_SIZE, context.temp_allocator)
+	platform.tray_set_icon_rgba(app.tray, icon, {TRAY_ICON_SIZE, TRAY_ICON_SIZE})
+}
+
+// The menus of the tray: at rest, while a recording is ready, while it runs.
+Tray_Menu :: enum u8 { Rest, Ready, Recording }
+
+@(private = "file")
+TRAY_SHORTCUT_TEXT := [Shortcut_Action]string{
+	.Screen = "Capture the screen", .Region = "Capture a region", .Record = "Record a video", .Record_Gif = "Record a GIF",
+	.Window = "Capture the window in front", .Ocr = "Read the text", .Qr = "Read a QR code",
+}
+
+// The tray's menu for the recording's state, each command with the keys that run it (tray_keys).
 app_tray_menu :: proc(app: ^App) {
-	platform.tray_set_menu(app.tray, {
-		{id = int(Tray_Item.Region), text = "Capture a region", default = true},
-		{id = int(Tray_Item.Screen), text = "Capture the screen"},
-		{id = int(Tray_Item.Window), text = "Capture the window in front"},
-		{id = int(Tray_Item.Qr), text = "Read a QR code"},
-		{id = int(Tray_Item.Ocr), text = "Read the text"},
-		{id = int(Tray_Item.Record), text = "Record a video"},
-		{id = int(Tray_Item.Record_Gif), text = "Record a GIF"},
-		{id = int(Tray_Item.Edit), text = "Capture a region and edit"},
-		{kind = .Separator},
-		{id = int(Tray_Item.History), text = "History"},
-		{kind = .Separator},
-		{id = int(Tray_Item.Settings), text = "Settings"},
-		{id = int(Tray_Item.Quit), text = "Quit cliche"},
-	})
+	if app.tray == nil { return }
+	switch {
+	case record_running(app.record): app.tray_menu = .Recording
+	case record_ready(app.record):   app.tray_menu = .Ready
+	case:                            app.tray_menu = .Rest
+	}
+	items := make([dynamic]platform.Tray_Menu_Item, 0, 16, context.temp_allocator)
+	switch app.tray_menu {
+	case .Ready:
+		keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Start), text = "Start recording", default = true, shortcut = keys})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Cancel), text = "Cancel"})
+	case .Recording:
+		keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Stop), text = "Stop recording", default = true, shortcut = keys})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Cancel), text = "Cancel recording"})
+	case .Rest:
+		default_item := tray_item_of_click(app.settings.tray_click)
+		for a in Shortcut_Action {
+			item := Tray_Item(int(Tray_Item.Screen) + int(a))
+			append(&items, platform.Tray_Menu_Item{id = int(item), text = TRAY_SHORTCUT_TEXT[a], default = item == default_item, shortcut = app.tray_keys[a]})
+		}
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Edit), text = "Capture a region and edit"})
+	}
+	append(&items, platform.Tray_Menu_Item{kind = .Separator})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.History), text = "History", default = app.tray_menu == .Rest && app.settings.tray_click == .History})
+	append(&items, platform.Tray_Menu_Item{kind = .Separator})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Settings), text = "Settings", default = app.tray_menu == .Rest && app.settings.tray_click == .Settings})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Quit), text = "Quit cliche"})
+	platform.tray_set_menu(app.tray, items[:])
+}
+
+// The tray item a click on the icon runs (general.tray_click): the menu marks it as the default.
+@(private = "file")
+tray_item_of_click :: proc(c: Tray_Click) -> Tray_Item {
+	switch c {
+	case .Region:   return .Region
+	case .Screen:   return .Screen
+	case .Window:   return .Window
+	case .Qr:       return .Qr
+	case .Ocr:      return .Ocr
+	case .Record:   return .Record
+	case .History:  return .History
+	case .Settings: return .Settings
+	}
+	return .None
+}
+
+// Once a turn of the loop: the menu built again when the keys that work changed (the settings, or the system's answer:
+// the shortcuts' service wakes the loop when it comes), or the recording's state did. A few strings compared, not a frame's
+// work.
+@(private = "file")
+app_tray_follow :: proc(app: ^App) {
+	if app.tray == nil { return }
+	changed := false
+	for a in Shortcut_Action {
+		keys := shortcut_keys(app, a)
+		if keys == app.tray_keys[a] { continue }
+		delete(app.tray_keys[a])
+		app.tray_keys[a] = strings.clone(keys)
+		changed = true
+	}
+	menu := Tray_Menu.Rest
+	if record_running(app.record) { menu = .Recording } else if record_ready(app.record) { menu = .Ready }
+	if changed || menu != app.tray_menu { app_tray_menu(app) }
 }
 
 @(private = "file")
@@ -532,7 +624,9 @@ app_tray :: proc(app: ^App) {
 	for e in platform.tray_poll(app.tray) {
 		#partial switch e.kind {
 		case .Click:
-			if record_running(app.record) { app_record_trigger(app, .Mp4); continue }   // (a click stops the recording)
+			// (while a recording is ready a click starts it; while it runs a click stops it)
+			if record_ready(app.record) { app_record_start(app); continue }
+			if record_running(app.record) { app_record_stop(app); continue }
 			switch app.settings.tray_click {
 			case .Region:   app_trigger(app, .Region)
 			case .Screen:   app_trigger(app, .Screen)
@@ -541,21 +635,19 @@ app_tray :: proc(app: ^App) {
 			case .Ocr:      app_trigger(app, .Region, .Text)
 			case .Record:   app_record_trigger(app, .Mp4)
 			case .History:  history_window_show(app)
-			case .Settings: settings_window_show(app)
+			case .Settings: settings_show(app)
 			}
 		case .Menu_Item:
 			switch Tray_Item(e.item) {
-			case .Region:   app_trigger(app, .Region)
-			case .Screen:   app_trigger(app, .Screen)
-			case .Window:   app_trigger(app, .Window)
-			case .Qr:       app_trigger(app, .Region, .Qr)
-			case .Ocr:      app_trigger(app, .Region, .Text)
-			case .Record:     app_record_trigger(app, .Mp4)
-			case .Record_Gif: app_record_trigger(app, .Gif)
-			case .Edit:     app_trigger(app, .Region, .Edit)
-			case .History:  history_window_show(app)
-			case .Settings: settings_window_show(app)
-			case .Quit:     app.quit = true
+			case .Screen, .Region, .Record, .Record_Gif, .Window, .Ocr, .Qr:
+				app_shortcut_run(app, Shortcut_Action(e.item - int(Tray_Item.Screen)))
+			case .Edit:          app_trigger(app, .Region, .Edit)
+			case .Record_Start:  app_record_start(app)
+			case .Record_Stop:   app_record_stop(app)
+			case .Record_Cancel: app_record_cancel(app)
+			case .History:       history_window_show(app)
+			case .Settings:      settings_show(app)
+			case .Quit:          app.quit = true
 			case .None:
 			}
 		}

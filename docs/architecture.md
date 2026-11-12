@@ -42,9 +42,10 @@ RegisterHotKey. The commands (`cliche --region`) stay for a compositor's own bin
 
 ## Settings
 
-`src/settings.odin` is the registry (one `config.Def` per preference, a category per page); `src/settings_view.odin`
-builds the window from it with `gt:prefs_page`, in the theme of `appearance.theme` (`src/themes.odin`), with the command
-palette and the sheet of keys. What is slow (the folder dialog, opening a folder, the desktop files of
+`src/settings.odin` is the registry (one `config.Def` per preference, a category per page); the appearance and session
+preferences are the toolkit's standard ones (`prefs_page.standard_register`). The settings are a mode of the main
+window (`src/history_view.odin`): `src/settings_view.odin` builds them with `gt:prefs_page` in place of the history, with
+its back bar, the theme cards and the shortcuts' lines the toolkit draws. What is slow (the folder dialog, opening a folder, the desktop files of
 `src/integration.odin`) runs on the worker. `clichetool shots` draws each page offscreen (`src/shots.odin`).
 
 ## Recording
@@ -52,8 +53,11 @@ palette and the sheet of keys. What is slow (the folder dialog, opening a folder
 A recording is a flow of its own (`src/record.odin`: one union, one transition procedure, tested without a window): its
 region is chosen on the frozen desktop as a screenshot's, then a third thread, the recorder, which exists only while a
 recording runs, reads a stream of the screen (`capture.stream_*`), encodes it (`gt:h264` and `gt:mux` for an MP4,
-`gt:gif` for a GIF) into `<name>.part`, and renames it at the end. `src/record_app.odin` ties it to the commands, the
-tray (its menu says "Stop recording" meanwhile) and the notification.
+`gt:gif` for a GIF) into `<name>.part`, and renames it at the end. Between the region and the recorder, the flow waits
+in Ready: `src/record_overlay.odin` shows an overlay window (`host.Open.overlay`: a layer surface on Wayland) with a frame
+around the region, outside it, and a bar of buttons, the only part that takes the pointer (`platform.set_input_region`).
+Record starts the recorder; Cancel while recording discards its file. `src/record_app.odin` ties it to the commands,
+the tray (a red icon and its own menu meanwhile) and the notification.
 
 ## Upload and text
 

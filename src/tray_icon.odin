@@ -6,7 +6,13 @@ package cliche
 TRAY_ICON_SIZE :: 32
 
 // `size` x `size` straight RGBA: white marks on transparency, with a dark edge so that they read on a light panel too.
-tray_icon_rgba :: proc(size: int, allocator := context.allocator) -> []u8 {
+tray_icon_rgba :: proc(size: int, allocator := context.allocator) -> []u8 { return tray_icon_draw(size, false, allocator) }
+
+// The icon while a recording is ready or runs: the same corners around a larger red dot, seen at a glance on the panel.
+tray_icon_recording_rgba :: proc(size: int, allocator := context.allocator) -> []u8 { return tray_icon_draw(size, true, allocator) }
+
+@(private = "file")
+tray_icon_draw :: proc(size: int, recording: bool, allocator := context.allocator) -> []u8 {
 	px := make([]u8, size * size * 4, allocator)
 	put :: proc(px: []u8, size, x, y: int, c: [4]u8) {
 		if x < 0 || y < 0 || x >= size || y >= size { return }
@@ -37,12 +43,13 @@ tray_icon_rgba :: proc(size: int, allocator := context.allocator) -> []u8 {
 		}
 	}
 	// the dot in the middle
-	r := size / 8
+	r := recording ? size / 5 : size / 8
 	mid := size / 2
+	dot := recording ? [4]u8{235, 45, 45, 255} : ink
 	for y in -r - 1 ..= r + 1 {
 		for x in -r - 1 ..= r + 1 {
 			d := x * x + y * y
-			if d <= r * r { put(px, size, mid + x, mid + y, ink) } else if d <= (r + 1) * (r + 1) { put(px, size, mid + x, mid + y, edge) }
+			if d <= r * r { put(px, size, mid + x, mid + y, dot) } else if d <= (r + 1) * (r + 1) { put(px, size, mid + x, mid + y, edge) }
 		}
 	}
 	return px

@@ -1,37 +1,30 @@
 package cliche
 
-// The settings: a window of its own with gui_toolkit's page of the preferences (gt:prefs_page), in the theme of
-// appearance.theme, with the command palette (Ctrl+K: cliche's actions, then every setting) and the sheet of its keys
-// (F1). Made at its first show, then hidden at a close and shown again. Each change is applied at once and written by
-// the worker (app_prefs_changed). What is slow (a folder chosen, a folder opened) goes to the worker too.
+// The settings: a mode of the main window (history_view.odin), in place of the history, with gui_toolkit's page of the
+// preferences (gt:prefs_page). The gear of the history's toolbar and Ctrl+, open it; the back bar and Escape go back.
+// The window's palette (Ctrl+K) holds cliche's actions, then every setting; its sheet of keys (F1) covers both modes.
+// Each change is applied at once and written by the worker (app_prefs_changed). What is slow (a folder chosen, a folder
+// opened) goes to the worker too.
+//
+// What is the toolkit's: the appearance and the session's preferences, the theme cards, the lines of the shortcuts
+// (the keys recorded, what the system said). What is cliche's: the pages, the words of its choices, the lines under the
+// save folder's name and the file name, and the buttons under the pages (the folder, the uploaders, the commands).
 
 import "core:fmt"
 import "core:math"
 import "core:slice"
 import "core:strings"
-import config "gt:config"
-import "gt:font"
-import "gt:host"
 import lucide "gt:lucide"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
-import "gt:render"
 import shortcuts "gt:shortcuts"
 import "gt:ui"
 
-SETTINGS_SIZE :: [2]int{880, 620}
-
-Settings_Window :: struct {
-	host:        host.Host,
-	opened:      bool,
-	visible:     bool,
-	hide_due:    bool,   // a close or Escape came in a frame: the window goes after it (not from inside it)
-	page:        prefs_page.Page,
-	icons:       font.Font_Id,
-	theme_shown: ui.Theme_Shown,
-	palette:     ui.Command_Palette,
-	sheet_open:  bool,
-	copied:      string,   // the command whose Copy was pressed last (its button says so); static text
+// The settings' part of the main window.
+Settings_Mode :: struct {
+	open:   bool,
+	page:   prefs_page.Page,
+	copied: string,   // the command whose Copy was pressed last (its button says so); static text
 }
 
 @(rodata)
@@ -41,143 +34,90 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "shortcuts",  title = "Shortcuts",     icon = lucide.KEYBOARD},
 	{category = "capture",    title = "Capture",       icon = lucide.MONITOR},
 	{category = "region",     title = "Region",        icon = lucide.IMAGE},
-	{category = "record",     title = "Recording",     icon = lucide.MONITOR},
+	{category = "record",     title = "Recording",     icon = lucide.FILM},
 	{category = "after",      title = "After capture", icon = lucide.CLIPBOARD},
 	{category = "save",       title = "Save",          icon = lucide.SAVE},
 	{category = "upload",     title = "Upload",        icon = lucide.EXTERNAL_LINK},
 	{category = "history",    title = "History",       icon = lucide.HISTORY},
 }
 
-// The preferences with a control of cliche's own, under their words.
-@(rodata)
-SETTINGS_CUSTOM := [?]string{"appearance.theme"}
-
-// The actions of the palette and of the sheet of keys.
+// The actions of the palette and of the sheet of keys that the history's (History_Action) do not hold already.
 Settings_Action :: enum u8 {
-	Capture_Region, Capture_Screen, Capture_Window, Read_Qr, Read_Text, Record, Record_Gif,
-	Choose_Folder, Open_Folder, Open_Uploaders, Import_Uploader, Shortcuts_Page, System_Shortcuts,
-	History, Palette, Keys, Close, Quit,
+	Capture_Screen, Capture_Window, Read_Qr, Read_Text, Record, Record_Gif,
+	Choose_Folder, Open_Uploaders, Import_Uploader, Shortcuts_Page, System_Shortcuts,
 }
 
 SETTINGS_ACTIONS := [Settings_Action]ui.Command{
-	.Capture_Region   = {label = "Capture a region", group = "Capture", icon = lucide.IMAGE, tags = {"screenshot", "rectangle", "selection"}},
 	.Capture_Screen   = {label = "Capture the screen under the pointer", group = "Capture", icon = lucide.MONITOR, tags = {"screenshot", "monitor", "full"}},
 	.Capture_Window   = {label = "Capture the window in front", group = "Capture", icon = lucide.IMAGE, tags = {"screenshot", "active"}},
 	.Read_Qr          = {label = "Read a QR code", group = "Capture", icon = lucide.QR_CODE, tags = {"scan", "barcode"}},
 	.Read_Text        = {label = "Read the text", group = "Capture", icon = lucide.CLIPBOARD, tags = {"ocr", "recognition", "copy"}},
-	.Record           = {label = "Record a video (again: stop)", group = "Record", icon = lucide.MONITOR, tags = {"mp4", "screencast", "video"}},
-	.Record_Gif       = {label = "Record a GIF (again: stop)", group = "Record", icon = lucide.IMAGE, tags = {"gif", "animation", "screencast"}},
+	.Record           = {label = "Record a video", group = "Record", icon = lucide.FILM, tags = {"mp4", "screencast", "video"}},
+	.Record_Gif       = {label = "Record a GIF", group = "Record", icon = lucide.FILM, tags = {"gif", "animation", "screencast"}},
 	.Choose_Folder    = {label = "Choose the save folder…", group = "Save", icon = lucide.FOLDER, tags = {"directory", "where", "browse"}},
-	.Open_Folder      = {label = "Open the save folder", group = "Save", icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
 	.Open_Uploaders   = {label = "Open the uploaders' folder", group = "Upload", icon = lucide.FOLDER_OPEN, tags = {"sxcu", "sharex", "host"}},
 	.Import_Uploader  = {label = "Import a ShareX uploader…", group = "Upload", icon = lucide.EXTERNAL_LINK, tags = {"sxcu", "sharex", "host", "add"}},
 	.Shortcuts_Page   = {label = "Shortcuts", group = "Settings", icon = lucide.KEYBOARD, tags = {"hotkey", "keys", "keybinding"}},
 	.System_Shortcuts = {label = "The system's shortcut settings…", group = "Settings", icon = lucide.EXTERNAL_LINK, tags = {"hotkey", "portal", "keys"}},
-	.History          = {label = "Open the history", group = "Window", icon = lucide.HISTORY, tags = {"recent", "captures", "grid", "list"}},
-	.Palette          = {label = "Command palette", group = "Window", keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
-	.Keys             = {label = "Keyboard shortcuts", group = "Window", keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
-	.Close            = {label = "Close the settings", group = "Window", keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"hide"}},
-	.Quit             = {label = "Quit cliche", group = "Window", keys = {{.Q, {.Ctrl}}, {}}, icon = lucide.POWER, tags = {"exit", "stop"}},
 }
 
-settings_window_show :: proc(app: ^App) {
-	sw := &app.settings_window
-	if !sw.opened && !settings_window_open(app, headless = false) { return }
-	token := app_take_token(app)
-	defer delete(token)
-	if !sw.visible {
-		host.host_show(&sw.host)
-		sw.visible = true
-		prefs_page.focus_search(&sw.page)
-		// (the uploaders' folder may have changed since: its list is read again on the worker)
-		worker_send(&app.worker, Job_Uploaders{})
-	}
-	platform.raise_window_token(sw.host.win, token)
-	sw.host.settle = max(sw.host.settle, 3)
+// `cliche --settings`, the tray's Settings: the main window, shown, in settings mode.
+settings_show :: proc(app: ^App) {
+	history_window_show(app)
+	settings_enter(app)
 }
 
-// Opens the window (hidden). `headless`: offscreen, on the software renderer (shots.odin).
-settings_window_open :: proc(app: ^App, headless: bool) -> bool {
-	sw := &app.settings_window
-	if !host.host_open(&sw.host, &app.shared, {title = "cliche settings", size = SETTINGS_SIZE, headless = headless}, settings_build, app) {
-		fmt.eprintln("cliche: the settings window cannot open")
-		return false
-	}
-	sw.opened = true
-	sw.host.input = settings_input
-	sw.host.params = settings_params
-	sw.host.after_input = 3
-	sw.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
-	sw.host.state.icon_font = sw.icons
-	app_wake_set(app, .Settings, sw.host.win)
-	return true
+// The main window goes to the settings (it is shown already, or about to be).
+settings_enter :: proc(app: ^App) {
+	m := &app.history_window.settings_mode
+	if m.open { return }
+	m.open = true
+	prefs_page.focus_search(&m.page)
+	// (the uploaders' folder may have changed since: its list is read again on the worker)
+	worker_send(&app.worker, Job_Uploaders{})
 }
 
-// Each build: the theme (applied only when it changes, or when the system goes light or dark), the base style.
-@(private = "file")
-settings_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
-	app := (^App)(h.user)
-	sw := &app.settings_window
-	s := &app.settings
-	choice := ui.Theme_Choice{name = s.theme, mode = s.mode, finish = s.finish, glow = 1}
-	if ui.theme_show(&app.shared.theme, themes(), choice, &sw.theme_shown, render.blend_space(&app.shared.r)) {
-		platform.set_dark_title(h.win, !sw.theme_shown.light)
-	}
-	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = s.font_size, text_pad = 6, cursor = .Arrow}
+// Back to the history.
+settings_leave :: proc(app: ^App) {
+	app.history_window.settings_mode.open = false
 }
 
-@(private = "file")
-settings_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
-	app := (^App)(h.user)
-	out := make([dynamic]platform.Event, 0, len(events), context.temp_allocator)
-	for e in events {
-		if e.kind == .Close {
-			platform.cancel_close(h.win)
-			app.settings_window.hide_due = true
-			continue
-		}
-		append(&out, e)
-	}
-	return out[:]
+// The keys of the settings' mode (no dialog open): Escape goes back when no preference has the keyboard; the window's
+// own commands (the palette, the sheet, close, quit) are the history's (history_view.odin).
+settings_keys :: proc(app: ^App) {
+	m := &app.history_window.settings_mode
+	if prefs_page.escape_leaves(&m.page) { settings_leave(app) }
 }
 
-@(private = "file")
-settings_build :: proc(h: ^host.Host, size: host.Vec2) {
-	app := (^App)(h.user)
-	sw := &app.settings_window
-	app_shortcuts_recording(app)
-	dialog := sw.palette.open || sw.sheet_open
-	if !dialog && !prefs_page.editing(&sw.page) {
-		if ui.key_press(.Escape) { sw.hide_due = true }
-		for a in Settings_Action {
-			if ui.command_pressed(SETTINGS_ACTIONS[a], settings_action_enabled(app, a)) { settings_action(app, a); break }
-		}
-	}
+// The settings' mode of the main window: the back bar, then the page.
+settings_build :: proc(app: ^App, em: f32) {
+	m := &app.history_window.settings_mode
+	o := settings_options(app)
+	if prefs_page.back_bar(&m.page, o, "Settings", "Back to the history (Escape)", em) { settings_leave(app) }
 	ui.next({width = ui.fill(), height = ui.fill()})
-	prefs_page.build(&sw.page, &app.prefs, settings_options(app))
-	settings_dialogs(app)
+	prefs_page.build(&m.page, &app.prefs, o)
 }
 
-// The palette (cliche's actions, then every setting: one chosen shows the settings on it alone) and the sheet of keys.
-@(private = "file")
-settings_dialogs :: proc(app: ^App) {
-	sw := &app.settings_window
+// The palette's part of the settings: cliche's actions the history lacks, then every preference (`names`: the
+// preferences' names, in their order after the actions).
+settings_palette :: proc(app: ^App) -> (commands: []ui.Command, enabled: []bool, names: []string) {
 	actions := slice.enumerated_array(&SETTINGS_ACTIONS)
-	if sw.palette.open {
-		o := settings_options(app)
-		settings, names := prefs_page.palette_commands(&app.prefs, o)
-		all := slice.concatenate([][]ui.Command{actions, settings}, context.temp_allocator)
-		enabled := make([]bool, len(all), context.temp_allocator)
-		for a in Settings_Action { enabled[int(a)] = settings_action_enabled(app, a) }
-		for i in len(actions) ..< len(all) { enabled[i] = true }
-		if i, _ := ui.palette(&sw.palette, all, enabled); i >= 0 {
-			if i < len(actions) { settings_action(app, Settings_Action(i)) } else { prefs_page.show(&sw.page, &app.prefs, o, names[i - len(actions)]) }
-		}
-	}
-	ui.shortcuts_sheet("keys", actions, &sw.sheet_open, "cliche's keys")
+	prefs, pref_names := prefs_page.palette_commands(&app.prefs, settings_options(app))
+	commands = slice.concatenate([][]ui.Command{actions, prefs}, context.temp_allocator)
+	enabled = make([]bool, len(commands), context.temp_allocator)
+	for a in Settings_Action { enabled[int(a)] = settings_action_enabled(app, a) }
+	for i in len(actions) ..< len(commands) { enabled[i] = true }
+	return commands, enabled, pref_names
 }
 
-@(private = "file")
+// The palette's choice `i` in settings_palette's list: an action, or a preference shown alone on the settings.
+settings_palette_chosen :: proc(app: ^App, i: int, names: []string) {
+	if i < len(Settings_Action) { settings_action(app, Settings_Action(i)); return }
+	settings_enter(app)
+	m := &app.history_window.settings_mode
+	prefs_page.show(&m.page, &app.prefs, settings_options(app), names[i - len(Settings_Action)])
+}
+
 settings_action_enabled :: proc(app: ^App, a: Settings_Action) -> bool {
 	#partial switch a {
 	case .System_Shortcuts: return shortcuts.can_configure(app.shortcuts)
@@ -185,30 +125,23 @@ settings_action_enabled :: proc(app: ^App, a: Settings_Action) -> bool {
 	return true
 }
 
-@(private = "file")
 settings_action :: proc(app: ^App, a: Settings_Action) {
-	sw := &app.settings_window
+	hw := &app.history_window
 	switch a {
-	case .Capture_Region:   sw.hide_due = true; app_trigger(app, .Region)
-	case .Capture_Screen:   sw.hide_due = true; app_trigger(app, .Screen)
-	case .Capture_Window:   sw.hide_due = true; app_trigger(app, .Window)
-	case .Read_Qr:          sw.hide_due = true; app_trigger(app, .Region, .Qr)
-	case .Read_Text:        sw.hide_due = true; app_trigger(app, .Region, .Text)
-	case .Record:           sw.hide_due = true; app_record_trigger(app, .Mp4)
-	case .Record_Gif:       sw.hide_due = true; app_record_trigger(app, .Gif)
+	case .Capture_Screen:   hw.hide_due = true; app_trigger(app, .Screen)
+	case .Capture_Window:   hw.hide_due = true; app_trigger(app, .Window)
+	case .Read_Qr:          hw.hide_due = true; app_trigger(app, .Region, .Qr)
+	case .Read_Text:        hw.hide_due = true; app_trigger(app, .Region, .Text)
+	case .Record:           hw.hide_due = true; app_record_trigger(app, .Mp4)
+	case .Record_Gif:       hw.hide_due = true; app_record_trigger(app, .Gif)
 	case .Choose_Folder:    worker_send(&app.worker, Job_Pick_Folder{start = strings.clone(app.settings.folder)})
-	case .Open_Folder:      worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)})
 	case .Open_Uploaders:   worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(uploaders_folder())})
 	case .Import_Uploader:  worker_send(&app.worker, Job_Import_Uploader{})
 	case .Shortcuts_Page:
-		delete(sw.page.current)
-		sw.page.current = strings.clone("shortcuts")
+		settings_enter(app)
+		delete(hw.settings_mode.page.current)
+		hw.settings_mode.page.current = strings.clone("shortcuts")
 	case .System_Shortcuts: shortcuts.configure(app.shortcuts)
-	case .History:          sw.hide_due = true; history_window_show(app)
-	case .Palette:          ui.palette_open(&sw.palette)
-	case .Keys:             sw.sheet_open = true
-	case .Close:            sw.hide_due = true
-	case .Quit:             app.quit = true
 	}
 }
 
@@ -217,15 +150,20 @@ settings_options :: proc(app: ^App) -> prefs_page.Options {
 		user = app,
 		changed = proc(user: rawptr, name: string) { app_prefs_changed((^App)(user)) },
 		choices = settings_choices,
-		custom_names = SETTINGS_CUSTOM[:], custom = settings_custom,
-		hotkeys = SHORTCUT_PREF_NAMES[:],
+		themes = themes(),
+		shortcuts = app.shortcuts,
+		themes_light = app.history_window.theme_shown.light,
+		shortcut_prefs = slice.enumerated_array(&SHORTCUT_PAGE_PREFS),
 		status = settings_status,
-		problem = proc(user: rawptr, name: string) -> string { return shortcut_problem((^App)(user), name) },
 		page_foot = settings_page_foot,
-		pages = SETTINGS_PAGES[:], icon_font = app.settings_window.icons, search_icon = lucide.SEARCH, reset_icon = lucide.REFRESH_CW,
+		pages = SETTINGS_PAGES[:], icon_font = app.history_window.icons, search_icon = lucide.SEARCH, reset_icon = lucide.REFRESH_CW,
 		foot = "prefs: " + APP_NAME + "/prefs in the configuration folder",
 		version = "cliche " + APP_VERSION,
 	}
+}
+
+settings_mode_free :: proc(app: ^App) {
+	prefs_page.destroy(&app.history_window.settings_mode.page)
 }
 
 // The words of a choice the registry keeps as a short value.
@@ -256,18 +194,8 @@ settings_choices :: proc(user: rawptr, name: string) -> (labels, values: []strin
 	return
 }
 
-// The themes as cards, each in its own colours.
-@(private = "file")
-settings_custom :: proc(user: rawptr, name: string, em: f32) {
-	app := (^App)(user)
-	if name != "appearance.theme" { return }
-	list := themes()
-	if at := prefs_page.theme_cards(list, app.settings.theme, app.settings_window.theme_shown.light, em); at >= 0 {
-		if config.set_from_string(&app.prefs, "appearance.theme", list[at].name, .User) == .None { app_prefs_changed(app) }
-	}
-}
-
-// What a line says of its preference's state: a shortcut's keys, the name the next file gets, the folder used.
+// What a line says of its preference's state: the name the next file gets, the folder used. (The shortcuts' lines are
+// the toolkit's.)
 @(private = "file")
 settings_status :: proc(user: rawptr, name: string) -> string {
 	app := (^App)(user)
@@ -278,12 +206,11 @@ settings_status :: proc(user: rawptr, name: string) -> string {
 		return fmt.tprintf("For example: %s", name_expand(app.settings.name_pattern, example, .Region, context.temp_allocator))
 	case "save.folder":
 		if app.settings.folder == "" && app.default_folder != "" { return fmt.tprintf("Now: %s", app.default_folder) }
-		return ""
 	}
-	return shortcut_status(app, name)
+	return ""
 }
 
-// Under a page: the save folder's buttons; the shortcuts' system settings and commands.
+// Under a page: the save folder's buttons; the shortcuts' system settings and commands; the uploaders.
 @(private = "file")
 settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	app := (^App)(user)
@@ -294,7 +221,7 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 		if ui.row(id = "###save_buttons") {
 			if foot_button("Choose a folder…###choose", em) { settings_action(app, .Choose_Folder) }
 			ui.spacer(ui.px(em * 0.5))
-			if foot_button("Open the folder###open", em) { settings_action(app, .Open_Folder) }
+			if foot_button("Open the folder###open", em) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
 		}
 	case "shortcuts":
 		shortcuts_foot(app, em)
@@ -305,7 +232,7 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 
 @(private = "file")
 shortcuts_foot :: proc(app: ^App, em: f32) {
-	sw := &app.settings_window
+	m := &app.history_window.settings_mode
 	ui.spacer(ui.px(em * 0.8))
 	switch shortcuts.backend(app.shortcuts) {
 	case .Portal:
@@ -317,7 +244,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 	case .Windows:
 		foot_text("Windows gives these keys to cliche in every program. Keys that another program holds cannot be used.", em)
 	case .None:
-		foot_text("This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = , Print, exec, cliche --region; sway: bindsym Print exec cliche --region):", em)
+		foot_text("This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = CTRL, Print, exec, cliche --region; sway: bindsym Ctrl+Print exec cliche --region):", em)
 	}
 	ui.spacer(ui.px(em * 0.6))
 	if ui.tags("weak") {
@@ -332,13 +259,13 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.text_size(em * 0.8), height = ui.pct(1), font = ui.mono_font(), text_pad = 0})
 			if ui.tags("weak") { ui.label(fmt.tprintf("%s###cmd", SHORTCUT_COMMANDS[a])) }
 			ui.spacer(ui.px(em * 0.6))
-			done := sw.copied == SHORTCUT_COMMANDS[a]
+			done := m.copied == SHORTCUT_COMMANDS[a]
 			ui.next({width = ui.px(em * 5.5), height = ui.px(math.round(em * 1.7)), radius = em * 0.35, font_size = math.round(em * 0.86)})
 			sig: ui.Signal
 			if ui.tags("ghost_button") { sig = ui.button(done ? "Copied###copy" : "Copy###copy") }
 			if sig.clicked {
-				platform.clipboard_set(sw.host.win, {text = SHORTCUT_COMMANDS[a]})
-				sw.copied = SHORTCUT_COMMANDS[a]
+				platform.clipboard_set(app.history_window.host.win, {text = SHORTCUT_COMMANDS[a]})
+				m.copied = SHORTCUT_COMMANDS[a]
 			}
 		}
 	}
@@ -385,19 +312,4 @@ foot_text :: proc(text: string, em: f32) {
 foot_button :: proc(label: string, em: f32) -> bool {
 	ui.next({width = ui.text_size(em * 0.9), height = ui.px(math.round(em * 2)), radius = em * 0.4})
 	return ui.button(label).clicked
-}
-
-settings_after_frame :: proc(app: ^App) {
-	sw := &app.settings_window
-	if !sw.hide_due { return }
-	sw.hide_due = false
-	sw.palette.open = false
-	sw.sheet_open = false
-	host.host_hide(&sw.host)
-	sw.visible = false
-}
-
-settings_window_free :: proc(app: ^App) {
-	prefs_page.destroy(&app.settings_window.page)
-	ui.palette_destroy(&app.settings_window.palette)
 }

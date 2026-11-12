@@ -26,7 +26,7 @@ shots_run :: proc(folder: string, which: string) -> int {
 	app := new(App)
 	defer free(app)
 	app.prefs = config.prefs_make()
-	config.register(&app.prefs, PREF_DEFS[:])
+	prefs_register(&app.prefs)
 	app.settings = prefs_read(&app.prefs)
 	app.flow = Flow_Idle{}
 	app.record = Record_Idle{}
@@ -43,23 +43,25 @@ shots_run :: proc(folder: string, which: string) -> int {
 
 @(private = "file")
 shots_settings :: proc(app: ^App, folder: string) -> int {
-	if !settings_window_open(app, headless = true) { return 1 }
-	sw := &app.settings_window
-	defer { settings_window_free(app); host.host_close(&sw.host) }
+	if !history_window_open(app, headless = true) { return 1 }
+	hw := &app.history_window
+	defer { history_window_free(app); host.host_close(&hw.host) }
+	settings_enter(app)
+	page := &hw.settings_mode.page
 	failed := false
 	for pg in SETTINGS_PAGES {
-		delete(sw.page.current)
-		sw.page.current = strings.clone(pg.category)
+		delete(page.current)
+		page.current = strings.clone(pg.category)
 		// (the heap: each frame frees the temporary allocator)
 		name := fmt.aprintf("settings-%s", pg.category)
-		failed |= !shots_write(app, &sw.host, folder, name)
+		failed |= !shots_write(app, &hw.host, folder, name)
 		delete(name)
 	}
 	// the command palette, open on the first page
-	delete(sw.page.current)
-	sw.page.current = strings.clone(SETTINGS_PAGES[0].category)
-	ui.palette_open(&sw.palette)
-	failed |= !shots_write(app, &sw.host, folder, "settings-palette")
+	delete(page.current)
+	page.current = strings.clone(SETTINGS_PAGES[0].category)
+	ui.palette_open(&hw.palette)
+	failed |= !shots_write(app, &hw.host, folder, "settings-palette")
 	return failed ? 1 : 0
 }
 

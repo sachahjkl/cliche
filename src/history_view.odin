@@ -1,9 +1,11 @@
 package cliche
 
-// The history's window: the captures kept (history.odin), in a grid of thumbnails or in a list, with a search, a filter
-// by kind, a preview of the picture selected (Space) and the usual actions: open, show in its folder, copy, edit, upload
-// again, delete the file, forget the entry. It is made as the settings' window is (settings_view.odin): at its first
-// show, hidden at a close, in the theme of appearance.theme, with the command palette (Ctrl+K) and the sheet of keys (F1).
+// cliche's main window, the history: the captures kept (history.odin), in a grid of thumbnails or in a list, with a
+// search, a filter by kind, a preview of the picture selected (Space) and the usual actions: open, show in its folder,
+// copy, edit, upload again, delete the file, forget the entry. The settings show in it, in place of the history
+// (settings_view.odin): the gear of the toolbar and Ctrl+, open them, the back bar and Escape go back. Made at its first
+// show, hidden at a close, in the theme of appearance.theme, with the command palette (Ctrl+K) and the sheet of keys
+// (F1) of both modes.
 //
 // What is slow goes to the worker (history.odin's jobs): the file, the thumbnails, a picture decoded, an upload, a file
 // opened or deleted. A thumbnail is a texture only while its entry is in view: the grid is a virtual list of lines of
@@ -23,6 +25,7 @@ import "gt:font"
 import "gt:host"
 import lucide "gt:lucide"
 import "gt:platform"
+import prefs_page "gt:prefs_page"
 import "gt:render"
 import timefmt "gt:timefmt"
 import "gt:ui"
@@ -38,7 +41,9 @@ HISTORY_THUMB_KEEP_FRAMES :: 30
 // The side of a thumbnail's cell per step of history.thumbnail_size, in ems.
 HISTORY_CELL_EM := [3]f32{7, 10, 14}
 // The preview's pane, in ems.
-HISTORY_PREVIEW_EM :: 26
+HISTORY_PREVIEW_EM     :: 26   // the preview pane's width at first, in ems (history.preview_width)
+HISTORY_PREVIEW_MIN_EM :: 14
+HISTORY_PREVIEW_MAX_EM :: 80
 // Entries an action opens at once (each starts a program).
 HISTORY_OPEN_MAX :: 8
 
@@ -121,6 +126,7 @@ History_Window :: struct {
 	enabled_made: bool,
 
 	menu_key:    ui.Key,
+	settings_mode: Settings_Mode,   // settings_view.odin
 	confirm_open: bool,
 	delete_ids:  [dynamic]u64,
 	status:      string,          // what the last action did, under the view (owned)
@@ -153,7 +159,7 @@ HISTORY_ACTIONS := [History_Action]ui.Command{
 	.Settings       = {label = "Settings", group = "Window", keys = {{.Comma, {.Ctrl}}, {}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}},
 	.Palette        = {label = "Command palette", group = "Window", keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
 	.Keys           = {label = "Keyboard shortcuts", group = "Window", keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
-	.Close          = {label = "Close the history", group = "Window", keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"hide"}},
+	.Close          = {label = "Close the window", group = "Window", keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"hide"}},
 	.Quit           = {label = "Quit cliche", group = "Window", keys = {{.Q, {.Ctrl}}, {}}, icon = lucide.POWER, tags = {"exit", "stop"}},
 }
 
@@ -209,7 +215,8 @@ history_prefs_changed :: proc(app: ^App) {
 }
 
 // The preferences of the history, as prefs_read copies them into Settings.
-history_settings_read :: proc(p: ^config.Prefs) -> (size: int, view: History_View_Mode, thumbnail: int) {
+history_settings_read :: proc(p: ^config.Prefs) -> (size: int, view: History_View_Mode, thumbnail: int, preview_em: f32) {
+	preview_em = f32(config.float_of(p, "history.preview_width"))
 	size = int(config.int_of(p, "history.size"))
 	if size <= 0 { size = HISTORY_SIZE_DEFAULT }
 	view = config.string_of(p, "history.view") == HISTORY_VIEW_NAMES[.List] ? .List : .Grid
@@ -219,10 +226,12 @@ history_settings_read :: proc(p: ^config.Prefs) -> (size: int, view: History_Vie
 	return
 }
 
-// Shows the window; `select`: the entry to select and bring into view (0: the selection stays).
+// Shows the window, on the history (settings_show then goes to the settings); `select`: the entry to select and bring
+// into view (0: the selection stays).
 history_window_show :: proc(app: ^App, select: u64 = 0) {
 	hw := &app.history_window
 	if !hw.opened && !history_window_open(app, headless = false) { return }
+	settings_leave(app)
 	token := app_take_token(app)
 	defer delete(token)
 	if !hw.visible {
@@ -245,8 +254,8 @@ history_window_show :: proc(app: ^App, select: u64 = 0) {
 // Opens the window (hidden). `headless`: offscreen, on the software renderer (shots.odin).
 history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw := &app.history_window
-	if !host.host_open(&hw.host, &app.shared, {title = "cliche history", size = HISTORY_WINDOW_SIZE, headless = headless}, history_build, app) {
-		fmt.eprintln("cliche: the history window cannot open")
+	if !host.host_open(&hw.host, &app.shared, {title = "cliche", size = HISTORY_WINDOW_SIZE, headless = headless}, history_build, app) {
+		fmt.eprintln("cliche: the main window cannot open")
 		return false
 	}
 	hw.opened = true
@@ -360,6 +369,7 @@ history_window_free :: proc(app: ^App) {
 	history_textures_drop(app)
 	delete(hw.thumbs)
 	ui.palette_destroy(&hw.palette)
+	settings_mode_free(app)
 	ui.field_destroy(&hw.search)
 	ui.table_destroy(&hw.table)
 	ui.table_data_destroy(&hw.table_data)
@@ -382,12 +392,13 @@ history_window_free :: proc(app: ^App) {
 history_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	app := (^App)(h.user)
 	hw := &app.history_window
-	s := &app.settings
-	choice := ui.Theme_Choice{name = s.theme, mode = s.mode, finish = s.finish, glow = 1}
+	a := app.settings.appearance
+	choice := prefs_page.appearance_choice(a)
+	choice.glow = 1
 	if ui.theme_show(&app.shared.theme, themes(), choice, &hw.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !hw.theme_shown.light)
 	}
-	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = s.font_size, text_pad = 6, cursor = .Arrow}
+	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = a.font_size, text_pad = 6, cursor = .Arrow}
 }
 
 @(private = "file")
@@ -421,7 +432,12 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	}
 
 	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.ctx_menu_any_open()
-	if !dialog {
+	settings := hw.settings_mode.open
+	if !dialog && settings {
+		settings_keys(app)
+		// (the window's own commands; the history's other keys mean nothing on the settings)
+		if !prefs_page.editing(&hw.settings_mode.page) { history_keys(app) }
+	} else if !dialog {
 		if ui.key_press(.Escape) {
 			if hw.search_focused && len(hw.search.buf) > 0 { ui.field_set(&hw.search, ""); hw.shown_due = true } else { hw.hide_due = true }
 		}
@@ -431,25 +447,40 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###history") {   // (the theme's surface: the host only clears to black)
-		history_toolbar(app, em)
-		ui.hline(ui.fill())
-		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
-		if ui.row(id = "###body") {
-			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
-			if ui.column(id = "###main") {
-				history_main(app, em)
-			}
-			if hw.preview_open {
-				// (a rule between the view and the pane: hline's, standing)
-				ui.next({width = ui.px(max(1, math.round(ui.scale()))), height = ui.fill(), bg = ui.color("border")})
-				ui.build_box({.Draw_Background, .Groove}, "###preview_rule")
-				history_preview_pane(app, em)
-			}
+		if settings {
+			settings_build(app, em)
+		} else {
+			history_page(app, em)
 		}
-		history_footer(app, em)
 	}
-	history_menu(app, em)
+	if !settings { history_menu(app, em) }
 	history_dialogs(app)
+}
+
+// The history's mode: the toolbar, the grid or the list (and the preview), the footer.
+@(private = "file")
+history_page :: proc(app: ^App, em: f32) {
+	hw := &app.history_window
+	history_toolbar(app, em)
+	ui.hline(ui.fill())
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
+	if ui.row(id = "###body") {
+		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+		if ui.column(id = "###main") {
+			history_main(app, em)
+		}
+		if hw.preview_open {
+			// (the rule between the view and the pane, dragged, sets the pane's width: kept when let go)
+			w := app.settings.history_preview_em
+			ui.next({height = ui.fill()})
+			split := ui.splitter("###preview_split", .X, &w, HISTORY_PREVIEW_MIN_EM, HISTORY_PREVIEW_MAX_EM,
+				{after = true, unit = em, flush = true, line_at = .Start, default_size = HISTORY_PREVIEW_EM})
+			if split.changed { app.settings.history_preview_em = w }
+			if split.finished { history_pref(app, "history.preview_width", fmt.tprintf("%.1f", w)) }
+			history_preview_pane(app, em)
+		}
+	}
+	history_footer(app, em)
 }
 
 // The entries shown, made again when the history, the search, the filter or the sort changed (not per frame).
@@ -478,7 +509,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.9)), axis = .X, cross = .Center})
 	if ui.row(id = "###toolbar") {
 		ui.spacer(ui.px(em * 0.6))
-		ui.next({width = ui.px(em * 18), height = ui.px(math.round(em * 1.9))})
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9))})
 		r := ui.line_edit("###search", &hw.search, "Search names, texts, URLs", clearable = true)
 		if r.box != nil { hw.search_key = r.box.key }
 		hw.search_focused = r.focused
@@ -491,7 +522,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 			hw.filter = History_Filter(chosen)
 			hw.shown_due = true
 		}
-		ui.spacer(ui.fill())
+		ui.spacer(ui.px(em * 0.8))
 		if app.settings.history_view == .Grid {
 			sizes := [3]string{"S", "M", "L"}
 			tips := [3]string{"Small thumbnails", "Medium thumbnails", "Large thumbnails"}
@@ -510,6 +541,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 		if history_icon_button("preview", lucide.EYE, hw.preview_open ? "Hide the preview (Space)" : "Preview (Space)", em) { history_action(app, .Preview) }
 		if history_icon_button("folder", lucide.FOLDER_OPEN, "Open the save folder", em) { history_action(app, .Open_Folder) }
 		if history_icon_button("palette", lucide.COMMAND, "Command palette (Ctrl+K)", em) { history_action(app, .Palette) }
+		if history_icon_button("settings", lucide.SETTINGS, "Settings (Ctrl+,)", em) { history_action(app, .Settings) }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -529,7 +561,7 @@ history_icon_button :: proc(id, glyph, tip: string, em: f32) -> bool {
 history_main :: proc(app: ^App, em: f32) {
 	hw := &app.history_window
 	if len(hw.history.entries) == 0 {
-		keys := app.settings.shortcuts[.Region]
+		keys := shortcut_keys(app, .Region)
 		note := keys != "" ? fmt.tprintf("Press %s, or click cliche's icon in the notification area: each capture comes here.", keys) : "Click cliche's icon in the notification area, or run cliche --region: each capture comes here."
 		if !hw.loaded { note = "Reading the history…" }
 		if ui.empty_state("empty", {icon = lucide.HISTORY, title = "No capture yet", note = note, actions = {"Capture a region"}}) == 0 {
@@ -823,7 +855,7 @@ history_table_lead :: proc(t: ^ui.Table, row: int, size: f32) {
 @(private = "file")
 history_preview_pane :: proc(app: ^App, em: f32) {
 	hw := &app.history_window
-	ui.next({width = ui.px(math.round(em * HISTORY_PREVIEW_EM)), height = ui.fill(), axis = .Y})
+	ui.next({width = ui.px(math.round(em * app.settings.history_preview_em)), height = ui.fill(), axis = .Y})
 	if ui.column(id = "###preview_pane") {
 		e := history_find(&hw.history, hw.selection.focus)
 		if e == nil {
@@ -905,7 +937,7 @@ history_keys :: proc(app: ^App) {
 		if hw.search_focused && a in HISTORY_FIELD_KEYS { continue }
 		if ui.command_pressed(HISTORY_ACTIONS[a], a in enabled) { history_action(app, a); return }
 	}
-	if app.settings.history_view != .Grid || len(hw.shown_ids) == 0 { return }
+	if hw.settings_mode.open || app.settings.history_view != .Grid || len(hw.shown_ids) == 0 { return }
 	// the grid's moves: a line is `grid_columns` cells; Shift extends the selection (the move clamps to the ends)
 	columns := max(hw.grid_columns, 1)
 	page := columns * max(hw.grid.page_rows - 1, 1)
@@ -954,18 +986,26 @@ history_menu :: proc(app: ^App, em: f32) {
 	}
 }
 
-// The palette, the sheet of keys, the question before files are deleted.
+// The palette (the history's actions, the settings' actions, then every setting), the sheet of keys, the question
+// before files are deleted.
 @(private = "file")
 history_dialogs :: proc(app: ^App) {
 	hw := &app.history_window
-	commands := slice.enumerated_array(&HISTORY_ACTIONS)
+	history_commands := slice.enumerated_array(&HISTORY_ACTIONS)
+	settings_commands := slice.enumerated_array(&SETTINGS_ACTIONS)
 	if hw.palette.open {
 		set := history_enabled(app)
-		enabled := make([]bool, len(History_Action), context.temp_allocator)
-		for a in History_Action { enabled[int(a)] = a in set }
-		if i, _ := ui.palette(&hw.palette, commands, enabled); i >= 0 { history_action(app, History_Action(i)) }
+		mine := make([]bool, len(History_Action), context.temp_allocator)
+		for a in History_Action { mine[int(a)] = a in set }
+		theirs, theirs_enabled, names := settings_palette(app)
+		commands := slice.concatenate([][]ui.Command{history_commands, theirs}, context.temp_allocator)
+		enabled := slice.concatenate([][]bool{mine, theirs_enabled}, context.temp_allocator)
+		if i, _ := ui.palette(&hw.palette, commands, enabled); i >= 0 {
+			if i < len(History_Action) { history_action(app, History_Action(i)) } else { settings_palette_chosen(app, i - len(History_Action), names) }
+		}
 	}
-	ui.shortcuts_sheet("keys", commands, &hw.sheet_open, "The history's keys")
+	sheet := slice.concatenate([][]ui.Command{history_commands, settings_commands}, context.temp_allocator)
+	ui.shortcuts_sheet("keys", sheet, &hw.sheet_open, "cliche's keys")
 	if hw.confirm_open {
 		names := make([dynamic]string, context.temp_allocator)
 		for id in hw.delete_ids {
@@ -997,10 +1037,17 @@ history_selected :: proc(app: ^App) -> []u64 {
 @(private = "file")
 history_enabled :: proc(app: ^App) -> History_Actions {
 	hw := &app.history_window
-	stamp := [3]u64{hw.history.version, hw.selection.version, u64(app.settings.history_view) + u64(len(hw.shown_ids)) << 8}
+	settings := hw.settings_mode.open
+	stamp := [3]u64{hw.history.version, hw.selection.version, u64(app.settings.history_view) + u64(len(hw.shown_ids)) << 8 + u64(settings) << 62}
 	if stamp == hw.enabled_stamp && hw.enabled_made { return hw.enabled }
 	hw.enabled_stamp, hw.enabled_made = stamp, true
-	out := History_Actions{.Preview, .Search, .Open_Folder, .Capture_Region, .Settings, .Palette, .Keys, .Close, .Quit}
+	// (on the settings: what concerns the window alone; the history's actions wait for it)
+	window := History_Actions{.Open_Folder, .Capture_Region, .Settings, .Palette, .Keys, .Close, .Quit}
+	if settings {
+		hw.enabled = window
+		return window
+	}
+	out := window + {.Preview, .Search}
 	if app.settings.history_view == .Grid { out += {.List} } else { out += {.Grid} }
 	if len(hw.shown_ids) > 0 { out += {.Select_All} }
 	if len(hw.selection.marked) > 0 { out += {.Remove} }
@@ -1096,7 +1143,7 @@ history_action :: proc(app: ^App, a: History_Action) {
 		hw.hide_due = true
 		app_trigger(app, .Region)
 	case .Settings:
-		settings_window_show(app)
+		settings_enter(app)
 	case .Palette:
 		ui.palette_open(&hw.palette)
 	case .Keys:

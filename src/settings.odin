@@ -7,25 +7,18 @@ import "core:os"
 import "core:strings"
 import config "gt:config"
 import "gt:platform"
-import "gt:ui"
+import prefs_page "gt:prefs_page"
 
 APP_NAME :: "cliche"
 
 DEFAULT_NAME_PATTERN :: "cliche-%Y%m%d-%H%M%S.png"
 
 // The pages of the settings, in this order (settings_view.odin gives their titles and icons). The choices of
-// general.tray_click and save.compression are settings_view.odin's, with their words.
+// general.tray_click and save.compression are settings_view.odin's, with their words. The appearance, general.menu and
+// general.autostart are the toolkit's standard preferences (prefs_register).
 PREF_DEFS := [?]config.Def{
 	// General
-	{name = "general.menu", title = "In the application menu", category = "general", description = "Put cliche in the application menu, with its icon. The desktop then knows cliche by its name: its shortcuts and the windows' places come from that.", kind = .Bool, default = {b = true}, tags = {"launcher", "desktop file", "start menu", "icon"}},
-	{name = "general.autostart", title = "Start with the session", category = "general", description = "Start cliche with the session, in the notification area, so that its shortcuts work from the start.", kind = .Bool, default = {b = false}, tags = {"login", "startup", "boot", "session"}},
 	{name = "general.tray_click", title = "A click on the icon", category = "general", description = "What a click on cliche's icon in the notification area does.", kind = .String, default = {s = "region"}, tags = {"tray", "icon", "notification area", "panel"}},
-
-	// Appearance
-	{name = "appearance.theme", title = "Theme", category = "appearance", description = "The colours of cliche's windows: cliche's own, or a theme of the toolkit (Midnight, Nord, Gruvbox, Tokyo Night, Catppuccin, Rosé Pine...).", kind = .String, default = {s = "cliche"}, tags = {"colours", "colors", "palette", "dark", "light", "look"}},
-	{name = "appearance.mode", title = "Light or dark", category = "appearance", description = "The theme's version: the system's (light or dark, followed as it changes), dark, or light.", kind = .String, default = {s = "system"}, choices = {"system", "dark", "light"}, tags = {"dark", "light", "night", "day"}},
-	{name = "appearance.finish", title = "Finish", category = "appearance", description = "How surfaces are drawn. Machined: bevelled buttons, sunken fields, carved lines. Edged: the same reliefs, crisp, with square corners. Flat: plain surfaces and thin lines.", kind = .String, default = {s = "machined"}, choices = {"machined", "edged", "flat", "gradient", "glass"}, tags = {"style", "look", "bevel", "flat"}},
-	{name = "appearance.font_size", title = "Text size", category = "appearance", description = "The size of the settings' text, in logical pixels.", kind = .Float, default = {f = 14}, min = 10, max = 24, bounded = true, unit = "px", tags = {"text size", "zoom", "bigger", "smaller"}},
 
 	// Capture
 	{name = "capture.delay", title = "Delay before a screen or a window", category = "capture", description = "Seconds to wait before a screen or a window is taken (a menu opened meanwhile is in the picture). A region's picture is taken at once, frozen while you choose.", kind = .Int, default = {i = 0}, min = 0, max = 10, bounded = true, unit = "s", tags = {"timer", "wait", "countdown", "menu"}},
@@ -42,6 +35,7 @@ PREF_DEFS := [?]config.Def{
 	// History
 	{name = "history.size", title = "Captures kept", category = "history", description = "How many captures the history keeps: the oldest go first. The files stay where they are.", kind = .Int, default = {i = 1000}, min = 10, max = 100000, bounded = true, tags = {"history", "recent", "limit"}},
 	{name = "history.view", title = "View", category = "history", description = "How the history shows the captures: thumbnails in a grid, or a list with their details.", kind = .String, default = {s = "grid"}, tags = {"grid", "list", "thumbnails"}},
+	{name = "history.preview_width", title = "Preview width", category = "history", description = "The width of the preview pane, in ems. Dragging the line beside it changes it.", kind = .Float, default = {f = HISTORY_PREVIEW_EM}, min = HISTORY_PREVIEW_MIN_EM, max = HISTORY_PREVIEW_MAX_EM, bounded = true, hidden = true},
 	{name = "history.thumbnail_size", title = "Thumbnail size", category = "history", description = "The size of the thumbnails in the grid.", kind = .String, default = {s = "medium"}, tags = {"grid", "preview", "size"}},
 
 	// Region
@@ -66,12 +60,12 @@ PREF_DEFS := [?]config.Def{
 	{name = "save.name", title = "File name", category = "save", description = "The name of a saved screenshot: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets \" (2)\".", kind = .String, default = {s = DEFAULT_NAME_PATTERN}, tags = {"file name", "pattern", "format"}},
 	{name = "save.compression", title = "PNG files", category = "save", description = "How hard the PNG file is compressed: small files, or fast saves (larger files).", kind = .String, default = {s = "small"}, tags = {"png", "size", "speed", "level"}},
 
-	// Shortcuts
-	{name = "shortcut.region", title = "Capture a region", category = "shortcuts", description = "Capture a region: a rectangle, a window or a screen chosen on the frozen screen.", kind = .String, default = {s = "Print"}, tags = {"hotkey", "keybinding", "keys", "print screen"}},
-	{name = "shortcut.screen", title = "Capture the screen", category = "shortcuts", description = "Capture the screen under the pointer.", kind = .String, default = {s = "Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "monitor", "print screen"}},
-	{name = "shortcut.window", title = "Capture the window in front", category = "shortcuts", description = "Capture the window in front.", kind = .String, default = {s = "Alt+Print"}, tags = {"hotkey", "keybinding", "keys", "print screen"}},
-	{name = "shortcut.record", title = "Record a video", category = "shortcuts", description = "Start recording a region as a video; the same keys stop it.", kind = .String, default = {s = "Ctrl+Print"}, tags = {"hotkey", "keybinding", "keys", "video", "mp4"}},
-	{name = "shortcut.record_gif", title = "Record a GIF", category = "shortcuts", description = "Start recording a region as a GIF; the same keys stop it.", kind = .String, default = {s = "Ctrl+Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "gif", "animation"}},
+	// Shortcuts: in the order of the tray's menu (Shortcut_Action's)
+	{name = "shortcut.screen", title = "Capture the screen", category = "shortcuts", description = "Capture the whole screen under the pointer.", kind = .String, default = {s = "Print"}, tags = {"hotkey", "keybinding", "keys", "monitor", "full screen", "print screen"}},
+	{name = "shortcut.region", title = "Capture a region", category = "shortcuts", description = "Capture a region: drag a rectangle, click a window framed, or take a screen, on the frozen screen.", kind = .String, default = {s = "Ctrl+Print"}, tags = {"hotkey", "keybinding", "keys", "selection", "print screen"}},
+	{name = "shortcut.record", title = "Record a video", category = "shortcuts", description = "Choose a region to record as a video, then press Record. The same keys start the recording, then stop it.", kind = .String, default = {s = "Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "video", "mp4", "screencast"}},
+	{name = "shortcut.record_gif", title = "Record a GIF", category = "shortcuts", description = "Choose a region to record as a GIF, then press Record. The same keys start the recording, then stop it.", kind = .String, default = {s = "Ctrl+Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "gif", "animation", "screencast"}},
+	{name = "shortcut.window", title = "Capture the window in front", category = "shortcuts", description = "Capture the window in front.", kind = .String, default = {s = "Alt+Print"}, tags = {"hotkey", "keybinding", "keys", "active window", "print screen"}},
 	{name = "shortcut.ocr", title = "Read the text", category = "shortcuts", description = "Read the text in a region: it goes to the clipboard.", kind = .String, default = {s = "Ctrl+Alt+T"}, tags = {"hotkey", "keybinding", "keys", "ocr", "text"}},
 	{name = "shortcut.qr", title = "Read a QR code", category = "shortcuts", description = "Read a QR code in a region: its text goes to the clipboard.", kind = .String, default = {s = "Ctrl+Alt+Q"}, tags = {"hotkey", "keybinding", "keys", "barcode", "scan"}},
 }
@@ -85,16 +79,14 @@ TRAY_CLICK_NAMES := [Tray_Click]string{.Region = "region", .Screen = "screen", .
 Settings :: struct {
 	menu, autostart:    bool,
 	tray_click:         Tray_Click,
-	theme:              string,
-	mode:               ui.Theme_Mode,
-	finish:             ui.Finish,
-	font_size:          f32,
+	appearance:         prefs_page.Appearance,   // appearance.theme, mode, finish, font_size (theme owned)
 	delay_s:            int,
 	record_fps, gif_fps, gif_width, record_max_s: int,
 	record_cursor:      bool,
 	history_size:       int,
 	history_view:       History_View_Mode,
 	history_thumbnail:  int,
+	history_preview_em: f32,   // the preview pane's width, ems (history.preview_width: its splitter sets it)
 	edit_after:         bool,
 	ocr_languages:      string,
 	confirm_on_release: bool,
@@ -118,11 +110,19 @@ prefs_file :: proc(allocator := context.temp_allocator) -> string {
 // The registry with the user's file and `args`' --pref read in. Returns the arguments that are not preferences.
 prefs_open :: proc(p: ^config.Prefs, args: []string) -> (rest: [dynamic]string, problems: [dynamic]string) {
 	p^ = config.prefs_make()
-	config.register(p, PREF_DEFS[:])
+	prefs_register(p)
 	_, file_problems := config.load_file(p, prefs_file(), .User)
 	rest, problems = config.apply_args(p, args, context.temp_allocator)
 	append(&problems, ..file_problems[:])
 	return
+}
+
+// The toolkit's standard preferences (the appearance, the launcher, the start with the session), then cliche's own.
+prefs_register :: proc(p: ^config.Prefs) {
+	d := prefs_page.STANDARD_DEFAULTS   // (the toolkit's defaults for the rest: system mode, machined, 14 px)
+	d.theme, d.app_name = "cliche", APP_NAME
+	prefs_page.standard_register(p, {.Appearance, .Session}, d)
+	config.register(p, PREF_DEFS[:])
 }
 
 prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Settings) {
@@ -130,17 +130,14 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.autostart = config.bool_of(p, "general.autostart")
 	click := config.string_of(p, "general.tray_click")
 	for name, c in TRAY_CLICK_NAMES { if name == click { s.tray_click = c } }
-	s.theme = strings.clone(config.string_of(p, "appearance.theme"), allocator)
-	s.mode = ui.theme_mode_of(config.string_of(p, "appearance.mode"))
-	s.finish = ui.finish_of(config.string_of(p, "appearance.finish"))
-	s.font_size = f32(config.float_of(p, "appearance.font_size"))
+	s.appearance = prefs_page.appearance_read(p, allocator)
 	s.delay_s = int(config.int_of(p, "capture.delay"))
 	s.record_fps = int(config.int_of(p, "record.fps"))
 	s.gif_fps = int(config.int_of(p, "record.gif_fps"))
 	s.gif_width = int(config.int_of(p, "record.gif_width"))
 	s.record_max_s = int(config.int_of(p, "record.max_length"))
 	s.record_cursor = config.bool_of(p, "record.cursor")
-	s.history_size, s.history_view, s.history_thumbnail = history_settings_read(p)
+	s.history_size, s.history_view, s.history_thumbnail, s.history_preview_em = history_settings_read(p)
 	s.edit_after = config.bool_of(p, "after.edit")
 	s.ocr_languages = strings.clone(strings.trim_space(config.string_of(p, "capture.ocr_languages")), allocator)
 	s.confirm_on_release = config.bool_of(p, "region.confirm_on_release")
@@ -161,7 +158,7 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 }
 
 settings_free :: proc(s: ^Settings, allocator := context.allocator) {
-	delete(s.theme, allocator)
+	prefs_page.appearance_free(&s.appearance)
 	delete(s.ocr_languages, allocator)
 	delete(s.uploader, allocator)
 	delete(s.folder, allocator)

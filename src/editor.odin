@@ -33,6 +33,7 @@ import "gt:host"
 import lucide "gt:lucide"
 import "gt:platform"
 import png "gt:png"
+import prefs_page "gt:prefs_page"
 import "gt:render"
 import "gt:ui"
 
@@ -431,17 +432,18 @@ editor_mosaic_stop :: proc(app: ^App) {
 ////////////////////////////////
 // Input
 
-// Each build: the theme, as the settings' window has it.
+// Each build: the theme, as the main window has it.
 @(private = "file")
 editor_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	app := (^App)(h.user)
 	ed := &app.editor
-	s := &app.settings
-	choice := ui.Theme_Choice{name = s.theme, mode = s.mode, finish = s.finish, glow = 1}
+	a := app.settings.appearance
+	choice := prefs_page.appearance_choice(a)
+	choice.glow = 1
 	if ui.theme_show(&app.shared.theme, themes(), choice, &ed.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !ed.theme_shown.light)
 	}
-	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = s.font_size, text_pad = 6, cursor = .Arrow}
+	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = a.font_size, text_pad = 6, cursor = .Arrow}
 }
 
 // The canvas' pointer goes to the model; the rest to the widgets. A press is the canvas' when it lands on it with no
@@ -602,7 +604,6 @@ editor_action :: proc(app: ^App, a: Editor_Action) {
 }
 
 // A close asked (the window's button, Escape, Ctrl+W): at once with nothing changed, else after the question.
-@(private = "file")
 editor_close_asked :: proc(app: ^App) {
 	ed := &app.editor
 	if ed.exporting { return }
