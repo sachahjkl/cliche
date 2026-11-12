@@ -1,0 +1,51 @@
+name: Odin on Linux
+description: In the job's Debian container (whose packages the job installs first), Odin dev-2026-11a (pinned by SHA-256) on the PATH with wgpu-native's static library in its vendor folder, and Rust (Debian's is too old for the toolkit's text library)
+
+runs:
+  using: composite
+  steps:
+    - name: Rust, stable
+      shell: bash
+      run: |
+        # (its homes named: in a container $HOME is not the user's, and rustup says so as an error)
+        export RUSTUP_HOME="$HOME/.rustup" CARGO_HOME="$HOME/.cargo"
+        echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"; echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+        curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors https://sh.rustup.rs | sh -s -- -y -q --profile minimal
+        echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+    # (the archive kept between runs, keyed by this file, which names the version: GitHub's release downloads may not answer for
+    # an hour, a 504 at each try. Its SHA-256 is checked below, whether it came from the cache or the download)
+    - name: Odin's archive, cached
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/odin-archive
+        key: odin-archive-${{ runner.os }}-${{ hashFiles('.github/actions/setup-odin-linux/action.yml') }}
+
+    - name: Odin dev-2026-11a
+      shell: bash
+      env:
+        ODIN_TAG: dev-2026-11a
+        ODIN_SHA256: 65c9f6e97d6f8a30930e151f270ce5aeaa98fe8b2ba49fe067394e2af04f7618
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        archive="$RUNNER_TEMP/odin-archive/odin-linux-amd64-$ODIN_TAG.tar.gz"
+        mkdir -p "$RUNNER_TEMP/odin-archive"
+        name="odin-linux-amd64-$ODIN_TAG.tar.gz"
+        if [ ! -f "$archive" ] && ! curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors -o "$archive" "https://github.com/odin-lang/Odin/releases/download/$ODIN_TAG/$name"; then
+          # (GitHub's release downloads answered 504 for over an hour while its API served the same file)
+          echo "the release download failed: the same file through GitHub's API"
+          id="$(curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/odin-lang/Odin/releases/tags/$ODIN_TAG" | jq -r --arg n "$name" '.assets[] | select(.name == $n) | .id')"
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" -o "$archive" "https://api.github.com/repos/odin-lang/Odin/releases/assets/$id"
+        fi
+        echo "$ODIN_SHA256  $archive" | sha256sum -c -
+        mkdir -p "$RUNNER_TEMP/odin" && tar -xzf "$archive" -C "$RUNNER_TEMP/odin"
+        dir="$(dirname "$(find "$RUNNER_TEMP/odin" -maxdepth 3 -name odin -type f | head -1)")"
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/odin" version
+
+    # (Odin's Linux archive has no wgpu-native: the toolkit's tools/tk fetches it, pinned by SHA-256)
+    - name: wgpu-native
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}   # (tk fetches it through GitHub's API when the release download fails: more requests with it)
+      run: mkdir -p build && odin run ext/gui_toolkit/tools/tk -out:build/tk -- fetch_wgpu
