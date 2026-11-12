@@ -66,7 +66,8 @@ Edit_Style :: struct {
 
 // The swatches: red first, the default (ShareX's look: red reads on any screenshot).
 EDIT_COLORS := [?]u32{0xE53935, 0xFB8C00, 0xFDD835, 0x43A047, 0x1E88E5, 0x8E24AA, 0x000000, 0xFFFFFF}
-EDIT_WIDTHS := [?]f32{2, 4, 6, 10}
+EDIT_WIDTH_MIN :: 1    // a stroke's width, logical pixels: the slider's ends
+EDIT_WIDTH_MAX :: 40
 EDIT_TEXT_SIZES := [?]f32{16, 24, 32, 48}
 
 EDIT_STYLE_DEFAULT :: Edit_Style{color = 0xE53935, width = 4, shadow = true, fill = false, text_size = 24}
@@ -164,6 +165,9 @@ Edit_Model :: struct {
 	tool:   Edit_Tool,
 	styles: [Edit_Tool]Edit_Style,   // each tool's own, for its next shape
 	typing: u32,   // counts the starts of Typing: the window puts the shape's text in its field at a new one
+	// the last undo step was a width set on this shape (its index + 1; 0: none), and the stack was this long after it:
+	// the widths a slider runs through are one step, not one a frame
+	width_run, width_run_undo: int,
 }
 
 edit_model_init :: proc(m: ^Edit_Model, size: [2]int, scale: f32, measure: Edit_Measure, measure_user: rawptr) {
@@ -618,16 +622,27 @@ edit_style_set :: proc(m: ^Edit_Model, style: Edit_Style) -> bool {
 	if !edit_idle(m) { return false }
 	if s := edit_selected_shape(m); s != nil {
 		if s.style == style { return false }
-		change_begin(&m.doc)
+		width_only := style.width != s.style.width && edit_style_but_width(style, s.style)
+		run := width_only && m.width_run == m.doc.selected + 1 && m.width_run_undo == len(m.doc.undo) && len(m.doc.redo) == 0
+		if !run { change_begin(&m.doc) }
 		s.style = style
 		if s.kind == .Text { text_measure(&m.doc, s) }
-		change_end(&m.doc)
+		if !run { change_end(&m.doc) }
+		m.width_run, m.width_run_undo = width_only ? m.doc.selected + 1 : 0, len(m.doc.undo)
 		m.styles[edit_kind_tool(s.kind)] = style
 		return true
 	}
 	if _, ok := edit_tool_kind(m.tool); !ok { return false }
 	m.styles[m.tool] = style
 	return true
+}
+
+// The two styles are the same but for their widths.
+@(private = "file")
+edit_style_but_width :: proc(a, b: Edit_Style) -> bool {
+	a, b := a, b
+	a.width, b.width = 0, 0
+	return a == b
 }
 
 // The part of the picture that is kept, in whole pixels: the crop, else all of it.

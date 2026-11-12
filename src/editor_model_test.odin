@@ -211,6 +211,31 @@ editor_property_changes_the_selection :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(m.doc.shapes), 0)
 }
 
+// A slider runs through many widths: one undo step for them all, then a colour is a step of its own.
+@(test)
+editor_widths_in_a_row_are_one_step :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	drag(&m, {10, 10}, {100, 100})
+	style, _ := edit_style_shown(&m)
+	for w in ([]f32{5, 9, 14, 17}) {
+		style.width = w
+		testing.expect(t, edit_style_set(&m, style))
+	}
+	testing.expect_value(t, len(m.doc.undo), 2)   // the arrow drawn, then its widths
+	style.color = EDIT_COLORS[4]
+	testing.expect(t, edit_style_set(&m, style))
+	style.width = 3
+	testing.expect(t, edit_style_set(&m, style))
+	testing.expect_value(t, len(m.doc.undo), 4)   // (a width after a colour: a step again)
+	testing.expect(t, edit_undo(&m))
+	testing.expect(t, edit_undo(&m))
+	testing.expect_value(t, m.doc.shapes[0].style.width, 17)
+	testing.expect(t, edit_undo(&m))
+	testing.expect_value(t, m.doc.shapes[0].style.width, EDIT_STYLE_DEFAULT.width)
+}
+
 @(test)
 editor_zoom_keeps_the_point_under_the_pointer :: proc(t: ^testing.T) {
 	m: Edit_Model

@@ -169,7 +169,7 @@ worker_do :: proc(w: ^Worker, j: Job) {
 	case Job_Crop:
 		out, ok := capture.crop(v.frame, v.rect)
 		if !ok { worker_post(w, Result_Shot{error = .Empty}); return }
-		worker_post(w, Result_Shot{shot = shot_of_frame(&out, .Region, bgra = false)})
+		worker_post(w, Result_Shot{shot = shot_of_frame(&out, .Region)})
 	case Job_Save:
 		job := v
 		worker_post(w, Result_Saved{save_shot(&job)})
@@ -226,6 +226,8 @@ worker_do :: proc(w: ^Worker, j: Job) {
 worker_session :: proc(w: ^Worker) -> bool {
 	if w.session != nil { return true }
 	w.session, w.session_error = capture.open()
+	// (RGBA from the capture itself: the textures, the clipboard and the PNG encoder take it, and no pass swaps it)
+	if w.session != nil { capture.set_pixel_order(w.session, .RGBA) }
 	return w.session != nil
 }
 

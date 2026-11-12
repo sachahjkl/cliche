@@ -5,8 +5,9 @@ package cliche
 // nothing over the other programs' windows but a picture of them.
 //
 // Wayland does not let a client pick the output of its window: the compositor puts the fullscreen window where it
-// chooses, and output_for_window says which output that is from the window's size (and the pointer, where the system
-// says it). The window shows that output's part of the picture; a selection stays on it.
+// chooses, and says which output that is (platform.window_output_name, from wl_surface.enter); until it has, and where
+// it cannot, output_for_window guesses from the window's size (and the pointer, where the system says it). The window
+// shows that output's part of the picture; a selection stays on it.
 //
 // What the user does:
 //   drag                 a rectangle; it stays, the keys adjust it (region.confirm_on_release: taken at the release)
@@ -139,6 +140,10 @@ overlay_output :: proc(app: ^App) -> Rect {
 	o := &app.overlay
 	outs := app.desktop.outputs
 	if len(outs) == 0 { return {app.desktop.frame.origin.x, app.desktop.frame.origin.y, 0, 0} }
+	// (the compositor's word first: two monitors of the same size cannot be told apart by the window's)
+	if name := platform.window_output_name(o.host.win); name != "" {
+		for out in outs { if out.name == name { return out.rect } }
+	}
 	scale := overlay_scale(o)
 	size := [2]i32{i32(math.round(f32(o.host.win.size.x) / scale)), i32(math.round(f32(o.host.win.size.y) / scale))}
 	hint: Maybe(Point)

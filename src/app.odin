@@ -51,6 +51,7 @@ App :: struct {
 	history_window: History_Window,                        // history_view.odin: the main window, with the settings
 	editor:     Editor,                                    // editor.odin
 	record_overlay: Record_Overlay,                        // record_overlay.odin
+	prewarmed:  bool,                                      // the editor was opened ahead (app_prewarm)
 	notice_entry: u64,                                     // the history's entry of the last notification (a click shows it)
 	saved_info: struct { size: [2]int, bytes: i64 },       // the picture of this capture, while app_outcome tells it
 
@@ -111,6 +112,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app_command(app, first.verb, first.token)
 
 	for !app.quit {
+		app_prewarm(app)
 		app_wait(app)
 		app_anchor_events(app)
 		app_inbox(app)
@@ -146,6 +148,22 @@ app_free :: proc(app: ^App) {
 	config.prefs_destroy(&app.prefs)
 }
 
+// The editor opened hidden before its first picture, when each screenshot opens in it (after.edit): its window, its
+// surface and the graphics driver are then ready, and a shortcut shows it at once. The driver is loaded on a thread
+// first (its done wakes this loop): the interface's thread never waits for it.
+@(private = "file")
+app_prewarm :: proc(app: ^App) {
+	if !app.settings.edit_after || app.editor.opened || app.prewarmed { return }
+	if app.shared.main == nil {
+		#partial switch render.device_preload_state() {
+		case .Not_Started: render.preload_device(done = app_wake, user = app); return
+		case .Creating:    return
+		}
+	}
+	app.prewarmed = true   // (once: a window that cannot open is not asked again at every turn)
+	editor_open(app, headless = false)
+}
+
 // The shown windows' frames, else the anchor: what ends the wait is a wake of any window (app_wake), input, the tray.
 @(private = "file")
 app_wait :: proc(app: ^App) {
@@ -174,6 +192,7 @@ app_frames :: proc(app: ^App) {
 	}
 	if app.editor.visible {
 		host.host_frame(&app.editor.host)
+		timing_mark("editor frame")
 		if app_close_asked(&app.editor.host) {
 			editor_close_asked(app)
 			app.editor.host.settle = max(app.editor.host.settle, 2)   // (its question, when it asks one, is drawn)
@@ -287,6 +306,7 @@ app_step :: proc(app: ^App, e: Flow_Event) -> bool {
 // A capture starts. False: one is already being taken (one at a time).
 app_trigger :: proc(app: ^App, source: Source, purpose := Purpose.Picture) -> bool {
 	if !app_step(app, Flow_Trigger{source}) { return false }
+	timing_start(SOURCE_NAMES[source])
 	app.copied = false
 	app.purpose = purpose
 	// (the renderer's device made while the desktop is read: the overlay's first show does not wait for the driver)
@@ -383,6 +403,7 @@ app_region_cancelled :: proc(app: ^App) {
 
 @(private = "file")
 app_shot :: proc(app: ^App, r: Result_Shot) {
+	timing_mark("picture from the worker")
 	r := r
 	#partial switch s in app.flow {
 	case Flow_Capturing:

@@ -37,6 +37,7 @@ main :: proc() {
 }
 
 run :: proc(all_args: []string) -> int {
+	timing_init()
 	when CLICHE_SHOTS != "" { return shots_run(CLICHE_SHOTS, len(all_args) > 0 ? all_args[0] : "") }
 	prefs: config.Prefs
 	args, problems := prefs_open(&prefs, all_args)

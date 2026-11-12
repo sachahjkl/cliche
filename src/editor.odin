@@ -128,6 +128,7 @@ Editor :: struct {
 	theme_shown: ui.Theme_Shown,
 	palette:     ui.Command_Palette,
 	sheet_open:  bool,
+	width_field: ui.Slider_Field,   // the bar's width: its slider's field
 	asking:      bool,       // the question before the changes are dropped
 	close_due:   bool,       // closed in a frame: acted on after it (editor_after_frame)
 
@@ -168,10 +169,12 @@ Editor :: struct {
 editor_open_shot :: proc(app: ^App, shot: Shot, scale: f32 = 1) -> bool {
 	ed := &app.editor
 	shot := shot
+	timing_mark("editor asked")
 	if !ed.opened && !editor_open(app, headless = false) {
 		shot_free(&shot)
 		return false
 	}
+	timing_mark("editor window open")
 	editor_picture_drop(app)
 	editor_load_stop(app)
 	ed.load_problem = ""
@@ -192,6 +195,7 @@ editor_open_shot :: proc(app: ^App, shot: Shot, scale: f32 = 1) -> bool {
 	}
 	// (mips: a picture shown smaller than its pixels stays sharp, not grainy)
 	render.update_texture_rgba(r, ed.tex, 0, 0, w, h, shot.rgba)
+	timing_mark("picture uploaded")
 	ed.shot, ed.has_picture = shot, true
 	edit_model_init(&ed.model, shot.size, scale, editor_measure, app)
 	ed.field_typing = 0
@@ -205,6 +209,7 @@ editor_open_shot :: proc(app: ^App, shot: Shot, scale: f32 = 1) -> bool {
 	}
 	platform.raise_window_token(ed.host.win, token)
 	ed.host.settle = max(ed.host.settle, 3)
+	timing_mark("editor shown")
 	return true
 }
 
@@ -341,6 +346,7 @@ editor_free :: proc(app: ^App) {
 	editor_picture_drop(app)
 	ui.palette_destroy(&ed.palette)
 	ui.field_destroy(&ed.field)
+	ui.slider_field_destroy(&ed.width_field)
 }
 
 // The window hidden, the picture and its shapes let go.
@@ -828,12 +834,9 @@ editor_properties :: proc(app: ^App, em: f32, side: f32) {
 		bar_separator(em, side)
 	}
 	if .Width in props {
-		@(static, rodata) labels := [len(EDIT_WIDTHS)]string{"2", "4", "6", "10"}
-		@(static, rodata) tips := [len(EDIT_WIDTHS)]string{"A thin stroke", "The usual stroke", "A thick stroke", "A very thick stroke"}
-		at := 0
-		for wv, i in EDIT_WIDTHS { if wv == style.width { at = i } }
-		ui.next({width = ui.px(em * 10), height = ui.px(math.round(side * 0.85))})
-		if ui.segmented("###width", labels[:], &at, tips[:]) { style.width = EDIT_WIDTHS[at] }
+		// (a slider for the feel, its field for the exact width)
+		ui.next({width = ui.px(math.round(em * 13)), height = ui.px(math.round(side * 0.85))})
+		ui.slider_field("###width", &app.editor.width_field, &style.width, EDIT_WIDTH_MIN, EDIT_WIDTH_MAX, 1, unit = "px")
 		ui.spacer(ui.px(em * 0.5))
 	}
 	if .Text_Size in props {
