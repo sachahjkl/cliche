@@ -25,11 +25,16 @@ default; each one stays movable until Done. `cliche --history` shows the capture
     cliche --window             capture the window in front
     cliche --qr                 read the QR code in a region: its text is copied
     cliche --ocr                read the text in a region: it is copied (Tesseract on Linux)
+    cliche --record             record a region as an MP4 video; the same command again stops it
+    cliche --record-gif         record a region as an animated GIF; the same command again stops it
+    cliche --edit               capture a region and open it in the editor
+    cliche --history            show the captures kept
     cliche --settings           open the settings
     cliche --quit               end the running cliche
 
 Shortcuts work in every program: Print Screen for a region, Shift+Print Screen for the screen, Alt+Print Screen for the
-window in front, Ctrl+Alt+Q for a QR code, Ctrl+Alt+T for the text in a region. Change them in the settings. On Linux the desktop portal gives them to cliche
+window in front, Ctrl+Print Screen to record a video (Ctrl+Shift: a GIF), Ctrl+Alt+Q for a QR code, Ctrl+Alt+T for the
+text in a region. Change them in the settings. On Linux the desktop portal gives them to cliche
 (KDE, GNOME, Hyprland, ShojiWM's desktop); where it gives none, bind a key to `cliche --region` in the compositor.
 
 In a region: drag a rectangle, it is taken when you release the button. A click takes the window under the pointer.
