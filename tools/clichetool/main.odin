@@ -25,7 +25,7 @@ COMMANDS :: [?]Command{
 	{name = "test", about = "the tests of the program", run = run_test},
 	{name = "check", about = "odin check of the program for this system and for Windows, and of this tool (-vet), the changelog's fragments, the tests, then a release build", run = run_check},
 	{name = "logo", about = "assets/logo*.png and cliche.ico, drawn by the toolkit's paint package", run = run_logo},
-	{name = "shots", about = "[folder]: the settings' pages, the editor and the history drawn offscreen, as PNG files (default build/shots)", run = run_shots},
+	{name = "shots", about = "[folder]: the settings' pages, the editor, the history and the workflows drawn offscreen, as PNG files (default build/shots)", run = run_shots},
 	{name = "changelog", about = "new <type> <text> | check | preview: the fragments of changelog.d/", run = run_changelog},
 }
 

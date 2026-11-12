@@ -32,6 +32,7 @@ ENTRY_ACTIONS := [?]desktop.Desktop_Action{
 	{id = "qr", name = "Read a QR code", arguments = "--qr"},
 	{id = "ocr", name = "Read the text", arguments = "--ocr"},
 	{id = "record", name = "Record a video", arguments = "--record"},
+	{id = "workflows", name = "Workflows", arguments = "--workflows"},
 	{id = "settings", name = "Settings", arguments = "--settings"},
 }
 

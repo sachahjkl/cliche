@@ -92,8 +92,8 @@ app_shortcut_run :: proc(app: ^App, a: Shortcut_Action) {
 	case .Record: app_record_trigger(app, .Mp4)
 	case .Record_Gif: app_record_trigger(app, .Gif)
 	case .Window: app_trigger(app, .Window)
-	case .Ocr:    app_trigger(app, .Region, .Text)
-	case .Qr:     app_trigger(app, .Region, .Qr)
+	case .Ocr:    app_trigger(app, .Ocr)
+	case .Qr:     app_trigger(app, .Qr)
 	}
 }
 

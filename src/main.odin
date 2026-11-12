@@ -18,13 +18,17 @@ USAGE :: `cliche: screenshots
   cliche --region             choose a rectangle, a window or a screen on the frozen desktop
   cliche --screen             capture the screen under the pointer
   cliche --window             capture the window in front
-  cliche --qr                 read the QR code in a region: its text is copied
-  cliche --ocr                read the text in a region: it is copied
+  cliche --qr                 read the QR code in a region
+  cliche --ocr                read the text in a region
   cliche --record             record a region as an MP4 video; the same command again stops it
   cliche --record-gif         record a region as an animated GIF; the same command again stops it
   cliche --edit               capture a region and open it in the editor
   cliche --history            show the captures kept
+  cliche --workflows          edit what happens after each capture
   cliche --settings           open the settings
+
+Each capture runs its workflow: by default a screenshot is copied and saved, a QR code's
+or a region's text is copied.
   cliche --quit               end the running cliche
   cliche version
   --pref name=value           a preference for this run only

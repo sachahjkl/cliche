@@ -16,18 +16,18 @@ import "gt:platform"
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
 Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
-Job_Save      :: struct { shot: Shot, folder, pattern, uploader: string, save, fast, reveal, upload, from_editor, edited, copied: bool }   // owned by the job
-Job_Write     :: struct { path, text: string }                // a file written whole (the preferences); owned
-Job_Qr        :: struct { shot: Shot }                        // the QR code in the picture, read; owned
-Job_Ocr       :: struct { shot: Shot, languages: string }   // the text in the picture, read; owned ("": the user's languages)
+Job_Save      :: struct { shot: Shot, folder, pattern: string }   // the editor's Ctrl+S; owned by the job
+Job_Write     :: struct { path, text: string }                // a file written whole (the preferences, the workflows); owned
+Job_Workflows_Load :: struct {}                               // the workflows' file, read at the start (workflow_store.odin)
+Job_Picture_Load :: struct { path: string, workflow: u64 }    // a PNG of the history decoded, for a preview run of `workflow`; owned
 Job_Reveal    :: struct { path: string }                     // a file shown in its folder; owned
 Job_Uploaders :: struct {}                                    // the uploaders found, for the settings
 Job_Import_Uploader :: struct {}                              // a .sxcu file chosen in the system's dialog, copied in
-Job_Pick_Folder :: struct { start: string }                   // the system's dialog for the save folder; owned
+Job_Pick_Folder :: struct { start: string, workflow, node: u64 }   // the system's dialog for a folder: the save folder (node 0) or a Save node's; owned
 Job_Open_Folder :: struct { folder: string }                  // the save folder in the file manager ("": the default); owned
 Job_Integrate :: struct { menu, autostart: bool }             // cliche's launcher and its start with the session (integration.odin)
 
-Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write, Job_Qr, Job_Ocr, Job_Pick_Folder, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Reveal }
+Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write, Job_Node, Job_Workflows_Load, Job_Picture_Load, Job_Pick_Folder, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Reveal }
 
 // The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
@@ -44,24 +44,27 @@ Result_Desktop :: struct {
 // A picture to act on (owned).
 Result_Shot :: struct { error: Flow_Error, shot: Shot }
 
-// The file is written, the picture uploaded (save.odin's Saved, its strings owned).
+// The editor's Ctrl+S is written (save.odin's Saved, its path owned).
 Result_Saved :: struct { using saved: Saved }
+
+// The workflows read (workflow_store.odin): the list (owned), and why the file could not be used ("" none; owned).
+Result_Workflows :: struct { workflows: Workflows, problem: string }
+
+// A picture of the history decoded for a preview run of `workflow` (owned; ok false: it cannot be read).
+Result_Picture :: struct { shot: Shot, workflow: u64, ok: bool }
 
 // The uploaders found (owned) and what was wrong with the others; `imported`: the name of one just imported.
 Result_Uploaders :: struct { names: []string, problems: []string, imported: string, import_problem: string }
 
 Result_Written :: struct { ok: bool, path: string }   // (path owned)
 
-// The text of the QR code read (owned, UTF-8).
-Result_Qr :: struct { error: Flow_Error, text: string }
-
-// The folder chosen in the system's dialog (owned; "": none chosen).
-Result_Folder :: struct { path: string }
+// The folder chosen in the system's dialog (owned; "": none chosen), for the save folder (node 0) or a Save node's.
+Result_Folder :: struct { path: string, workflow, node: u64 }
 
 // What went wrong putting cliche on the desktop (owned; "": nothing).
 Result_Integrated :: struct { problem: string }
 
-Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written, Result_Qr, Result_Folder, Result_Integrated, Result_Uploaders }
+Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Folder, Result_Integrated, Result_Uploaders }
 
 Worker :: struct {
 	thread:    ^thread.Thread,
@@ -76,6 +79,7 @@ Worker :: struct {
 
 	// the worker's thread only
 	history:   History_Disk,       // the history's copy and its file (history.odin)
+	fonts:     Worker_Fonts,       // a watermark's text (workflow_ops.odin)
 	session:   ^capture.Session,
 	session_error: capture.Error,
 }
@@ -146,6 +150,7 @@ worker_run :: proc(t: ^thread.Thread) {
 	capture.close(w.session)
 	w.session = nil
 	history_disk_free(&w.history)
+	worker_fonts_destroy(&w.fonts)
 }
 
 @(private = "file")
@@ -177,24 +182,21 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		ok := write_file(v.path, transmute([]u8)v.text)
 		delete(v.text)
 		worker_post(w, Result_Written{ok, v.path})
-	case Job_Qr:
-		shot := v.shot
-		text, ok := qr_read(shot)
-		shot_free(&shot)
-		worker_post(w, Result_Qr{error = ok ? .None : .No_Qr, text = text})
-	case Job_Ocr:
-		shot := v.shot
-		text, err := ocr_read(shot, v.languages)
-		shot_free(&shot)
-		delete(v.languages)
-		// (the same result as a QR code's: a text for the clipboard)
-		worker_post(w, Result_Qr{error = err, text = text})
+	case Job_Node:
+		job := v
+		worker_post(w, node_work(&job, &w.fonts))
+	case Job_Workflows_Load:
+		list, problem := workflows_load()
+		worker_post(w, Result_Workflows{list, problem})
+	case Job_Picture_Load:
+		worker_post(w, picture_load(v.path, v.workflow))
+		delete(v.path)
 	case Job_Pick_Folder:
 		r := platform.pick_folder_dialog({title = "The folder of the screenshots", start_dir = v.start})
 		delete(v.start)
 		path := r.status == .Chosen && len(r.paths) > 0 ? strings.clone(r.paths[0]) : ""
 		platform.dialog_result_destroy(&r)
-		worker_post(w, Result_Folder{path})
+		worker_post(w, Result_Folder{path, v.workflow, v.node})
 	case Job_Open_Folder:
 		folder := v.folder != "" ? v.folder : save_folder_default(context.temp_allocator)
 		_ = os.make_directory_all(folder)
@@ -240,11 +242,11 @@ job_free :: proc(j: ^Job) {
 	case Job_Write:
 		delete(v.path)
 		delete(v.text)
-	case Job_Qr:
-		shot_free(&v.shot)
-	case Job_Ocr:
-		shot_free(&v.shot)
-		delete(v.languages)
+	case Job_Node:
+		// (the worker has stopped: this is the interface's thread, where a picture may be let go)
+		job_node_free(&v)
+	case Job_Picture_Load:
+		delete(v.path)
 	case Job_Pick_Folder:
 		delete(v.start)
 	case Job_Open_Folder:
@@ -260,11 +262,13 @@ result_free :: proc(r: ^Result) {
 	#partial switch &v in r {
 	case Result_Desktop: desktop_free(&v)
 	case Result_Shot:    shot_free(&v.shot)
-	case Result_Saved:   delete(v.path); delete(v.url); delete(v.upload_problem)
+	case Result_Saved:   delete(v.path)
+	case Result_Node:    result_node_free(&v)
+	case Result_Workflows: workflows_free(&v.workflows); delete(v.problem)
+	case Result_Picture: shot_free(&v.shot)
 	case Result_Uploaders: uploaders_result_free(&v)
 	case Result_History: history_result_free(&v)
 	case Result_Written: delete(v.path)
-	case Result_Qr:      delete(v.text)
 	case Result_Opened:  delete(v.default_folder)
 	case Result_Folder:  delete(v.path)
 	case Result_Integrated: delete(v.problem)

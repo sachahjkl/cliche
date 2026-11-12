@@ -2,7 +2,7 @@ package cliche
 
 // Pictures of cliche's windows, drawn offscreen (the software renderer: no window of the system opens): what
 // `clichetool shots` asks for with -define:CLICHE_SHOTS=<folder>, one window a run (the first window is the only one a
-// headless renderer has): `cliche-shots settings | editor | history`. A normal build has none of this: the folder is "".
+// headless renderer has): `cliche-shots settings | editor | history | workflows`. A normal build has none of this: the folder is "".
 // The preferences are their defaults (the user's file is not read), on the default theme; the editor's picture and the
 // history's entries are made up here.
 
@@ -36,8 +36,9 @@ shots_run :: proc(folder: string, which: string) -> int {
 	case "settings", "": return shots_settings(app, folder)
 	case "editor":       return shots_editor(app, folder)
 	case "history":      return shots_history(app, folder)
+	case "workflows":    return shots_workflows(app, folder)
 	}
-	fmt.eprintfln("shots: no window %q (settings, editor, history)", which)
+	fmt.eprintfln("shots: no window %q (settings, editor, history, workflows)", which)
 	return 2
 }
 
@@ -126,6 +127,26 @@ shots_history :: proc(app: ^App, folder: string) -> int {
 	app.settings.history_view = .List
 	failed |= !shots_write(app, &hw.host, folder, "history-list")
 	return failed ? 1 : 0
+}
+
+// The Workflows mode on the default "Screenshot" workflow, its Save step selected, as after a run.
+@(private = "file")
+shots_workflows :: proc(app: ^App, folder: string) -> int {
+	if !history_window_open(app, headless = true) { return 1 }
+	hw := &app.history_window
+	app.workflows = workflows_default()
+	defer { history_window_free(app); host.host_close(&hw.host); workflows_free(&app.workflows) }
+	workflow_mode_enter(app)
+	m := &hw.workflow_mode
+	wf := workflows_find(&app.workflows, m.shown)
+	if wf == nil { return 1 }
+	for n in wf.nodes {
+		m.last[n.id] = Node_Last{state = .Done}
+		if n.kind == .Save_File { append(&m.selection, n.id) }
+	}
+	m.last_version += 1
+	ok := shots_write(app, &hw.host, folder, "workflows", frames = 10)   // (the graph is fitted once laid out)
+	return ok ? 0 : 1
 }
 
 // A few frames of `h`, then the next one captured and written as <folder>/<name>.png.

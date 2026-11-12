@@ -1,7 +1,7 @@
 package cliche
 
-// The editor: a window of its own where a picture just taken gets arrows, boxes, text and the rest before the
-// after-capture chain runs on it. Every annotation stays an object (editor_model.odin) until the picture is done: it is
+// The editor: a window of its own where a picture just taken gets arrows, boxes, text and the rest: a workflow's
+// Annotate step (workflow_app.odin) waits for it. Every annotation stays an object (editor_model.odin) until the picture is done: it is
 // selected, moved, resized, recoloured or deleted, and every change is undone and redone.
 //
 // The window follows the settings' model (settings_view.odin): a host of its own, opened at the first picture and then
@@ -15,9 +15,10 @@ package cliche
 // it into the model's events; the keys go through the commands' table, as the settings' do. A text being typed is a
 // field of the toolkit's over the canvas.
 //
-// Done hands the flattened picture to the after-capture chain (app_chain_run); a close without Done gives the capture
-// up (Flow_Cancelled). Flattening runs on the GPU (an offscreen target read back a frame later); the PNG is encoded and
-// written on the worker (Job_Save), as always. A file of the history is read and decoded on a thread of the editor's.
+// Done hands the flattened picture back to the run that asked for it (workflow_editor_done); a picture of the history
+// runs the workflow of "Capture a region and edit". A close without Done stops that branch of the run
+// (workflow_editor_closed). Flattening runs on the GPU (an offscreen target read back a frame later); Ctrl+S encodes and
+// writes the PNG on the worker (Job_Save). A file of the history is read and decoded on a thread of the editor's.
 
 import "core:fmt"
 import "core:math"
@@ -89,7 +90,7 @@ EDITOR_ACTIONS := [Editor_Action]ui.Command{
 	.Zoom_Fit         = {label = "Fit the picture to the window", group = "View", keys = {{.N0, {.Ctrl}}, {}}, icon = ICON_FIT, tags = {"zoom", "whole", "reset"}},
 	.Copy             = {label = "Copy the picture", group = "Picture", keys = {{.C, {.Ctrl}}, {}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard"}},
 	.Save             = {label = "Save the picture", group = "Picture", keys = {{.S, {.Ctrl}}, {}}, icon = lucide.SAVE, tags = {"file", "png", "write"}},
-	.Done             = {label = "Done: run the after-capture actions", group = "Picture", keys = {{.Return, {}}, {}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
+	.Done             = {label = "Done: the workflow goes on", group = "Picture", keys = {{.Return, {}}, {}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
 	.Close            = {label = "Close the editor", group = "Window", keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}},
 	.Palette          = {label = "Command palette", group = "Window", keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
 	.Keys             = {label = "Keyboard shortcuts", group = "Window", keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
@@ -218,8 +219,8 @@ editor_open_shot :: proc(app: ^App, shot: Shot, scale: f32 = 1) -> bool {
 editor_open_file :: proc(app: ^App, path: string) {
 	ed := &app.editor
 	if !ed.opened && !editor_open(app, headless = false) { return }
-	if ed.has_picture && edit_changed(&ed.model) {
-		// (a picture with changes is not dropped for another)
+	if ed.has_picture && (edit_changed(&ed.model) || app.editor_for.run != 0) {
+		// (a picture with changes, or one a workflow waits for, is not dropped for another)
 		platform.raise_window_token(ed.host.win, "")
 		return
 	}
@@ -284,6 +285,7 @@ editor_after_frame :: proc(app: ^App) {
 	if ed.close_due {
 		ed.close_due = false
 		editor_close(app)   // (the picture goes: nothing is copied, saved or told; the capture's flow was over already)
+		workflow_editor_closed(app)   // (its run's branch stops; the next Annotate waiting comes)
 	}
 }
 
@@ -628,7 +630,7 @@ editor_export_start :: proc(app: ^App, purpose: Edit_Export_Purpose) {
 		ed.shot, ed.has_picture = {}, false
 		edit_model_destroy(&ed.model)
 		editor_close(app)
-		app_chain_run(app, shot, edited = true)
+		workflow_editor_done(app, shot)
 		return
 	}
 	edit_export_begin(&ed.export, purpose, &m.doc)
@@ -636,7 +638,7 @@ editor_export_start :: proc(app: ^App, purpose: Edit_Export_Purpose) {
 	ed.host.settle = max(ed.host.settle, 2)
 }
 
-// The flattened picture, once read back: to the chain, the clipboard or a file.
+// The flattened picture, once read back: to the workflow, the clipboard or a file.
 @(private = "file")
 editor_export_poll :: proc(app: ^App) {
 	ed := &app.editor
@@ -662,9 +664,9 @@ editor_export_poll :: proc(app: ^App) {
 	switch purpose {
 	case .Done:
 		editor_close(app)
-		app_chain_run(app, shot, edited = true)
+		workflow_editor_done(app, shot)
 	case .Copy:
-		// (the clipboard is the anchor's, as the chain's copy is: it outlives this window)
+		// (the clipboard is the anchor's, as a workflow's Copy step is: it outlives this window)
 		ok := platform.clipboard_set_image(app.anchor, {rgba = shot.rgba, size = shot.size})
 		shot_free(&shot)
 		ui.use(&ed.host.state)
@@ -672,10 +674,7 @@ editor_export_poll :: proc(app: ^App) {
 		if ok { ui.toast(.Good, "Copied to the clipboard") } else { ui.toast(.Bad, "The picture cannot go to the clipboard") }
 		ed.host.settle = max(ed.host.settle, 3)
 	case .Save:
-		worker_send(&app.worker, Job_Save{
-			shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern),
-			save = true, fast = app.settings.fast_png, reveal = app.settings.reveal, from_editor = true,
-		})
+		worker_send(&app.worker, Job_Save{shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern)})
 	}
 }
 

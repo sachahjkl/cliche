@@ -35,7 +35,6 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "capture",    title = "Capture",       icon = lucide.MONITOR},
 	{category = "region",     title = "Region",        icon = lucide.IMAGE},
 	{category = "record",     title = "Recording",     icon = lucide.FILM},
-	{category = "after",      title = "After capture", icon = lucide.CLIPBOARD},
 	{category = "save",       title = "Save",          icon = lucide.SAVE},
 	{category = "upload",     title = "Upload",        icon = lucide.EXTERNAL_LINK},
 	{category = "history",    title = "History",       icon = lucide.HISTORY},
@@ -71,6 +70,7 @@ settings_show :: proc(app: ^App) {
 settings_enter :: proc(app: ^App) {
 	m := &app.history_window.settings_mode
 	if m.open { return }
+	workflow_mode_leave(app)
 	m.open = true
 	prefs_page.focus_search(&m.page)
 	// (the uploaders' folder may have changed since: its list is read again on the worker)
@@ -130,8 +130,8 @@ settings_action :: proc(app: ^App, a: Settings_Action) {
 	switch a {
 	case .Capture_Screen:   hw.hide_due = true; app_trigger(app, .Screen)
 	case .Capture_Window:   hw.hide_due = true; app_trigger(app, .Window)
-	case .Read_Qr:          hw.hide_due = true; app_trigger(app, .Region, .Qr)
-	case .Read_Text:        hw.hide_due = true; app_trigger(app, .Region, .Text)
+	case .Read_Qr:          hw.hide_due = true; app_trigger(app, .Qr)
+	case .Read_Text:        hw.hide_due = true; app_trigger(app, .Ocr)
 	case .Record:           hw.hide_due = true; app_record_trigger(app, .Mp4)
 	case .Record_Gif:       hw.hide_due = true; app_record_trigger(app, .Gif)
 	case .Choose_Folder:    worker_send(&app.worker, Job_Pick_Folder{start = strings.clone(app.settings.folder)})
@@ -185,10 +185,6 @@ settings_choices :: proc(user: rawptr, name: string) -> (labels, values: []strin
 	case "history.thumbnail_size":
 		@(static, rodata) l := [?]string{"Small", "Medium", "Large"}
 		@(static, rodata) v := [?]string{"small", "medium", "large"}
-		return l[:], v[:]
-	case "save.compression":
-		@(static, rodata) l := [?]string{"Small files", "Fast saves"}
-		@(static, rodata) v := [?]string{"small", "fast"}
 		return l[:], v[:]
 	}
 	return

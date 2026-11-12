@@ -127,6 +127,7 @@ History_Window :: struct {
 
 	menu_key:    ui.Key,
 	settings_mode: Settings_Mode,   // settings_view.odin
+	workflow_mode: Workflow_Mode,   // workflow_view.odin
 	confirm_open: bool,
 	delete_ids:  [dynamic]u64,
 	status:      string,          // what the last action did, under the view (owned)
@@ -135,7 +136,7 @@ History_Window :: struct {
 // The actions of the palette, the menu, the sheet of keys.
 History_Action :: enum u8 {
 	Open, Reveal, Copy_Picture, Copy_Path, Copy_Url, Copy_Text, Edit, Upload, Delete_File, Remove,
-	Preview, Select_All, Search, Grid, List, Open_Folder, Capture_Region, Settings, Palette, Keys, Close, Quit,
+	Preview, Select_All, Search, Grid, List, Open_Folder, Capture_Region, Workflows, Settings, Palette, Keys, Close, Quit,
 }
 
 HISTORY_ACTIONS := [History_Action]ui.Command{
@@ -156,6 +157,7 @@ HISTORY_ACTIONS := [History_Action]ui.Command{
 	.List           = {label = "Show a list", group = "View", keys = {{.N2, {.Ctrl}}, {}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
 	.Open_Folder    = {label = "Open the save folder", group = "View", icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
 	.Capture_Region = {label = "Capture a region", group = "Window", icon = lucide.IMAGE, tags = {"screenshot", "new"}},
+	.Workflows      = {label = "Workflows", group = "Window", keys = {{.W, {.Ctrl, .Shift}}, {}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}},
 	.Settings       = {label = "Settings", group = "Window", keys = {{.Comma, {.Ctrl}}, {}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}},
 	.Palette        = {label = "Command palette", group = "Window", keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
 	.Keys           = {label = "Keyboard shortcuts", group = "Window", keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
@@ -232,6 +234,7 @@ history_window_show :: proc(app: ^App, select: u64 = 0) {
 	hw := &app.history_window
 	if !hw.opened && !history_window_open(app, headless = false) { return }
 	settings_leave(app)
+	workflow_mode_leave(app)
 	token := app_take_token(app)
 	defer delete(token)
 	if !hw.visible {
@@ -356,10 +359,14 @@ history_after_frame :: proc(app: ^App) {
 	hw.palette.open = false
 	hw.sheet_open = false
 	hw.confirm_open = false
+	hw.workflow_mode.add.open = false
+	hw.workflow_mode.confirm_open = false
 	ui.ctx_menu_close()
 	host.host_hide(&hw.host)
 	hw.visible = false
 	history_textures_drop(app)
+	workflow_textures_drop(app)
+	workflows_save(app)
 }
 
 // Before the windows close (the textures are the renderer's): app_windows_close calls it first. The host stays for
@@ -370,6 +377,7 @@ history_window_free :: proc(app: ^App) {
 	delete(hw.thumbs)
 	ui.palette_destroy(&hw.palette)
 	settings_mode_free(app)
+	workflow_mode_free(app)
 	ui.field_destroy(&hw.search)
 	ui.table_destroy(&hw.table)
 	ui.table_data_destroy(&hw.table_data)
@@ -431,9 +439,14 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 		hw.mode_built = app.settings.history_view
 	}
 
-	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.ctx_menu_any_open()
+	workflows := hw.workflow_mode.open
+	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.ctx_menu_any_open() || hw.workflow_mode.add.open || hw.workflow_mode.confirm_open
 	settings := hw.settings_mode.open
-	if !dialog && settings {
+	if !dialog && workflows {
+		workflow_keys(app)
+		// (the window's own commands; the history's other keys mean nothing here)
+		if !hw.workflow_mode.typing { history_keys(app) }
+	} else if !dialog && settings {
 		settings_keys(app)
 		// (the window's own commands; the history's other keys mean nothing on the settings)
 		if !prefs_page.editing(&hw.settings_mode.page) { history_keys(app) }
@@ -447,13 +460,13 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###history") {   // (the theme's surface: the host only clears to black)
-		if settings {
-			settings_build(app, em)
-		} else {
-			history_page(app, em)
+		switch {
+		case workflows: workflow_build(app, em)
+		case settings:  settings_build(app, em)
+		case:           history_page(app, em)
 		}
 	}
-	if !settings { history_menu(app, em) }
+	if !settings && !workflows { history_menu(app, em) }
 	history_dialogs(app)
 }
 
@@ -540,6 +553,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.6))
 		if history_icon_button("preview", lucide.EYE, hw.preview_open ? "Hide the preview (Space)" : "Preview (Space)", em) { history_action(app, .Preview) }
 		if history_icon_button("folder", lucide.FOLDER_OPEN, "Open the save folder", em) { history_action(app, .Open_Folder) }
+		if history_icon_button("workflows", lucide.GIT_FORK, "Workflows: what happens after a capture (Ctrl+Shift+W)", em) { history_action(app, .Workflows) }
 		if history_icon_button("palette", lucide.COMMAND, "Command palette (Ctrl+K)", em) { history_action(app, .Palette) }
 		if history_icon_button("settings", lucide.SETTINGS, "Settings (Ctrl+,)", em) { history_action(app, .Settings) }
 		ui.spacer(ui.px(em * 0.6))
@@ -998,13 +1012,21 @@ history_dialogs :: proc(app: ^App) {
 		mine := make([]bool, len(History_Action), context.temp_allocator)
 		for a in History_Action { mine[int(a)] = a in set }
 		theirs, theirs_enabled, names := settings_palette(app)
-		commands := slice.concatenate([][]ui.Command{history_commands, theirs}, context.temp_allocator)
-		enabled := slice.concatenate([][]bool{mine, theirs_enabled}, context.temp_allocator)
+		// (the Workflows mode's own commands, last, while it is shown)
+		flows := hw.workflow_mode.open ? slice.enumerated_array(&WORKFLOW_ACTIONS) : nil
+		flows_enabled := make([]bool, len(flows), context.temp_allocator)
+		for &e in flows_enabled { e = true }
+		commands := slice.concatenate([][]ui.Command{history_commands, theirs, flows}, context.temp_allocator)
+		enabled := slice.concatenate([][]bool{mine, theirs_enabled, flows_enabled}, context.temp_allocator)
 		if i, _ := ui.palette(&hw.palette, commands, enabled); i >= 0 {
-			if i < len(History_Action) { history_action(app, History_Action(i)) } else { settings_palette_chosen(app, i - len(History_Action), names) }
+			switch {
+			case i < len(History_Action):               history_action(app, History_Action(i))
+			case i < len(History_Action) + len(theirs): settings_palette_chosen(app, i - len(History_Action), names)
+			case:                                       workflow_action(app, Workflow_Action(i - len(History_Action) - len(theirs)))
+			}
 		}
 	}
-	sheet := slice.concatenate([][]ui.Command{history_commands, settings_commands}, context.temp_allocator)
+	sheet := slice.concatenate([][]ui.Command{history_commands, settings_commands, slice.enumerated_array(&WORKFLOW_ACTIONS)}, context.temp_allocator)
 	ui.shortcuts_sheet("keys", sheet, &hw.sheet_open, "cliche's keys")
 	if hw.confirm_open {
 		names := make([dynamic]string, context.temp_allocator)
@@ -1037,12 +1059,12 @@ history_selected :: proc(app: ^App) -> []u64 {
 @(private = "file")
 history_enabled :: proc(app: ^App) -> History_Actions {
 	hw := &app.history_window
-	settings := hw.settings_mode.open
+	settings := hw.settings_mode.open || hw.workflow_mode.open
 	stamp := [3]u64{hw.history.version, hw.selection.version, u64(app.settings.history_view) + u64(len(hw.shown_ids)) << 8 + u64(settings) << 62}
 	if stamp == hw.enabled_stamp && hw.enabled_made { return hw.enabled }
 	hw.enabled_stamp, hw.enabled_made = stamp, true
 	// (on the settings: what concerns the window alone; the history's actions wait for it)
-	window := History_Actions{.Open_Folder, .Capture_Region, .Settings, .Palette, .Keys, .Close, .Quit}
+	window := History_Actions{.Open_Folder, .Capture_Region, .Workflows, .Settings, .Palette, .Keys, .Close, .Quit}
 	if settings {
 		hw.enabled = window
 		return window
@@ -1142,7 +1164,10 @@ history_action :: proc(app: ^App, a: History_Action) {
 	case .Capture_Region:
 		hw.hide_due = true
 		app_trigger(app, .Region)
+	case .Workflows:
+		workflow_mode_enter(app)
 	case .Settings:
+		workflow_mode_leave(app)
 		settings_enter(app)
 	case .Palette:
 		ui.palette_open(&hw.palette)

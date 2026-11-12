@@ -16,12 +16,17 @@ grab_desktop :: proc(s: ^capture.Session) -> Result_Desktop {
 	return r
 }
 
-// The output under the pointer; the first output when the system does not say where the pointer is (Wayland).
+// The output under the pointer: as the capture session says it (a Wayland compositor with cursor sessions, X11,
+// Windows), else as the program knows it; the first output when nothing says.
 grab_screen :: proc(s: ^capture.Session, pointer: proc() -> (Point, bool)) -> Result_Shot {
 	outs := capture.outputs(s)
 	if len(outs) == 0 { return {error = .Empty} }
 	at := 0
-	if p, ok := pointer(); ok { at = max(output_at(outs, p), 0) }
+	if _, output, ok := capture.pointer(s); ok {
+		for o, i in outs { if o.id == output { at = i } }
+	} else if p, pok := pointer(); pok {
+		at = max(output_at(outs, p), 0)
+	}
 	timing_note("capture asked")
 	f, err := capture.output(s, outs[at].id)
 	timing_note("capture done")

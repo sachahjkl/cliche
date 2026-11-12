@@ -26,7 +26,7 @@ app_record_trigger :: proc(app: ^App, format: Record_Format) {
 	}
 	if record_busy(app.record) { return }   // (its region being chosen, or its end being written)
 	if !app_record_step(app, Record_Trigger{format}) { return }
-	if !app_trigger(app, .Region, .Record) {
+	if !app_capture_start(app, .Region, .Region, record = true) {
 		// (a screenshot is being taken: the recording waits for none)
 		app_record_step(app, Record_Cancelled{})
 	}
@@ -49,7 +49,7 @@ app_record_chosen :: proc(app: ^App, r: Rect) {
 	app_tray_menu(app)
 	if record_overlay_show(app) { return }
 	app_record_start(app)
-	if !record_running(app.record) || !app.settings.notify { return }
+	if !record_running(app.record) || !app.settings.record_notify { return }
 	keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
 	body := keys != "" ? fmt.tprintf("Press %s again, or click cliche's icon, to stop it.", keys) : "Click cliche's icon in the notification area to stop it."
 	if id, ok := platform.notify(app.anchor, {title = "Recording", body = body, silent = true, replace = app.notice}); ok { app.notice = id }
@@ -127,7 +127,7 @@ app_record_messages :: proc(app: ^App) {
 			app_record_end(app)
 			if discarding { continue }   // (the file is deleted: nothing to tell)
 			app_record_told(app, v.path, v.bytes, v.length_ms)
-			if v.error == .None && v.path != "" && app.settings.reveal { worker_send(&app.worker, Job_Reveal{path = clone_string(v.path)}) }
+			if v.error == .None && v.path != "" && app.settings.record_reveal { worker_send(&app.worker, Job_Reveal{path = clone_string(v.path)}) }
 		}
 	}
 }
@@ -154,7 +154,7 @@ app_record_told :: proc(app: ^App, path: string, bytes, length_ms: i64) {
 		title, body = "No recording", RECORD_ERROR_TEXT[s.error]
 		fmt.eprintfln("cliche: %s", body)
 	}
-	if title != "" && app.settings.notify {
+	if title != "" && app.settings.record_notify {
 		if id, ok := platform.notify(app.anchor, {title = title, body = body, silent = true, replace = app.notice}); ok { app.notice = id }
 	}
 	app_record_step(app, Record_Reset{})

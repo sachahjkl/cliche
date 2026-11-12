@@ -2,28 +2,10 @@ package cliche
 
 import "core:strings"
 
-// What happens to a picture once it is taken: a chain of actions, run in this order. Copy and Save run now; the others
-// are an upload (ShareX's .sxcu uploaders) and the editor first (after.edit). Reading a QR code is a capture of its own
-// (Purpose.Qr): its text, not the picture, is what it gives.
+// What happens to a picture once it is taken is a workflow (workflow.odin): a graph of steps the user edits. This file
+// holds what the steps share: the picture taken, and the words of a notification.
 
-After_Capture :: enum u8 {
-	Copy,          // the picture on the clipboard
-	Save,          // a PNG file in save.folder, named by save.name
-	Upload,        // to a host: ShareX's custom uploaders (uploader.odin), the URL to the clipboard
-	Open_Editor,   // the picture opened in cliche's editor first (after.edit: Purpose.Edit)
-}
-
-After_Capture_Set :: bit_set[After_Capture; u8]
-
-// The actions this version runs; a set asks for the others in vain.
-AFTER_CAPTURE_DONE :: After_Capture_Set{.Copy, .Save, .Upload}
-
-// What a capture is for: a picture, through the chain; or the text of the QR code in it (cliche --qr), or the text it
-// shows (cliche --ocr), copied; or the region of a recording (cliche --record: record_app.odin); or a picture for the
-// editor first (cliche --edit, after.edit), whose Done runs the chain.
-Purpose :: enum u8 { Picture, Qr, Text, Record, Edit }
-
-// A picture taken: straight RGBA, rows from the top, no padding. The worker makes it; the chain reads it.
+// A picture taken: straight RGBA, rows from the top, no padding. The worker makes it; a workflow's run reads it.
 Shot :: struct {
 	rgba:   []u8,
 	size:   [2]int,

@@ -13,8 +13,9 @@ APP_NAME :: "cliche"
 
 DEFAULT_NAME_PATTERN :: "cliche-%Y%m%d-%H%M%S.png"
 
-// The pages of the settings, in this order (settings_view.odin gives their titles and icons). The choices of
-// general.tray_click and save.compression are settings_view.odin's, with their words. The appearance, general.menu and
+// The pages of the settings, in this order (settings_view.odin gives their titles and icons). What happens after a
+// capture is not here: it is the workflows (workflow.odin). The choices of general.tray_click are settings_view.odin's,
+// with their words. The appearance, general.menu and
 // general.autostart are the toolkit's standard preferences (prefs_register).
 PREF_DEFS := [?]config.Def{
 	// General
@@ -30,6 +31,8 @@ PREF_DEFS := [?]config.Def{
 	{name = "record.gif_fps", title = "GIF frame rate", category = "record", description = "The most frames a second of a GIF. Fewer make smaller files.", kind = .Int, default = {i = 12}, min = 1, max = 30, bounded = true, unit = "fps", tags = {"gif", "animation", "frame rate"}},
 	{name = "record.gif_width", title = "Largest GIF width", category = "record", description = "The largest width of a GIF: a wider recording is scaled down. 0: its own size.", kind = .Int, default = {i = 960}, min = 0, max = 3840, bounded = true, unit = "px", tags = {"gif", "size", "scale", "resolution"}},
 	{name = "record.cursor", title = "Show the pointer", category = "record", description = "Show the pointer in recordings, where the desktop can draw it in.", kind = .Bool, default = {b = true}, tags = {"mouse", "pointer", "cursor"}},
+	{name = "record.notify", title = "Notify", category = "record", description = "Show a notification when a recording starts and when its file is written.", kind = .Bool, default = {b = true}, tags = {"toast", "message"}},
+	{name = "record.reveal", title = "Show the file in its folder", category = "record", description = "Show a recording's file in its folder, in the file manager, once it is written.", kind = .Bool, default = {b = false}, tags = {"open", "folder", "explorer", "files"}},
 	{name = "record.max_length", title = "Longest recording", category = "record", description = "Stop a recording after this many seconds. 0: only when you stop it.", kind = .Int, default = {i = 0}, min = 0, max = 3600, bounded = true, unit = "s", tags = {"limit", "duration", "timer"}},
 
 	// History
@@ -44,21 +47,12 @@ PREF_DEFS := [?]config.Def{
 	{name = "region.magnifier", title = "Magnifier", category = "region", description = "Show a magnifier near the pointer, with the pointer's position and the selection's size.", kind = .Bool, default = {b = true}, tags = {"zoom", "loupe", "pixel"}},
 	{name = "region.dim", title = "Shade around the selection", category = "region", description = "How dark the screen is outside what is chosen.", kind = .Int, default = {i = 45}, min = 0, max = 90, bounded = true, unit = "%", tags = {"shade", "darken", "overlay", "opacity"}},
 
-	// After capture
-	{name = "after.edit", title = "Open in the editor", category = "after", description = "Open each screenshot in the editor first: arrows, boxes, text; Done copies, saves and uploads it as the settings below say.", kind = .Bool, default = {b = false}, tags = {"annotate", "draw", "arrow", "markup"}},
-	{name = "after.copy", title = "Copy to the clipboard", category = "after", description = "Copy the picture to the clipboard.", kind = .Bool, default = {b = true}, tags = {"clipboard", "paste"}},
-	{name = "after.save", title = "Save as a file", category = "after", description = "Save the picture as a PNG file in the folder.", kind = .Bool, default = {b = true}, tags = {"file", "disk", "png"}},
-	{name = "after.reveal", title = "Show the file in its folder", category = "after", description = "Show the saved file in its folder, in the file manager.", kind = .Bool, default = {b = false}, tags = {"open", "folder", "explorer", "files"}},
-	{name = "after.notify", title = "Notify", category = "after", description = "Show a notification that says where the picture went.", kind = .Bool, default = {b = true}, tags = {"toast", "message"}},
-
 	// Upload
-	{name = "after.upload", title = "Upload and copy the address", category = "upload", description = "Upload the picture to the host below and copy its address to the clipboard, in place of the picture.", kind = .Bool, default = {b = false}, tags = {"share", "link", "url", "host", "sxcu", "imgur"}},
-	{name = "upload.uploader", title = "Host", category = "upload", description = "Where pictures go: the built-in host (anonymous, files kept 72 hours), or one of the ShareX uploaders (.sxcu files) in the uploaders' folder.", kind = .String, default = {s = BUILTIN_UPLOADER_NAME}, tags = {"host", "sxcu", "sharex", "server"}},
+	{name = "upload.uploader", title = "Default host", category = "upload", description = "Where a workflow's Upload step sends pictures when it names no host, and where the history uploads again: the built-in host (anonymous, files kept 72 hours), or one of the ShareX uploaders (.sxcu files) in the uploaders' folder.", kind = .String, default = {s = BUILTIN_UPLOADER_NAME}, tags = {"host", "sxcu", "sharex", "server", "share", "link", "url", "imgur"}},
 
 	// Save
-	{name = "save.folder", title = "Folder", category = "save", description = "The folder screenshots are saved in. Empty: Pictures/Screenshots when it exists, else Pictures/cliche.", kind = .String, default = {s = ""}, tags = {"directory", "path", "where"}},
-	{name = "save.name", title = "File name", category = "save", description = "The name of a saved screenshot: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets \" (2)\".", kind = .String, default = {s = DEFAULT_NAME_PATTERN}, tags = {"file name", "pattern", "format"}},
-	{name = "save.compression", title = "PNG files", category = "save", description = "How hard the PNG file is compressed: small files, or fast saves (larger files).", kind = .String, default = {s = "small"}, tags = {"png", "size", "speed", "level"}},
+	{name = "save.folder", title = "Default folder", category = "save", description = "The folder of a workflow's Save step that names none, of the editor's Save, and of recordings. Empty: Pictures/Screenshots when it exists, else Pictures/cliche.", kind = .String, default = {s = ""}, tags = {"directory", "path", "where"}},
+	{name = "save.name", title = "Default file name", category = "save", description = "The name of a saved file when its Save step names none: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets \" (2)\".", kind = .String, default = {s = DEFAULT_NAME_PATTERN}, tags = {"file name", "pattern", "format"}},
 
 	// Shortcuts: in the order of the tray's menu (Shortcut_Action's)
 	{name = "shortcut.screen", title = "Capture the screen", category = "shortcuts", description = "Capture the whole screen under the pointer.", kind = .String, default = {s = "Print"}, tags = {"hotkey", "keybinding", "keys", "monitor", "full screen", "print screen"}},
@@ -87,19 +81,16 @@ Settings :: struct {
 	history_view:       History_View_Mode,
 	history_thumbnail:  int,
 	history_preview_em: f32,   // the preview pane's width, ems (history.preview_width: its splitter sets it)
-	edit_after:         bool,
 	ocr_languages:      string,
 	confirm_on_release: bool,
 	frame_windows:      bool,
 	magnifier:          bool,
 	dim:                f32,   // 0..1
-	actions:            After_Capture_Set,
-	reveal:             bool,
-	uploader:           string,
-	notify:             bool,
-	folder:             string,   // "": the default folder (save_folder_default)
-	name_pattern:       string,
-	fast_png:           bool,
+	record_notify:      bool,
+	record_reveal:      bool,
+	uploader:           string,   // the default host of an Upload step
+	folder:             string,   // the default folder of a Save step ("": save_folder_default)
+	name_pattern:       string,   // the default name of a Save step
 	shortcuts:          [Shortcut_Action]string,   // as platform.hotkey_parse reads them; "": none
 }
 
@@ -138,21 +129,16 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.record_max_s = int(config.int_of(p, "record.max_length"))
 	s.record_cursor = config.bool_of(p, "record.cursor")
 	s.history_size, s.history_view, s.history_thumbnail, s.history_preview_em = history_settings_read(p)
-	s.edit_after = config.bool_of(p, "after.edit")
 	s.ocr_languages = strings.clone(strings.trim_space(config.string_of(p, "capture.ocr_languages")), allocator)
 	s.confirm_on_release = config.bool_of(p, "region.confirm_on_release")
 	s.frame_windows = config.bool_of(p, "region.frame_windows")
 	s.magnifier = config.bool_of(p, "region.magnifier")
 	s.dim = f32(config.int_of(p, "region.dim")) / 100
-	if config.bool_of(p, "after.copy") { s.actions += {.Copy} }
-	if config.bool_of(p, "after.save") { s.actions += {.Save} }
-	if config.bool_of(p, "after.upload") { s.actions += {.Upload} }
-	s.reveal = config.bool_of(p, "after.reveal")
+	s.record_notify = config.bool_of(p, "record.notify")
+	s.record_reveal = config.bool_of(p, "record.reveal")
 	s.uploader = strings.clone(config.string_of(p, "upload.uploader"), allocator)
-	s.notify = config.bool_of(p, "after.notify")
 	s.folder = strings.clone(strings.trim_space(config.string_of(p, "save.folder")), allocator)
 	s.name_pattern = strings.clone(config.string_of(p, "save.name"), allocator)
-	s.fast_png = config.string_of(p, "save.compression") == "fast"
 	for pref, a in SHORTCUT_PREFS { s.shortcuts[a] = strings.clone(strings.trim_space(config.string_of(p, pref)), allocator) }
 	return
 }

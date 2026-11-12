@@ -1,14 +1,15 @@
 package cliche
 
-// The capture flow: one state machine for a screenshot, from the trigger to the file. The app (app.odin) runs the side
+// The capture flow: one state machine for a screenshot, from the trigger to its picture. The app (app.odin) runs the side
 // effects of each state it enters (a job for the worker, the overlay shown or hidden, a notification); the states and
 // what may follow each are here, pure, and tested without a window (flow_test.odin).
 //
-//   Idle -> Capturing -> Selecting -> Encoding -> Done | Failed -> Idle
+//   Idle -> Capturing -> Selecting -> Encoding -> (Handed) Idle | Failed -> Idle
 //                     \______________/
 //                      (screen, window: no selection)
 //
-// A trigger while a capture goes on is refused: one capture at a time. A later layer adds Recording beside it.
+// The picture is handed to a run of the capture's workflow (workflow_app.odin), which goes on outside this flow: the next
+// capture may start at once. A trigger while a capture goes on is refused: one capture at a time.
 
 import capture "gt:capture"
 
@@ -34,6 +35,7 @@ Flow_Error :: enum u8 {
 	No_Text,       // no text could be read in the picture
 	Not_Uploaded,  // the upload failed, and nothing was saved
 	No_Ocr,        // no engine reads text here (gt:ocr: Tesseract on Linux, Windows' own)
+	No_Workflow,   // no workflow runs for this capture
 }
 
 FLOW_ERROR_TEXT := [Flow_Error]string{
@@ -48,12 +50,13 @@ FLOW_ERROR_TEXT := [Flow_Error]string{
 	.Not_Uploaded = "the picture could not be uploaded",
 	.No_Text     = "no text could be read in the picture",
 	.No_Ocr      = "this system reads no text: install Tesseract and its languages (Linux), or a Windows language with text recognition",
+	.No_Workflow = "no workflow runs for this capture: choose one in the Workflows of the main window",
 }
 
 Flow_Idle      :: struct {}
 Flow_Capturing :: struct { source: Source }   // the worker reads the screen
 Flow_Selecting :: struct {}                   // the overlay shows the frozen desktop (Region only)
-Flow_Encoding  :: struct { source: Source }   // the picture is cut, copied, encoded and saved
+Flow_Encoding  :: struct { source: Source }   // the picture is cut (a region) and handed to its workflow
 Flow_Done      :: struct { source: Source }
 Flow_Failed    :: struct { source: Source, error: Flow_Error }
 
@@ -63,9 +66,9 @@ Flow_Trigger        :: struct { source: Source }   // a command, a hotkey, the t
 Flow_Captured       :: struct {}                   // the worker has the picture
 Flow_Capture_Failed :: struct { error: Flow_Error }
 Flow_Confirmed      :: struct {}                   // the user took a rectangle
-Flow_Cancelled      :: struct {}
-Flow_Handed         :: struct {}                                      // the picture went to the editor: the capture is over                   // Escape, a close
-Flow_Saved          :: struct {}                   // every action of the chain ran
+Flow_Cancelled      :: struct {}                   // Escape, a close
+Flow_Handed         :: struct {}                   // the picture went to a run of its workflow: the capture is over
+Flow_Saved          :: struct {}                   // the picture's work is done (a test's flow: the app hands it on)
 Flow_Save_Failed    :: struct { error: Flow_Error }
 Flow_Reset          :: struct {}                   // the outcome was told: ready for the next
 
@@ -101,8 +104,8 @@ flow_step :: proc(f: Flow, e: Flow_Event) -> (next: Flow, ok: bool) {
 	case Flow_Encoding:
 		#partial switch v in e {
 		case Flow_Saved:       return Flow_Done{s.source}, true
-		// (the editor holds the picture now, as a document of its own: its Done saves it outside this flow, and the next
-		// capture may start while it is open)
+		// (the run of the workflow holds the picture now, outside this flow: the next capture may start while it runs, or
+		// while its editor is open)
 		case Flow_Handed:      return Flow_Idle{}, true
 		case Flow_Save_Failed: return Flow_Failed{s.source, v.error}, true
 		}

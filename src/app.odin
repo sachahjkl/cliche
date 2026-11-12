@@ -6,9 +6,12 @@ package cliche
 // window that needs one (the overlay of a region, the main window), and that window is then hidden, not closed, so that
 // it comes back at once.
 //
-// The windows: the region's overlay (overlay.odin), the main window with the history and the settings
-// (history_view.odin, settings_view.odin), the editor (editor.odin), and the record overlay over the other programs while
-// a recording is ready or runs (record_overlay.odin).
+// The windows: the region's overlay (overlay.odin), the main window with the history, the workflows and the settings
+// (history_view.odin, workflow_view.odin, settings_view.odin), the editor (editor.odin), and the record overlay over the
+// other programs while a recording is ready or runs (record_overlay.odin).
+//
+// A capture's picture goes to a run of the workflow its trigger runs (workflow_app.odin): the flow of the capture ends
+// there, and the run goes on beside the next captures.
 //
 // The loop, on the interface's thread:
 //   wait     the shown windows' frames (host.hosts_wait), or the anchor alone when none is shown
@@ -28,7 +31,7 @@ import "gt:platform"
 import "gt:render"
 
 // The tray menu's items. The first seven are Shortcut_Action's, in its order.
-Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, Edit, Record_Start, Record_Stop, Record_Cancel, History, Settings, Quit }
+Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit }
 
 // A command another start handed over (token owned).
 Inbox_Item :: struct { verb: Verb, token: string }
@@ -53,14 +56,20 @@ App :: struct {
 	record_overlay: Record_Overlay,                        // record_overlay.odin
 	prewarmed:  bool,                                      // the editor was opened ahead (app_prewarm)
 	notice_entry: u64,                                     // the history's entry of the last notification (a click shows it)
-	saved_info: struct { size: [2]int, bytes: i64 },       // the picture of this capture, while app_outcome tells it
 
 	flow:       Flow,                                      // flow.odin
 	desktop:    Result_Desktop,                            // the region's desktop, from Selecting to its cut (owned)
 	has_desktop: bool,
-	copied:     bool,                                      // the shot of this capture went to the clipboard
-	purpose:    Purpose,                                   // what this capture is for (actions.odin)
-	upload:     struct { url, problem: string },           // what the upload of this capture gave, while app_outcome tells it (not owned)
+	capture_trigger: Trigger,                              // what started this capture: its workflow runs on its picture
+	capture_record: bool,                                  // this capture is a recording's region (record_app.odin)
+	workflows:  Workflows,                                 // workflow.odin, workflow_store.odin
+	workflows_loaded: bool,
+	workflows_problem: string,                             // why the file was not used (owned; "" none)
+	workflows_save_due: bool,                              // a change is not written yet
+	runs:       [dynamic]^Run,                             // the runs in flight (workflow_app.odin)
+	run_next_id: u64,
+	annotate_queue: [dynamic]Annotate_Ask,                 // Annotate nodes waiting for the editor
+	editor_for: Annotate_Ask,                              // the run and node the editor's picture is for (run 0: none)
 	record:     Record_Flow,                               // the recording's state (record.odin)
 	recorder:   Recorder,                                  // its thread, while one runs
 	record_region: Rect,                                   // its region, logical
@@ -105,6 +114,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	// (opened now, on the worker: the first capture does not wait for the compositor's protocols)
 	worker_send(&app.worker, Job_Open{})
 	history_start(app)
+	workflows_start(app)
 	app.server = instance.serve_start(owner, app_message, app)
 	app_tray_open(app)
 	app_shortcuts_start(app)
@@ -127,7 +137,9 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	instance.serve_stop(app.server)
 	app_shortcuts_stop(app)
 	recorder_join(&app.recorder)   // (a recording running is stopped, its file closed)
+	workflows_save(app)   // (a change still waiting for the end of its gesture)
 	worker_stop(&app.worker)   // (before the desktop goes: a cut may be reading it)
+	workflows_stop(app)   // (after the worker: its jobs held the runs' pictures)
 	if app.has_desktop { desktop_free(&app.desktop) }
 	app_windows_close(app)
 	platform.destroy_window(app.anchor)   // (its tray icon with it)
@@ -148,12 +160,12 @@ app_free :: proc(app: ^App) {
 	config.prefs_destroy(&app.prefs)
 }
 
-// The editor opened hidden before its first picture, when each screenshot opens in it (after.edit): its window, its
+// The editor opened hidden before its first picture, when a screenshot's workflow opens it (Annotate): its window, its
 // surface and the graphics driver are then ready, and a shortcut shows it at once. The driver is loaded on a thread
 // first (its done wakes this loop): the interface's thread never waits for it.
 @(private = "file")
 app_prewarm :: proc(app: ^App) {
-	if !app.settings.edit_after || app.editor.opened || app.prewarmed { return }
+	if app.editor.opened || app.prewarmed || !workflows_want_editor(app) { return }
 	if app.shared.main == nil {
 		#partial switch render.device_preload_state() {
 		case .Not_Started: render.preload_device(done = app_wake, user = app); return
@@ -278,11 +290,12 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Region:   app_trigger(app, .Region)
 	case .Screen:   app_trigger(app, .Screen)
 	case .Window:   app_trigger(app, .Window)
-	case .Qr:       app_trigger(app, .Region, .Qr)
-	case .Ocr:      app_trigger(app, .Region, .Text)
+	case .Qr:       app_trigger(app, .Qr)
+	case .Ocr:      app_trigger(app, .Ocr)
 	case .Record:     app_record_trigger(app, .Mp4)
 	case .Record_Gif: app_record_trigger(app, .Gif)
-	case .Edit:     app_trigger(app, .Region, .Edit)
+	case .Edit:     app_trigger(app, .Edit)
+	case .Workflows: workflows_show(app)
 	case .History:  history_window_show(app)
 	case .Settings: settings_show(app)
 	case .Quit:     app.quit = true
@@ -303,12 +316,16 @@ app_step :: proc(app: ^App, e: Flow_Event) -> bool {
 	return ok
 }
 
-// A capture starts. False: one is already being taken (one at a time).
-app_trigger :: proc(app: ^App, source: Source, purpose := Purpose.Picture) -> bool {
+// A capture for `t`'s workflow starts. False: one is already being taken (one at a time).
+app_trigger :: proc(app: ^App, t: Trigger) -> bool {
+	return app_capture_start(app, TRIGGER_SOURCE[t], t, record = false)
+}
+
+// A capture of `source` starts: for the workflow of `t`, or for a recording's region (`record`).
+app_capture_start :: proc(app: ^App, source: Source, t: Trigger, record: bool) -> bool {
 	if !app_step(app, Flow_Trigger{source}) { return false }
 	timing_start(SOURCE_NAMES[source])
-	app.copied = false
-	app.purpose = purpose
+	app.capture_trigger, app.capture_record = t, record
 	// (the renderer's device made while the desktop is read: the overlay's first show does not wait for the driver)
 	if source == .Region && app.shared.main == nil && render.device_preload_state() == .Not_Started { render.preload_device() }
 	// (a region's picture is frozen while it is chosen: no delay; a screen or a window waits, for a menu to open)
@@ -328,8 +345,18 @@ app_results :: proc(app: ^App) {
 			app.default_folder = v.default_folder
 			if v.error != .None { fmt.eprintfln("cliche: no capture here: %s", FLOW_ERROR_TEXT[flow_error_of(v.error)]) }
 		case Result_Folder:
-			if v.path != "" && config.set_from_string(&app.prefs, "save.folder", v.path, .User) == .None { app_prefs_changed(app) }
+			if v.node != 0 {
+				workflow_folder_chosen(app, v.workflow, v.node, v.path)
+			} else if v.path != "" && config.set_from_string(&app.prefs, "save.folder", v.path, .User) == .None {
+				app_prefs_changed(app)
+			}
 			delete(v.path)
+		case Result_Node:
+			workflow_node_result(app, v)
+		case Result_Workflows:
+			workflows_loaded(app, v)
+		case Result_Picture:
+			workflow_preview_picture(app, v)
 		case Result_History:
 			history_result(app, v)
 		case Result_Uploaders:
@@ -346,8 +373,6 @@ app_results :: proc(app: ^App) {
 		case Result_Written:
 			if !v.ok { fmt.eprintfln("cliche: %s cannot be written", v.path) }
 			delete(v.path)
-		case Result_Qr:
-			app_qr(app, v)
 		}
 	}
 }
@@ -362,8 +387,8 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 	if d.error != .None {
 		desktop_free(&d)
 		app_step(app, Flow_Capture_Failed{flow_error_of(d.error)})
-		if app.purpose == .Record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
-		app_outcome(app, "")
+		if app.capture_record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
+		app_outcome(app)
 		return
 	}
 	app.desktop, app.has_desktop = d, true
@@ -371,8 +396,8 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 	if !overlay_show(app) {
 		app_desktop_drop(app)
 		app_step(app, Flow_Capture_Failed{.Failed})
-		if app.purpose == .Record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
-		app_outcome(app, "")
+		if app.capture_record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
+		app_outcome(app)
 	}
 }
 
@@ -383,7 +408,7 @@ app_desktop_drop :: proc(app: ^App) {
 
 // What the overlay decided, after its frame.
 app_region_confirmed :: proc(app: ^App, r: Rect) {
-	if app.purpose == .Record {
+	if app.capture_record {
 		overlay_hide(app)
 		app_record_chosen(app, r)
 		return
@@ -398,7 +423,7 @@ app_region_cancelled :: proc(app: ^App) {
 	app_step(app, Flow_Cancelled{})
 	overlay_hide(app)
 	app_desktop_drop(app)
-	if app.purpose == .Record { app_record_abandoned(app, failed = false) }
+	if app.capture_record { app_record_abandoned(app, failed = false) }
 }
 
 @(private = "file")
@@ -409,7 +434,7 @@ app_shot :: proc(app: ^App, r: Result_Shot) {
 	case Flow_Capturing:
 		if r.error != .None {
 			app_step(app, Flow_Capture_Failed{r.error})
-			app_outcome(app, "")
+			app_outcome(app)
 			return
 		}
 		app_step(app, Flow_Captured{})
@@ -419,7 +444,7 @@ app_shot :: proc(app: ^App, r: Result_Shot) {
 		if r.error != .None {
 			shot_free(&r.shot)
 			app_step(app, Flow_Save_Failed{r.error})
-			app_outcome(app, "")
+			app_outcome(app)
 			return
 		}
 		app_chain(app, r.shot)
@@ -428,151 +453,42 @@ app_shot :: proc(app: ^App, r: Result_Shot) {
 	}
 }
 
-// The action chain: the clipboard here (it is the window's thread's), the file on the worker. The shot goes with the job.
+// The picture of a capture goes to a run of its trigger's workflow (workflow_app.odin), which owns it from now on: the
+// capture is over (Flow_Handed), and another may start while the run goes on. A recording's region comes from the overlay:
+// no picture comes here.
 @(private = "file")
 app_chain :: proc(app: ^App, shot: Shot) {
-	switch app.purpose {
-	case .Qr:
-		worker_send(&app.worker, Job_Qr{shot})
-		return
-	case .Text:
-		worker_send(&app.worker, Job_Ocr{shot, strings.clone(app.settings.ocr_languages)})
-		return
-	case .Edit:
-		app_hand_to_editor(app, shot)
-		return
-	case .Record:
-		// (a recording's region goes to the recorder from the overlay: no shot comes here)
+	if app.capture_record {
 		shot := shot
 		shot_free(&shot)
 		return
-	case .Picture:
-		if app.settings.edit_after {
-			app_hand_to_editor(app, shot)
-			return
-		}
 	}
-	app_chain_run(app, shot)
-}
-
-// The picture goes to the editor, which owns it from now on: the capture is over (Flow_Handed), and another may start
-// while the editor is open. Its Done runs the chain on its own (app_chain_run, edited).
-@(private = "file")
-app_hand_to_editor :: proc(app: ^App, shot: Shot) {
-	// (the editor's picture has changes: they are not dropped for this one, which goes through the chain at once)
-	if app.editor.visible && app.editor.has_picture && edit_changed(&app.editor.model) {
-		app_chain_run(app, shot)
+	if workflow_capture(app, app.capture_trigger, shot) {
+		app_step(app, Flow_Handed{})
 		return
 	}
-	if editor_open_shot(app, shot, shot.scale > 0 ? shot.scale : 1) {
-		app_step(app, Flow_Handed{})
-	} else {
-		app_step(app, Flow_Save_Failed{.Failed})
-		app_outcome(app, "")
-	}
+	app_step(app, Flow_Save_Failed{.No_Workflow})
+	app_outcome(app)
 }
 
-// The chain itself: copy here, save and upload on the worker. `edited`: the editor's Done, whose picture is told on
-// its own (app_edited_saved), outside the capture's flow.
-app_chain_run :: proc(app: ^App, shot: Shot, edited := false) {
-	actions := app.settings.actions & AFTER_CAPTURE_DONE
-	copied := false
-	if .Copy in actions {
-		// (gt:platform encodes the clipboard's PNG on this thread, at its fast level: it takes no encoded file)
-		copied = platform.clipboard_set_image(app.anchor, {rgba = shot.rgba, size = shot.size})
-		if !copied { fmt.eprintln("cliche: the picture cannot go to the clipboard") }
-	}
-	if !edited { app.copied = copied }
-	worker_send(&app.worker, Job_Save{
-		shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern),
-		save = .Save in actions, fast = app.settings.fast_png, reveal = app.settings.reveal,
-		upload = .Upload in actions, uploader = strings.clone(app.settings.uploader),
-		edited = edited, copied = copied,
-	})
-}
-
-// What the editor's Done gave: the address on the clipboard, the history, a notification. Not the flow's: it may be at
-// another capture now.
-@(private = "file")
-app_edited_saved :: proc(app: ^App, r: Result_Saved) {
-	copied := r.copied
-	if r.url != "" { copied = platform.clipboard_set(app.anchor, {text = r.url}) }
-	if r.error == .None && (r.path != "" || r.url != "") {
-		app.notice_entry = history_note(app, {kind = history_kind_of(r.source), path = r.path, url = r.url, size = r.size, bytes = r.bytes})
-	}
-	title, body: string
-	switch {
-	case r.error != .None:      title, body = "No screenshot", r.upload_problem != "" ? r.upload_problem : FLOW_ERROR_TEXT[r.error]
-	case r.url != "":           title, body = r.path != "" ? "Screenshot saved and uploaded" : "Screenshot uploaded", r.url
-	case r.upload_problem != "": title, body = "Screenshot saved, not uploaded", r.upload_problem
-	case r.path != "" && copied: title, body = "Screenshot saved and copied", r.path
-	case r.path != "":          title, body = "Screenshot saved", r.path
-	case copied:                title, body = "Screenshot copied to the clipboard", ""
-	}
-	if r.error != .None { fmt.eprintfln("cliche: %s", body) }
-	if title != "" && app.settings.notify {
-		if id, ok := platform.notify(app.anchor, {title = title, body = body, silent = true, replace = app.notice}); ok { app.notice = id }
-	}
-}
-
+// What the worker said of the editor's Ctrl+S: told in the editor.
 @(private = "file")
 app_saved :: proc(app: ^App, r: Result_Saved) {
-	defer { delete(r.path); delete(r.url); delete(r.upload_problem) }
-	if r.from_editor { editor_saved(app, r.path, r.error); return }   // (the editor's Ctrl+S: the capture goes on)
-	if r.edited { app_edited_saved(app, r); return }
-	if _, encoding := app.flow.(Flow_Encoding); !encoding { return }
-	// (an upload's address takes the picture's place on the clipboard, as ShareX does)
-	if r.url != "" { app.copied = platform.clipboard_set(app.anchor, {text = r.url}) }
-	app.upload = {url = r.url, problem = r.upload_problem}
-	app.saved_info = {r.size, r.bytes}
-	defer { app.upload = {}; app.saved_info = {} }
-	if r.error != .None { app_step(app, Flow_Save_Failed{r.error}) } else { app_step(app, Flow_Saved{}) }
-	app_outcome(app, r.path)
+	defer delete(r.path)
+	editor_saved(app, r.path, r.error)
 }
 
-// The QR code's text, read: on the clipboard.
+// A capture that failed: told to the user, then Idle. (A capture that worked is told by its workflow's run.)
 @(private = "file")
-app_qr :: proc(app: ^App, r: Result_Qr) {
-	defer delete(r.text)
-	if _, encoding := app.flow.(Flow_Encoding); !encoding { return }
-	if r.error != .None {
-		app_step(app, Flow_Save_Failed{r.error})
-		app_outcome(app, "")
-		return
-	}
-	app.copied = platform.clipboard_set(app.anchor, {text = r.text})
-	if !app.copied { fmt.eprintln("cliche: the QR code's text cannot go to the clipboard") }
-	app_step(app, Flow_Saved{})
-	app_outcome(app, r.text)
-}
-
-// Done or Failed: told to the user, then Idle. `detail`: the file saved, or the QR code's text.
-@(private = "file")
-app_outcome :: proc(app: ^App, detail: string) {
-	path := detail
-	title, body: string
-	#partial switch s in app.flow {
-	case Flow_Done:
-		switch {
-		case app.purpose == .Qr && app.copied:   title, body = "QR code copied", notice_text(detail)
-		case app.purpose == .Qr:                 title, body = "QR code read", notice_text(detail)
-		case app.purpose == .Text && app.copied: title, body = "Text copied", notice_text(detail)
-		case app.purpose == .Text:               title, body = "Text read", notice_text(detail)
-		case app.upload.url != "":     title, body = path != "" ? "Screenshot saved and uploaded" : "Screenshot uploaded", app.upload.url
-		case app.upload.problem != "": title, body = "Screenshot saved, not uploaded", app.upload.problem
-		case path != "" && app.copied: title, body = "Screenshot saved and copied", path
-		case path != "":               title, body = "Screenshot saved", path
-		case app.copied:               title, body = "Screenshot copied to the clipboard", ""
+app_outcome :: proc(app: ^App) {
+	if s, failed := app.flow.(Flow_Failed); failed {
+		title := "No screenshot"
+		#partial switch app.capture_trigger {
+		case .Qr:  title = "No QR code"
+		case .Ocr: title = "No text"
 		}
-	}
-	if s, done := app.flow.(Flow_Done); done { app_history_note(app, s.source, path, detail) }
-	#partial switch s in app.flow {
-	case Flow_Failed:
-		title = app.purpose == .Qr ? "No QR code" : app.purpose == .Text ? "No text" : "No screenshot"
-		body = app.upload.problem != "" ? app.upload.problem : FLOW_ERROR_TEXT[s.error]
+		body := FLOW_ERROR_TEXT[s.error]
 		fmt.eprintfln("cliche: %s", body)
-	}
-	if title != "" && app.settings.notify {
 		if id, ok := platform.notify(app.anchor, {title = title, body = body, silent = true, replace = app.notice}); ok { app.notice = id }
 	}
 	app_step(app, Flow_Reset{})
@@ -644,6 +560,7 @@ app_tray_menu :: proc(app: ^App) {
 	}
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.History), text = "History", default = app.tray_menu == .Rest && app.settings.tray_click == .History})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Workflows), text = "Workflows"})
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Settings), text = "Settings", default = app.tray_menu == .Rest && app.settings.tray_click == .Settings})
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Quit), text = "Quit cliche"})
@@ -698,8 +615,8 @@ app_tray :: proc(app: ^App) {
 			case .Region:   app_trigger(app, .Region)
 			case .Screen:   app_trigger(app, .Screen)
 			case .Window:   app_trigger(app, .Window)
-			case .Qr:       app_trigger(app, .Region, .Qr)
-			case .Ocr:      app_trigger(app, .Region, .Text)
+			case .Qr:       app_trigger(app, .Qr)
+			case .Ocr:      app_trigger(app, .Ocr)
 			case .Record:   app_record_trigger(app, .Mp4)
 			case .History:  history_window_show(app)
 			case .Settings: settings_show(app)
@@ -708,7 +625,8 @@ app_tray :: proc(app: ^App) {
 			switch Tray_Item(e.item) {
 			case .Screen, .Region, .Record, .Record_Gif, .Window, .Ocr, .Qr:
 				app_shortcut_run(app, Shortcut_Action(e.item - int(Tray_Item.Screen)))
-			case .Edit:          app_trigger(app, .Region, .Edit)
+			case .Edit:          app_trigger(app, .Edit)
+			case .Workflows:     workflows_show(app)
 			case .Record_Start:  app_record_start(app)
 			case .Record_Stop:   app_record_stop(app)
 			case .Record_Cancel: app_record_cancel(app)
@@ -748,21 +666,4 @@ app_uploaders :: proc(app: ^App, r: Result_Uploaders) {
 	app.uploaders = r
 	if r.imported != "" && config.set_from_string(&app.prefs, "upload.uploader", r.imported, .User) == .None { app_prefs_changed(app) }
 	if r.import_problem != "" { fmt.eprintfln("cliche: %s", r.import_problem) }
-}
-
-// What this capture gave, kept in the history (a QR code's or a text's words; a picture's file or address).
-@(private = "file")
-app_history_note :: proc(app: ^App, source: Source, path, detail: string) {
-	e := History_Entry{url = app.upload.url}
-	switch app.purpose {
-	case .Qr:     e.kind, e.text = .Qr, detail
-	case .Text:   e.kind, e.text = .Text, detail
-	case .Picture, .Edit:
-		if path == "" && app.upload.url == "" { return }   // (copied only: nothing to find again)
-		e.kind = history_kind_of(source)
-		e.path = path
-		e.size, e.bytes = app.saved_info.size, app.saved_info.bytes
-	case .Record: return
-	}
-	app.notice_entry = history_note(app, e)
 }
