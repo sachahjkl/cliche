@@ -18,6 +18,7 @@ USAGE :: `cliche: screenshots
   cliche --region             choose a rectangle, a window or a screen on the frozen desktop
   cliche --screen             capture the screen under the pointer
   cliche --window             capture the window in front
+  cliche --qr                 read the QR code in a region: its text is copied
   cliche --settings           open the settings
   cliche --quit               end the running cliche
   cliche version

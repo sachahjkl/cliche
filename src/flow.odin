@@ -30,6 +30,7 @@ Flow_Error :: enum u8 {
 	Failed,        // the system said no
 	Empty,         // nothing to take: no output, no window, an empty rectangle
 	Not_Saved,     // the file could not be written
+	No_Qr,         // the picture holds no QR code that reads
 }
 
 FLOW_ERROR_TEXT := [Flow_Error]string{
@@ -40,6 +41,7 @@ FLOW_ERROR_TEXT := [Flow_Error]string{
 	.Failed      = "the system could not capture the screen",
 	.Empty       = "there is nothing to capture",
 	.Not_Saved   = "the picture could not be saved",
+	.No_Qr       = "no QR code could be read in the picture",
 }
 
 Flow_Idle      :: struct {}

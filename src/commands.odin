@@ -11,14 +11,14 @@ INSTANCE_NAME :: "cliche.main"
 SEND_WAIT_MS  :: 1000
 ACQUIRE_WAIT_MS :: 1500
 
-Verb :: enum u8 { Ping, Region, Screen, Window, Settings, Quit }
+Verb :: enum u8 { Ping, Region, Screen, Window, Qr, Settings, Quit }
 
 VERB_NAMES := [Verb]string{
-	.Ping = "ping", .Region = "region", .Screen = "screen", .Window = "window", .Settings = "settings", .Quit = "quit",
+	.Ping = "ping", .Region = "region", .Screen = "screen", .Window = "window", .Qr = "qr", .Settings = "settings", .Quit = "quit",
 }
 
 // The verbs whose window takes the keyboard: the launcher's activation token goes with them (Wayland).
-VERBS_WITH_TOKEN :: bit_set[Verb]{.Region, .Settings}
+VERBS_WITH_TOKEN :: bit_set[Verb]{.Region, .Qr, .Settings}
 
 Command :: struct {
 	verb:  Verb,

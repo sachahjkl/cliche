@@ -8,8 +8,10 @@ cliche lives in the notification area. A shortcut takes a picture at once: a reg
 window under the pointer is framed for you), the screen under the pointer, or the window in front. The picture then goes
 where you said: the clipboard, a PNG file.
 
-To come: screen recording (MP4, GIF), upload to a host of your choice (ShareX's `.sxcu` uploaders), QR codes read from a
-picture, a light OCR, an editor.
+`cliche --qr` reads a QR code instead: choose the region that holds it, and its text goes to the clipboard.
+
+To come: screen recording (MP4, GIF), upload to a host of your choice (ShareX's `.sxcu` uploaders), a light OCR, an
+editor.
 
 ## Use
 
@@ -17,6 +19,7 @@ picture, a light OCR, an editor.
     cliche --region             choose a rectangle, a window or a screen on the frozen desktop
     cliche --screen             capture the screen under the pointer
     cliche --window             capture the window in front
+    cliche --qr                 read the QR code in a region: its text is copied
     cliche --settings           open the settings
     cliche --quit               end the running cliche
 

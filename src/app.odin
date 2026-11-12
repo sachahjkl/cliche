@@ -23,7 +23,7 @@ import "gt:platform"
 import "gt:render"
 
 // The tray menu's items.
-Tray_Item :: enum { None, Region, Screen, Window, Settings, Quit }
+Tray_Item :: enum { None, Region, Screen, Window, Qr, Settings, Quit }
 
 // A command another start handed over (token owned).
 Inbox_Item :: struct { verb: Verb, token: string }
@@ -49,6 +49,7 @@ App :: struct {
 	desktop:    Result_Desktop,                            // the region's desktop, from Selecting to its cut (owned)
 	has_desktop: bool,
 	copied:     bool,                                      // the shot of this capture went to the clipboard
+	purpose:    Purpose,                                   // what this capture is for (actions.odin)
 	token:      string,                                    // the activation token of the next window shown (owned)
 	backend:    capture.Backend,                           // the session's, once open
 	notice:     platform.Notification_Id,                  // the last notification: the next one replaces it
@@ -195,6 +196,7 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Region:   app_trigger(app, .Region)
 	case .Screen:   app_trigger(app, .Screen)
 	case .Window:   app_trigger(app, .Window)
+	case .Qr:       app_trigger(app, .Region, .Qr)
 	case .Settings: settings_window_show(app)
 	case .Quit:     app.quit = true
 	}
@@ -214,9 +216,10 @@ app_step :: proc(app: ^App, e: Flow_Event) -> bool {
 	return ok
 }
 
-app_trigger :: proc(app: ^App, source: Source) {
+app_trigger :: proc(app: ^App, source: Source, purpose := Purpose.Picture) {
 	if !app_step(app, Flow_Trigger{source}) { return }   // (one capture at a time)
 	app.copied = false
+	app.purpose = purpose
 	// (the renderer's device made while the desktop is read: the overlay's first show does not wait for the driver)
 	if source == .Region && app.shared.main == nil && render.device_preload_state() == .Not_Started { render.preload_device() }
 	worker_send(&app.worker, Job_Grab{source})
@@ -239,6 +242,8 @@ app_results :: proc(app: ^App) {
 		case Result_Written:
 			if !v.ok { fmt.eprintfln("cliche: %s cannot be written", v.path) }
 			delete(v.path)
+		case Result_Qr:
+			app_qr(app, v)
 		}
 	}
 }
@@ -313,6 +318,10 @@ app_shot :: proc(app: ^App, r: Result_Shot) {
 // The action chain: the clipboard here (it is the window's thread's), the file on the worker. The shot goes with the job.
 @(private = "file")
 app_chain :: proc(app: ^App, shot: Shot) {
+	if app.purpose == .Qr {
+		worker_send(&app.worker, Job_Qr{shot})
+		return
+	}
 	actions := app.settings.actions & AFTER_CAPTURE_DONE
 	if .Copy in actions {
 		// (gt:platform encodes the clipboard's PNG on this thread, at its fast level: it takes no encoded file)
@@ -333,19 +342,38 @@ app_saved :: proc(app: ^App, r: Result_Saved) {
 	app_outcome(app, r.path)
 }
 
-// Done or Failed: told to the user, then Idle.
+// The QR code's text, read: on the clipboard.
 @(private = "file")
-app_outcome :: proc(app: ^App, path: string) {
+app_qr :: proc(app: ^App, r: Result_Qr) {
+	defer delete(r.text)
+	if _, encoding := app.flow.(Flow_Encoding); !encoding { return }
+	if r.error != .None {
+		app_step(app, Flow_Save_Failed{r.error})
+		app_outcome(app, "")
+		return
+	}
+	app.copied = platform.clipboard_set(app.anchor, {text = r.text})
+	if !app.copied { fmt.eprintln("cliche: the QR code's text cannot go to the clipboard") }
+	app_step(app, Flow_Saved{})
+	app_outcome(app, r.text)
+}
+
+// Done or Failed: told to the user, then Idle. `detail`: the file saved, or the QR code's text.
+@(private = "file")
+app_outcome :: proc(app: ^App, detail: string) {
+	path := detail
 	title, body: string
 	#partial switch s in app.flow {
 	case Flow_Done:
 		switch {
+		case app.purpose == .Qr && app.copied: title, body = "QR code copied", notice_text(detail)
+		case app.purpose == .Qr:               title, body = "QR code read", notice_text(detail)
 		case path != "" && app.copied: title, body = "Screenshot saved and copied", path
 		case path != "":               title, body = "Screenshot saved", path
 		case app.copied:               title, body = "Screenshot copied to the clipboard", ""
 		}
 	case Flow_Failed:
-		title, body = "No screenshot", FLOW_ERROR_TEXT[s.error]
+		title, body = app.purpose == .Qr ? "No QR code" : "No screenshot", FLOW_ERROR_TEXT[s.error]
 		fmt.eprintfln("cliche: %s", body)
 	}
 	if title != "" && app.settings.notify {
@@ -373,6 +401,7 @@ app_tray_open :: proc(app: ^App) {
 		{id = int(Tray_Item.Region), text = "Capture a region", default = true},
 		{id = int(Tray_Item.Screen), text = "Capture the screen"},
 		{id = int(Tray_Item.Window), text = "Capture the window in front"},
+		{id = int(Tray_Item.Qr), text = "Read a QR code"},
 		{kind = .Separator},
 		{id = int(Tray_Item.Settings), text = "Settings"},
 		{id = int(Tray_Item.Quit), text = "Quit cliche"},
@@ -390,6 +419,7 @@ app_tray :: proc(app: ^App) {
 			case .Region:   app_trigger(app, .Region)
 			case .Screen:   app_trigger(app, .Screen)
 			case .Window:   app_trigger(app, .Window)
+			case .Qr:       app_trigger(app, .Region, .Qr)
 			case .Settings: settings_window_show(app)
 			case .Quit:     app.quit = true
 			case .None:

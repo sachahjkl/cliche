@@ -15,8 +15,9 @@ Job_Grab      :: struct { source: Source }                    // the desktop (Re
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
 Job_Save      :: struct { shot: Shot, folder, pattern: string, save: bool }   // owned by the job
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences); owned
+Job_Qr        :: struct { shot: Shot }                        // the QR code in the picture, read; owned
 
-Job :: union { Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write }
+Job :: union { Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Write, Job_Qr }
 
 // The session is open (or why not).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend }
@@ -38,7 +39,10 @@ Result_Saved :: struct { error: Flow_Error, path: string }
 
 Result_Written :: struct { ok: bool, path: string }   // (path owned)
 
-Result :: union { Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written }
+// The text of the QR code read (owned, UTF-8).
+Result_Qr :: struct { error: Flow_Error, text: string }
+
+Result :: union { Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Written, Result_Qr }
 
 Worker :: struct {
 	thread:    ^thread.Thread,
@@ -151,6 +155,11 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		ok := write_file(v.path, transmute([]u8)v.text)
 		delete(v.text)
 		worker_post(w, Result_Written{ok, v.path})
+	case Job_Qr:
+		shot := v.shot
+		text, ok := qr_read(shot)
+		shot_free(&shot)
+		worker_post(w, Result_Qr{error = ok ? .None : .No_Qr, text = text})
 	}
 }
 
@@ -171,6 +180,8 @@ job_free :: proc(j: ^Job) {
 	case Job_Write:
 		delete(v.path)
 		delete(v.text)
+	case Job_Qr:
+		shot_free(&v.shot)
 	}
 }
 
@@ -180,6 +191,7 @@ result_free :: proc(r: ^Result) {
 	case Result_Shot:    shot_free(&v.shot)
 	case Result_Saved:   delete(v.path)
 	case Result_Written: delete(v.path)
+	case Result_Qr:      delete(v.text)
 	}
 }
 
