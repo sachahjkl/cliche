@@ -59,10 +59,11 @@ main :: proc() {
 	toolbox.tool_main("clichetool", {
 		{name = "build", usage = "[release]: the toolkit's text library when its sources changed, then build/cliche", run = run_build},
 		{name = "test", usage = ": the tests of the program", run = run_test},
-		{name = "check", usage = ": odin check of the program for this system and for Windows, and of this tool (-vet), the ui scopes, the changelog's fragments, the tests, then a release build", run = run_check},
+		{name = "check", usage = ": odin check of the program for this system and for Windows, and of this tool (-vet), the ui scopes, the changelog's fragments, the French catalogue, the tests, then a release build", run = run_check},
 		{name = "shots", usage = "[folder [window...]]: (window: settings, editor, history, workflows, record, or motion: the Workflows mode frame by frame) the windows drawn offscreen, as PNG files (default build/shots)", run = run_shots},
 		toolbox.logo_command(logo()),
 		tk_changelog.command(p),
+		toolbox.i18n_command({dirs = {"src"}, folder = "i18n"}),
 		site_command(),
 		toolbox.notices_command(p),
 		r[0], r[1], r[2],

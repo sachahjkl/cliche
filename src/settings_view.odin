@@ -21,6 +21,7 @@ import "gt:platform"
 import prefs_page "gt:prefs_page"
 import shortcuts "gt:shortcuts"
 import "gt:ui"
+import i18n "gt:i18n"
 
 // The settings' part of the main window.
 Settings_Mode :: struct {
@@ -29,23 +30,22 @@ Settings_Mode :: struct {
 	copied: string,   // the command whose Copy was pressed last (its button says so); static text
 }
 
-@(rodata)
 SETTINGS_PAGES := [?]prefs_page.Page_Info{
-	{category = "general",    title = "General",       icon = lucide.SETTINGS},
-	{category = "appearance", title = "Appearance",    icon = lucide.PALETTE},
-	{category = "shortcut",   title = "Shortcuts",     icon = lucide.KEYBOARD},
-	{category = "capture",    title = "Capture",       icon = lucide.MONITOR},
-	{category = "region",     title = "Region",        icon = lucide.IMAGE},
-	{category = "record",     title = "Recording",     icon = lucide.FILM},
-	{category = "save",       title = "Save",          icon = lucide.SAVE},
-	{category = "upload",     title = "Upload",        icon = lucide.EXTERNAL_LINK},
-	{category = "history",    title = "History",       icon = lucide.HISTORY},
+	{category = "general",    title = i18n.later("General"),       icon = lucide.SETTINGS},
+	{category = "appearance", title = i18n.later("Appearance"),    icon = lucide.PALETTE},
+	{category = "shortcut",   title = i18n.later("Shortcuts"),     icon = lucide.KEYBOARD},
+	{category = "capture",    title = i18n.later("Capture"),       icon = lucide.MONITOR},
+	{category = "region",     title = i18n.later("Region"),        icon = lucide.IMAGE},
+	{category = "record",     title = i18n.later("Recording"),     icon = lucide.FILM},
+	{category = "save",       title = i18n.later("Save"),          icon = lucide.SAVE},
+	{category = "upload",     title = i18n.later("Upload"),        icon = lucide.EXTERNAL_LINK},
+	{category = "history",    title = i18n.later("History"),       icon = lucide.HISTORY},
 	// (the toolkit's standard groups: the same pages in every program, after cliche's own)
-	{category = "window",     title = "Window",        icon = lucide.APP_WINDOW},
-	{category = "scrolling",  title = "Scrolling",     icon = lucide.ARROW_DOWN_UP},
-	{category = "input",      title = "Input",         icon = lucide.MOUSE},
-	{category = "timing",     title = "Delays and menus", icon = lucide.TIMER},
-	{category = "rendering",  title = "Rendering",     icon = lucide.CPU},
+	{category = "window",     title = i18n.later("Window"),        icon = lucide.APP_WINDOW},
+	{category = "scrolling",  title = i18n.later("Scrolling"),     icon = lucide.ARROW_DOWN_UP},
+	{category = "input",      title = i18n.later("Input"),         icon = lucide.MOUSE},
+	{category = "timing",     title = i18n.later("Delays and menus"), icon = lucide.TIMER},
+	{category = "rendering",  title = i18n.later("Rendering"),     icon = lucide.CPU},
 }
 
 // The actions of the palette and of the sheet of keys that the history's (History_Action) do not hold already.
@@ -55,17 +55,17 @@ Settings_Action :: enum u8 {
 }
 
 SETTINGS_ACTIONS := [Settings_Action]ui.Command{
-	.Capture_Screen   = {label = "Capture the screen under the pointer", group = "Capture", icon = lucide.MONITOR, tags = {"screenshot", "monitor", "full"}},
-	.Capture_Window   = {label = "Capture the window in front", group = "Capture", icon = lucide.IMAGE, tags = {"screenshot", "active"}},
-	.Read_Qr          = {label = "Read a QR code", group = "Capture", icon = lucide.QR_CODE, tags = {"scan", "barcode"}},
-	.Read_Text        = {label = "Read the text", group = "Capture", icon = lucide.CLIPBOARD, tags = {"ocr", "recognition", "copy"}},
-	.Record           = {label = "Record a video", group = "Record", icon = lucide.FILM, tags = {"mp4", "screencast", "video"}},
-	.Record_Gif       = {label = "Record a GIF", group = "Record", icon = lucide.FILM, tags = {"gif", "animation", "screencast"}},
-	.Choose_Folder    = {label = "Choose the save folder…", group = "Save", icon = lucide.FOLDER, tags = {"directory", "where", "browse"}},
-	.Open_Uploaders   = {label = "Open the uploaders' folder", group = "Upload", icon = lucide.FOLDER_OPEN, tags = {"sxcu", "sharex", "host"}},
-	.Import_Uploader  = {label = "Import a ShareX uploader…", group = "Upload", icon = lucide.EXTERNAL_LINK, tags = {"sxcu", "sharex", "host", "add"}},
-	.Shortcuts_Page   = {label = "Shortcuts", group = "Settings", icon = lucide.KEYBOARD, tags = {"hotkey", "keys", "keybinding"}},
-	.System_Shortcuts = {label = "The system's shortcut settings…", group = "Settings", icon = lucide.EXTERNAL_LINK, tags = {"hotkey", "portal", "keys"}},
+	.Capture_Screen   = {label = i18n.later("Capture the screen under the pointer"), group = i18n.later("Capture"), icon = lucide.MONITOR, tags = {"screenshot", "monitor", "full"}},
+	.Capture_Window   = {label = i18n.later("Capture the window in front"), group = i18n.later("Capture"), icon = lucide.IMAGE, tags = {"screenshot", "active"}},
+	.Read_Qr          = {label = i18n.later("Read a QR code"), group = i18n.later("Capture"), icon = lucide.QR_CODE, tags = {"scan", "barcode"}},
+	.Read_Text        = {label = i18n.later("Read the text"), group = i18n.later("Capture"), icon = lucide.CLIPBOARD, tags = {"ocr", "recognition", "copy"}},
+	.Record           = {label = i18n.later("Record a video"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"mp4", "screencast", "video"}},
+	.Record_Gif       = {label = i18n.later("Record a GIF"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"gif", "animation", "screencast"}},
+	.Choose_Folder    = {label = i18n.later("Choose the save folder…"), group = i18n.later("Save"), icon = lucide.FOLDER, tags = {"directory", "where", "browse"}},
+	.Open_Uploaders   = {label = i18n.later("Open the uploaders' folder"), group = i18n.later("Upload"), icon = lucide.FOLDER_OPEN, tags = {"sxcu", "sharex", "host"}},
+	.Import_Uploader  = {label = i18n.later("Import a ShareX uploader…"), group = i18n.later("Upload"), icon = lucide.EXTERNAL_LINK, tags = {"sxcu", "sharex", "host", "add"}},
+	.Shortcuts_Page   = {label = i18n.later("Shortcuts"), group = i18n.later("Settings"), icon = lucide.KEYBOARD, tags = {"hotkey", "keys", "keybinding"}},
+	.System_Shortcuts = {label = i18n.later("The system's shortcut settings…"), group = i18n.later("Settings"), icon = lucide.EXTERNAL_LINK, tags = {"hotkey", "portal", "keys"}},
 }
 
 // `cliche --settings`, the tray's Settings: the main window, shown, in settings mode.
@@ -101,7 +101,7 @@ settings_keys :: proc(app: ^App) {
 settings_build :: proc(app: ^App, em: f32) {
 	m := &app.history_window.settings_mode
 	o := settings_options(app)
-	if prefs_page.back_bar(&m.page, o, "Settings", "Back to the history (Escape)", em) { settings_leave(app) }
+	if prefs_page.back_bar(&m.page, o, i18n.tr("Settings"), i18n.tr("Back to the history (Escape)"), em) { settings_leave(app) }
 	ui.next({width = ui.fill(), height = ui.fill()})
 	prefs_page.build(&m.page, &app.prefs, o)
 }
@@ -179,21 +179,24 @@ settings_mode_free :: proc(app: ^App) {
 settings_choices :: proc(user: rawptr, name: string) -> (labels, values: []string) {
 	switch name {
 	case "general.tray_click":
-		@(static, rodata) l := [?]string{"Capture a region", "Capture the screen", "Capture the window", "Read a QR code", "Read the text", "Record a video", "Open the history", "Open the settings"}
+		l := [?]string{i18n.later("Capture a region"), i18n.later("Capture the screen"), i18n.later("Capture the window"), i18n.later("Read a QR code"), i18n.later("Read the text"), i18n.later("Record a video"), i18n.later("Open the history"), i18n.later("Open the settings")}
 		@(static, rodata) v := [?]string{"region", "screen", "window", "qr", "ocr", "record", "history", "settings"}
-		return l[:], v[:]
+		@(static) shown: [len(l)]string
+		return labels_shown(shown[:], l[:]), v[:]
 	case "upload.uploader":
 		names := app_of(user).uploaders.names
 		if len(names) == 0 { return }
 		return names, names
 	case "history.view":
-		@(static, rodata) l := [?]string{"Grid", "List"}
+		l := [?]string{i18n.later("Grid"), i18n.later("List")}
 		@(static, rodata) v := [?]string{"grid", "list"}
-		return l[:], v[:]
+		@(static) shown: [len(l)]string
+		return labels_shown(shown[:], l[:]), v[:]
 	case "history.thumbnail_size":
-		@(static, rodata) l := [?]string{"Small", "Medium", "Large"}
+		l := [?]string{i18n.later("Small"), i18n.later("Medium"), i18n.later("Large")}
 		@(static, rodata) v := [?]string{"small", "medium", "large"}
-		return l[:], v[:]
+		@(static) shown: [len(l)]string
+		return labels_shown(shown[:], l[:]), v[:]
 	}
 	return
 }
@@ -207,9 +210,9 @@ settings_status :: proc(user: rawptr, name: string) -> string {
 	case "save.name":
 		// (an example date: the local time needs the time zone's file, which the interface's thread does not read)
 		example := Stamp{year = 2026, month = 3, day = 7, hour = 9, minute = 5, second = 4, milli = 42}
-		return fmt.tprintf("For example: %s", name_expand(app.settings.name_pattern, example, .Region, context.temp_allocator))
+		return fmt.tprintf(i18n.tr("For example: %s"), name_expand(app.settings.name_pattern, example, .Region, context.temp_allocator))
 	case "save.folder":
-		if app.settings.folder == "" && app.default_folder != "" { return fmt.tprintf("Now: %s", app.default_folder) }
+		if app.settings.folder == "" && app.default_folder != "" { return fmt.tprintf(i18n.tr("Now: %s"), app.default_folder) }
 	}
 	return ""
 }
@@ -225,9 +228,9 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 		ui.spacer(ui.px(em * 0.8))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###save_buttons") {
-			if foot_button("Choose a folder…###choose", em) { settings_action(app, .Choose_Folder) }
+			if foot_button(fmt.tprintf("%s###choose", i18n.tr("Choose a folder…")), em) { settings_action(app, .Choose_Folder) }
 			ui.spacer(ui.px(em * 0.5))
-			if foot_button("Open the folder###open", em) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
+			if foot_button(fmt.tprintf("%s###open", i18n.tr("Open the folder")), em) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
 		}
 	case "shortcut":
 		shortcuts_foot(app, em)
@@ -242,33 +245,33 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.8))
 	switch shortcuts.backend(app.shortcuts) {
 	case .Portal:
-		foot_text("The desktop keeps cliche's shortcuts while cliche runs. It may ask you to confirm them, and you may change the keys in its own settings.", em)
+		foot_text(i18n.tr("The desktop keeps cliche's shortcuts while cliche runs. It may ask you to confirm them, and you may change the keys in its own settings."), em)
 		if shortcuts.can_configure(app.shortcuts) {
 			ui.spacer(ui.px(em * 0.5))
-			if foot_button("The system's shortcut settings…###system", em) { settings_action(app, .System_Shortcuts) }
+			if foot_button(fmt.tprintf("%s###system", i18n.tr("The system's shortcut settings…")), em) { settings_action(app, .System_Shortcuts) }
 		}
 	case .Windows:
-		foot_text("Windows gives these keys to cliche in every program. Keys that another program holds cannot be used.", em)
+		foot_text(i18n.tr("Windows gives these keys to cliche in every program. Keys that another program holds cannot be used."), em)
 	case .None:
-		foot_text("This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = CTRL, Print, exec, cliche --region; sway: bindsym Ctrl+Print exec cliche --region):", em)
+		foot_text(i18n.tr("This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = CTRL, Print, exec, cliche --region; sway: bindsym Ctrl+Print exec cliche --region):"), em)
 	}
 	ui.spacer(ui.px(em * 0.6))
 	if ui.tags("weak") {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.5), font_size = math.round(em * 0.78), text_pad = 0})
-		ui.label("COMMANDS###cmd_head")
+		ui.label(fmt.tprintf("%s###cmd_head", i18n.tr("COMMANDS")))
 	}
 	for a in Shortcut_Action {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.1)), axis = .X, cross = .Center})
 		if ui.row(id = fmt.tprintf("###cmd%d", int(a))) {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
-			ui.label(fmt.tprintf("%s###what", SHORTCUT_TEXT[a]))
+			ui.label(fmt.tprintf("%s###what", i18n.tr(SHORTCUT_TEXT[a])))
 			ui.next({width = ui.text_size(em * 0.8), height = ui.pct(1), font = ui.mono_font(), text_pad = 0})
 			if ui.tags("weak") { ui.label(fmt.tprintf("%s###cmd", SHORTCUT_COMMANDS[a])) }
 			ui.spacer(ui.px(em * 0.6))
 			done := m.copied == SHORTCUT_COMMANDS[a]
 			// (one width for both words: the row does not move when it says Copied)
 			ui.next({font_size = math.round(em * 0.86)})
-			if ui.button_icon("###copy", done ? lucide.CHECK : lucide.COPY, done ? "Copied" : "Copy", width = ui.px(em * 6.5)).clicked {
+			if ui.button_icon("###copy", done ? lucide.CHECK : lucide.COPY, done ? i18n.tr("Copied") : i18n.tr("Copy"), width = ui.px(em * 6.5)).clicked {
 				platform.clipboard_set(app.history_window.host.win, {text = SHORTCUT_COMMANDS[a]})
 				m.copied = SHORTCUT_COMMANDS[a]
 			}
@@ -279,7 +282,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 @(private = "file")
 upload_foot :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.8))
-	foot_text("Add a host: put its ShareX uploader (.sxcu) in the uploaders' folder, or import it. The list above shows them.", em)
+	foot_text(i18n.tr("Add a host: put its ShareX uploader (.sxcu) in the uploaders' folder, or import it. The list above shows them."), em)
 	for p in app.uploaders.problems {
 		if ui.tags("bad") {
 			ui.next({width = ui.fill(), font_size = math.round(em * 0.86), text_pad = 0})
@@ -295,9 +298,9 @@ upload_foot :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.5))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###upload_buttons") {
-		if foot_button("Import a .sxcu file…###import", em) { settings_action(app, .Import_Uploader) }
+		if foot_button(fmt.tprintf("%s###import", i18n.tr("Import a .sxcu file…")), em) { settings_action(app, .Import_Uploader) }
 		ui.spacer(ui.px(em * 0.5))
-		if foot_button("Open the uploaders' folder###uploaders", em) { settings_action(app, .Open_Uploaders) }
+		if foot_button(fmt.tprintf("%s###uploaders", i18n.tr("Open the uploaders' folder")), em) { settings_action(app, .Open_Uploaders) }
 	}
 }
 
@@ -310,6 +313,13 @@ foot_text :: proc(text: string, em: f32) {
 		ui.next({width = ui.fill(), font_size = math.round(em * 0.86), text_pad = 0})
 		ui.paragraph(fmt.tprintf("%s###foot_text", text))
 	}
+}
+
+// The words of a choice in the language in use, in `out` (static: the page may keep them past the frame).
+@(private = "file")
+labels_shown :: proc(out, english: []string) -> []string {
+	for e, i in english { out[i] = i18n.tr(e) }
+	return out
 }
 
 // A button as wide as its words.

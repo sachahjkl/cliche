@@ -15,6 +15,7 @@ import "core:log"
 import capture "gt:capture"
 import "gt:platform"
 import "gt:ui"
+import i18n "gt:i18n"
 
 // `cliche --record`, `--record-gif`, their shortcuts: a region to choose; again, the recording starts; again, it stops.
 app_record_trigger :: proc(app: ^App, format: Record_Format) {
@@ -53,8 +54,8 @@ app_record_chosen :: proc(app: ^App, r: Rect) {
 	app_record_start(app)
 	if !record_running(app.record) || !app.settings.record_notify { return }
 	keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
-	body := keys != "" ? fmt.tprintf("Press %s again, or click cliche's icon, to stop it.", keys) : "Click cliche's icon in the notification area to stop it."
-	app_announce(app, .Info, "Recording", body)
+	body := keys != "" ? fmt.tprintf(i18n.tr("Press %s again, or click cliche's icon, to stop it."), keys) : i18n.tr("Click cliche's icon in the notification area to stop it.")
+	app_announce(app, .Info, i18n.tr("Recording"), body)
 }
 
 // The Record button, the same keys, the tray: the recorder starts on the live screen.
@@ -120,7 +121,7 @@ app_record_messages :: proc(app: ^App) {
 			record_overlay_redraw(app)
 		case Record_Tick:
 			app_record_step(app, Record_Progress{v.elapsed_ms})
-			if app.tray != nil { platform.tray_set_tooltip(app.tray, fmt.tprintf("cliche: recording, %s", record_clock_text(v.elapsed_ms))) }
+			if app.tray != nil { platform.tray_set_tooltip(app.tray, fmt.tprintf(i18n.tr("cliche: recording, %s"), record_clock_text(v.elapsed_ms))) }
 			record_overlay_redraw(app)
 		case Record_Ended:
 			_, discarding := app.record.(Record_Discarding)
@@ -149,12 +150,12 @@ app_record_told :: proc(app: ^App, path: string, bytes, length_ms: i64) {
 	failed := false
 	#partial switch s in app.record {
 	case Record_Done:
-		title = s.format == .Gif ? "GIF saved" : "Recording saved"
+		title = s.format == .Gif ? i18n.tr("GIF saved") : i18n.tr("Recording saved")
 		size := [2]int{int(app.record_region.w), int(app.record_region.h)}
 		app.notice_entry = history_note(app, {kind = s.format == .Gif ? .Gif : .Video, path = path, size = size, bytes = bytes, length_ms = length_ms})
 		body = record_notice_body(path, bytes, length_ms)
 	case Record_Failed:
-		title, body = "No recording", RECORD_ERROR_TEXT[s.error]
+		title, body = i18n.tr("No recording"), i18n.tr(RECORD_ERROR_TEXT[s.error])
 		failed = true
 		log.warn(body)
 	}

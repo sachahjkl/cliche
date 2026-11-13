@@ -20,12 +20,15 @@ package cliche
 // Every other thread wakes it through app_wake: the waits end on a wake of any of the windows.
 
 import "core:log"
+import "core:slice"
 import "core:strings"
 import "core:sync"
 import capture "gt:capture"
 import config "gt:config"
 import crash "gt:crash"
+import flowgraph "gt:flowgraph"
 import "gt:host"
+import i18n "gt:i18n"
 import tk_log "gt:log"
 import instance "gt:instance"
 import shortcuts "gt:shortcuts"
@@ -33,6 +36,9 @@ import "gt:platform"
 import "gt:render"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
+
+// cliche's own texts in each language it has (i18n/<language>.txt, written by `clichetool i18n <language>`).
+PROGRAM_CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
 
 // The tray menu's items. The first seven are Shortcut_Action's, in its order.
 Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit }
@@ -69,6 +75,7 @@ App :: struct {
 	capture_record: bool,                                  // this capture is a recording's region (record_app.odin)
 	workflows:  Workflows,                                 // workflow.odin, workflow_store.odin
 	workflows_loaded: bool,
+	catalog_shown: flowgraph.Catalog,                      // CATALOG in the language in use, for the graph's widgets (catalog_shown_make)
 	workflows_problem: string,                             // why the file was not used (owned; "" none)
 	workflows_save_due: bool,                              // a change is not written yet
 	runs:       [dynamic]^Run,                             // the runs in flight (workflow_app.odin)
@@ -105,6 +112,12 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	// (this process is the one that runs: its log and its crash reports, before any thread starts, so that each has them)
 	logger := tk_log.install({program = APP_NAME, echo = ODIN_DEBUG})
 	context.logger = logger
+	// (here: the language is a setting, read above, and its unreadable lines go to the log, installed above; every text
+	// shown, the tray's menu and the default workflows' names included, is made below)
+	prefs_page.language_start(&app.prefs, PROGRAM_CATALOGUES)
+	prefs_translate(&app.prefs)
+	app.catalog_shown = catalog_shown_make()
+	tables_translate()
 	crash_settings_keep(&app.crash_settings, &app.prefs)
 	_ = crash.install({program = APP_NAME, version = APP_VERSION, log_tail = {tk_log.tail, logger.data}, settings = {crash_settings_text, &app.crash_settings}})
 	crash.begin_session()
@@ -135,7 +148,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app_tray_open(app)
 	app_shortcuts_start(app)
 	app_integrate(app, force = true)
-	if has_crashed { app_announce(app, .Bad, "cliche stopped unexpectedly: its report is in this file", crashed) }
+	if has_crashed { app_announce(app, .Bad, i18n.tr("cliche stopped unexpectedly: its report is in this file"), crashed) }
 	delete(crashed)
 	app_command(app, first.verb, first.token)
 
@@ -185,8 +198,28 @@ app_free :: proc(app: ^App) {
 	uploaders_result_free(&app.uploaders)
 	delete(app.default_folder)
 	settings_free(&app.settings)
+	catalog_shown_free(&app.catalog_shown)
 	config.prefs_destroy(&app.prefs)
 	delete(app.wakes)
+}
+
+// The tables of commands, pages, columns and kinds, in the language in use, once: the toolkit shows their words as they are, in many
+// places (the palettes, the sheets of keys, the tooltips, the settings' sidebar), and the language does not change while
+// cliche runs. The tests never come here: their tables stay English.
+@(private = "file")
+tables_translate :: proc() {
+	commands :: proc(list: []ui.Command) {
+		for &c in list { c.label, c.group = i18n.tr(c.label), i18n.tr(c.group) }
+	}
+	commands(slice.enumerated_array(&EDITOR_ACTIONS))
+	commands(slice.enumerated_array(&HISTORY_ACTIONS))
+	commands(slice.enumerated_array(&SETTINGS_ACTIONS))
+	commands(slice.enumerated_array(&WORKFLOW_ACTIONS))
+	for &p in SETTINGS_PAGES { p.title = i18n.tr(p.title) }
+	for &c in HISTORY_COLUMNS { c.title = i18n.tr(c.title) }
+	// (the history's search and its sort by kind read these words too: they find what the window shows)
+	for &k in HISTORY_KIND_TEXT { k = i18n.tr(k) }
+	for &f in HISTORY_FILTER_TEXT { f = i18n.tr(f) }
 }
 
 // An editor opened hidden before the first picture, when a screenshot's workflow opens one (Annotate): its window, its
@@ -557,14 +590,14 @@ app_announce :: proc(app: ^App, kind: ui.Toast_Kind, title: string, body := "", 
 @(private = "file")
 app_outcome :: proc(app: ^App) {
 	if s, failed := app.flow.(Flow_Failed); failed {
-		title := "No screenshot"
+		title := i18n.tr("No screenshot")
 		#partial switch app.capture_trigger {
-		case .Qr:  title = "No QR code"
-		case .Ocr: title = "No text"
+		case .Qr:  title = i18n.tr("No QR code")
+		case .Ocr: title = i18n.tr("No text")
 		}
 		body := FLOW_ERROR_TEXT[s.error]
 		log.warn(body)
-		app_announce(app, .Bad, title, body)
+		app_announce(app, .Bad, title, i18n.tr(body))
 	}
 	app_step(app, Flow_Reset{})
 }
@@ -603,8 +636,8 @@ Tray_Menu :: enum u8 { Rest, Ready, Recording }
 
 @(private = "file")
 TRAY_SHORTCUT_TEXT := [Shortcut_Action]string{
-	.Screen = "Capture the screen", .Region = "Capture a region", .Record = "Record a video", .Record_Gif = "Record a GIF",
-	.Window = "Capture the window in front", .Ocr = "Read the text", .Qr = "Read a QR code",
+	.Screen = i18n.later("Capture the screen"), .Region = i18n.later("Capture a region"), .Record = i18n.later("Record a video"), .Record_Gif = i18n.later("Record a GIF"),
+	.Window = i18n.later("Capture the window in front"), .Ocr = i18n.later("Read the text"), .Qr = i18n.later("Read a QR code"),
 }
 
 // The tray's menu for the recording's state, each command with the keys that run it (tray_keys).
@@ -619,26 +652,26 @@ app_tray_menu :: proc(app: ^App) {
 	switch app.tray_menu {
 	case .Ready:
 		keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
-		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Start), text = "Start recording", default = true, shortcut = keys})
-		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Cancel), text = "Cancel"})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Start), text = i18n.tr("Start recording"), default = true, shortcut = keys})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Cancel), text = i18n.tr("Cancel")})
 	case .Recording:
 		keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
-		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Stop), text = "Stop recording", default = true, shortcut = keys})
-		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Cancel), text = "Cancel recording"})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Stop), text = i18n.tr("Stop recording"), default = true, shortcut = keys})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Record_Cancel), text = i18n.tr("Cancel recording")})
 	case .Rest:
 		default_item := tray_item_of_click(app.settings.tray_click)
 		for a in Shortcut_Action {
 			item := Tray_Item(int(Tray_Item.Screen) + int(a))
-			append(&items, platform.Tray_Menu_Item{id = int(item), text = TRAY_SHORTCUT_TEXT[a], default = item == default_item, shortcut = app.tray_keys[a]})
+			append(&items, platform.Tray_Menu_Item{id = int(item), text = i18n.tr(TRAY_SHORTCUT_TEXT[a]), default = item == default_item, shortcut = app.tray_keys[a]})
 		}
-		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Edit), text = "Capture a region and edit"})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Edit), text = i18n.tr("Capture a region and edit")})
 	}
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
-	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.History), text = "History", default = app.tray_menu == .Rest && app.settings.tray_click == .History})
-	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Workflows), text = "Workflows"})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.History), text = i18n.tr("History"), default = app.tray_menu == .Rest && app.settings.tray_click == .History})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Workflows), text = i18n.tr("Workflows")})
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
-	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Settings), text = "Settings", default = app.tray_menu == .Rest && app.settings.tray_click == .Settings})
-	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Quit), text = "Quit cliche"})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Settings), text = i18n.tr("Settings"), default = app.tray_menu == .Rest && app.settings.tray_click == .Settings})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Quit), text = i18n.tr("Quit cliche")})
 	platform.tray_set_menu(app.tray, items[:])
 }
 
@@ -730,14 +763,14 @@ app_prefs_changed :: proc(app: ^App) {
 @(private = "file")
 app_prefs_save :: proc(app: ^App) {
 	config.user_writer_save(&app.prefs_writer, &app.prefs)
-	if config.user_writer_failed(&app.prefs_writer) { app_announce(app, .Bad, "The preferences cannot be written", prefs_file()) }
+	if config.user_writer_failed(&app.prefs_writer) { app_announce(app, .Bad, i18n.tr("The preferences cannot be written"), prefs_file()) }
 }
 
 // The system's dialog for a folder, its answer at a next frame of the main window (where it was asked): the save folder
 // (node 0), or a Save node's.
 app_pick_folder :: proc(app: ^App, start: string, workflow: u64 = 0, node: u64 = 0) {
 	Pick :: struct { app: ^App, workflow, node: u64 }
-	ui.file_dialog(&app.history_window.host.state, .Folder, {title = "The folder of the screenshots", start_dir = start}, proc(r: platform.Dialog_Result, user: rawptr) {
+	ui.file_dialog(&app.history_window.host.state, .Folder, {title = i18n.tr("The folder of the screenshots"), start_dir = start}, proc(r: platform.Dialog_Result, user: rawptr) {
 		pick := (^Pick)(user)
 		defer free(pick)
 		app := pick.app
@@ -753,8 +786,8 @@ app_pick_folder :: proc(app: ^App, start: string, workflow: u64 = 0, node: u64 =
 // The system's dialog for a ShareX uploader; the file chosen is copied in on the worker.
 app_import_uploader :: proc(app: ^App) {
 	patterns := []string{"*.sxcu"}
-	filters := []platform.File_Filter{{"ShareX uploaders", patterns}}
-	ui.file_dialog(&app.history_window.host.state, .Open, {title = "A ShareX uploader", filters = filters}, proc(r: platform.Dialog_Result, user: rawptr) {
+	filters := []platform.File_Filter{{i18n.tr("ShareX uploaders"), patterns}}
+	ui.file_dialog(&app.history_window.host.state, .Open, {title = i18n.tr("A ShareX uploader"), filters = filters}, proc(r: platform.Dialog_Result, user: rawptr) {
 		app := (^App)(user)
 		if r.status != .Chosen || len(r.paths) == 0 { return }
 		worker_send(&app.worker, Job_Import_Uploader{path = strings.clone(r.paths[0])})

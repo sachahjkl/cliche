@@ -1,0 +1,1691 @@
+# The texts in fr (docs/i18n.md). Written by the i18n command: a translation left empty is the English.
+language fr
+
+en cliche stopped unexpectedly: its report is in this file
+fr cliche s'est arrêté de façon inattendue : son rapport est dans ce fichier
+
+en No screenshot
+fr Aucune capture d'écran
+
+en No QR code
+fr Aucun code QR
+
+en No text
+fr Aucun texte
+
+en Capture the screen
+fr Capturer l'écran
+
+en Capture a region
+fr Capturer une zone
+
+en Record a video
+fr Enregistrer une vidéo
+
+en Record a GIF
+fr Enregistrer un GIF
+
+en Capture the window in front
+fr Capturer la fenêtre au premier plan
+
+en Read the text
+fr Lire le texte
+
+en Read a QR code
+fr Lire un code QR
+
+en Start recording
+fr Démarrer l'enregistrement
+
+en Cancel
+fr Annuler
+
+en Stop recording
+fr Arrêter l'enregistrement
+
+en Cancel recording
+fr Annuler l'enregistrement
+
+en Capture a region and edit
+fr Capturer une zone et la modifier
+
+en History
+fr Historique
+
+en Workflows
+fr Workflows
+
+en Settings
+fr Réglages
+
+en Quit cliche
+fr Quitter cliche
+
+en The preferences cannot be written
+fr Les réglages ne peuvent pas être écrits
+
+en The folder of the screenshots
+fr Le dossier des captures d'écran
+
+en ShareX uploaders
+fr Hébergeurs ShareX
+
+en A ShareX uploader
+fr Un hébergeur ShareX
+
+en Select and move
+fr Sélectionner et déplacer
+
+en Tools
+fr Outils
+
+en Rectangle
+fr Rectangle
+
+en Ellipse
+fr Ellipse
+
+en Arrow
+fr Flèche
+
+en Line
+fr Ligne
+
+en Pen
+fr Crayon
+
+en Text
+fr Texte
+
+en Highlighter
+fr Surligneur
+
+en Pixelate
+fr Pixeliser
+
+en Step number
+fr Numéro d'étape
+
+en Crop
+fr Rogner
+
+en Undo
+fr Annuler
+
+en Edit
+fr Modifier
+
+en Redo
+fr Rétablir
+
+en Delete the selection
+fr Supprimer la sélection
+
+en Duplicate the selection
+fr Dupliquer la sélection
+
+en Remove the crop
+fr Retirer le rognage
+
+en Zoom in
+fr Zoom avant
+
+en View
+fr Affichage
+
+en Zoom out
+fr Zoom arrière
+
+en Fit the picture to the window
+fr Ajuster l'image à la fenêtre
+
+en Copy the picture
+fr Copier l'image
+
+en Picture
+fr Image
+
+en Save the picture
+fr Enregistrer l'image
+
+en Done: the workflow goes on
+fr Terminé : le workflow continue
+
+en Close the editor
+fr Fermer l'éditeur
+
+en Window
+fr Fenêtre
+
+en Command palette
+fr Palette de commandes
+
+en Keyboard shortcuts
+fr Raccourcis clavier
+
+en Move the selection a pixel (arrows; with Shift, ten)
+fr Déplacer la sélection d'un pixel (flèches ; avec Maj, dix)
+
+en Red
+fr Rouge
+
+en Orange
+fr Orange
+
+en Yellow
+fr Jaune
+
+en Green
+fr Vert
+
+en Blue
+fr Bleu
+
+en Purple
+fr Violet
+
+en Black
+fr Noir
+
+en White
+fr Blanc
+
+en The picture cannot be read.
+fr L'image ne peut pas être lue.
+
+en The picture cannot be read: it is not a PNG file, or it is gone.
+fr L'image ne peut pas être lue : ce n'est pas un fichier PNG, ou il n'existe plus.
+
+en Not saved
+fr Non enregistrée
+
+en Saved
+fr Enregistrée
+
+en The picture could not be made
+fr L'image n'a pas pu être créée
+
+en Nothing was done with it.
+fr Rien n'en a été fait.
+
+en Reading the picture…
+fr Lecture de l'image…
+
+en Done
+fr Terminé
+
+ctx text size, short
+en S
+fr P
+
+ctx text size, short
+en M
+fr M
+
+ctx text size, short
+en L
+fr G
+
+ctx text size, short
+en XL
+fr TG
+
+en Small text
+fr Petit texte
+
+en Medium text
+fr Texte moyen
+
+en Large text
+fr Grand texte
+
+en Very large text
+fr Très grand texte
+
+en Shadow
+fr Ombre
+
+en Fill
+fr Remplissage
+
+en The editor's keys
+fr Les touches de l'éditeur
+
+en Close the editor and drop the changes?
+fr Fermer l'éditeur et abandonner les modifications ?
+
+en The annotations on this picture are lost. Nothing is copied or saved.
+fr Les annotations de cette image sont perdues. Rien n'est copié ni enregistré.
+
+en Drop the changes
+fr Abandonner les modifications
+
+en Copied to the clipboard
+fr Copiée dans le presse-papiers
+
+en The picture cannot go to the clipboard
+fr L'image ne peut pas aller dans le presse-papiers
+
+en this desktop offers no way to capture this
+fr ce bureau ne permet pas de capturer ceci
+
+en the capture was refused
+fr la capture a été refusée
+
+en the screen or the window is gone
+fr l'écran ou la fenêtre n'existe plus
+
+en the system could not capture the screen
+fr le système n'a pas pu capturer l'écran
+
+en there is nothing to capture
+fr il n'y a rien à capturer
+
+en the picture could not be saved
+fr l'image n'a pas pu être enregistrée
+
+en no QR code could be read in the picture
+fr aucun code QR n'a pu être lu dans l'image
+
+en the picture could not be uploaded
+fr l'image n'a pas pu être mise en ligne
+
+en no text could be read in the picture
+fr aucun texte n'a pu être lu dans l'image
+
+en this system reads no text: install Tesseract and its languages (Linux), or a Windows language with text recognition
+fr ce système ne lit pas de texte : installez Tesseract et ses langues (Linux), ou une langue de Windows avec la reconnaissance de texte
+
+en no workflow runs for this capture: choose one in the Workflows of the main window
+fr aucun workflow ne s'exécute pour cette capture : choisissez-en un dans les Workflows de la fenêtre principale
+
+en Region
+fr Zone
+
+en Screen
+fr Écran
+
+en Video
+fr Vidéo
+
+en QR code
+fr Code QR
+
+en All
+fr Tout
+
+en Screenshots
+fr Captures d'écran
+
+en Recordings
+fr Enregistrements
+
+en Uploads
+fr Mises en ligne
+
+en the file cannot be read
+fr le fichier ne peut pas être lu
+
+en no uploader is set up
+fr aucun hébergeur n'est configuré
+
+en Name
+fr Nom
+
+en Kind
+fr Type
+
+en Size
+fr Taille
+
+en Date
+fr Date
+
+en URL
+fr URL
+
+en Open
+fr Ouvrir
+
+en Capture
+fr Capture
+
+en Open the folder
+fr Ouvrir le dossier
+
+en Copy the path
+fr Copier le chemin
+
+en Copy the URL
+fr Copier l'URL
+
+en Copy the text
+fr Copier le texte
+
+en Upload again
+fr Remettre en ligne
+
+en Delete the file…
+fr Supprimer le fichier…
+
+en Remove from the history
+fr Retirer de l'historique
+
+en Preview
+fr Aperçu
+
+en Select all
+fr Tout sélectionner
+
+en Search
+fr Rechercher
+
+en Show a grid
+fr Afficher une grille
+
+en Show a list
+fr Afficher une liste
+
+en Open the save folder
+fr Ouvrir le dossier des captures
+
+en Close the window
+fr Fermer la fenêtre
+
+en Uploaded: the address is on the clipboard
+fr En ligne : l'adresse est dans le presse-papiers
+
+en Not uploaded
+fr Non mise en ligne
+
+en The picture cannot be read
+fr L'image ne peut pas être lue
+
+en Search names, texts, URLs
+fr Rechercher des noms, des textes, des URL
+
+ctx thumbnail size, short
+en S
+fr P
+
+ctx thumbnail size, short
+en M
+fr M
+
+ctx thumbnail size, short
+en L
+fr G
+
+en Small thumbnails
+fr Petites miniatures
+
+en Medium thumbnails
+fr Miniatures moyennes
+
+en Large thumbnails
+fr Grandes miniatures
+
+en Grid
+fr Grille
+
+en List
+fr Liste
+
+en Hide the preview (Space)
+fr Masquer l'aperçu (Espace)
+
+en Preview (Space)
+fr Aperçu (Espace)
+
+en Workflows: what happens after a capture (Ctrl+Shift+W)
+fr Workflows : ce qui se passe après une capture (Ctrl+Maj+W)
+
+en Command palette (Ctrl+K)
+fr Palette de commandes (Ctrl+K)
+
+en Settings (Ctrl+,)
+fr Réglages (Ctrl+,)
+
+en Press %s, or click cliche's icon in the notification area: each capture comes here.
+fr Appuyez sur %s, ou cliquez sur l'icône de cliche dans la zone de notification : chaque capture arrive ici.
+
+en Click cliche's icon in the notification area, or run cliche --region: each capture comes here.
+fr Cliquez sur l'icône de cliche dans la zone de notification, ou lancez cliche --region : chaque capture arrive ici.
+
+en Reading the history…
+fr Lecture de l'historique…
+
+en No capture yet
+fr Aucune capture pour l'instant
+
+en Nothing matches
+fr Aucun résultat
+
+en No capture has these words, or is of this kind.
+fr Aucune capture ne contient ces mots, ou n'est de ce type.
+
+en Clear the search
+fr Effacer la recherche
+
+en %d captures
+en+ %d captures
+fr %d capture
+fr+ %d captures
+
+en %d of %d captures
+en+ %d of %d captures
+fr %d capture sur %d
+fr+ %d captures sur %d
+
+en %s, %d selected
+fr %s, %d sélectionnées
+
+en File missing
+fr Fichier manquant
+
+en %s (missing)
+fr %s (manquant)
+
+en Nothing selected
+fr Aucune sélection
+
+en Select a capture to see it here.
+fr Sélectionnez une capture pour la voir ici.
+
+en The file is missing
+fr Le fichier est manquant
+
+en No picture
+fr Aucune image
+
+en cliche's keys
+fr Les touches de cliche
+
+en Delete %d files for good?
+fr Supprimer définitivement %d fichiers ?
+
+en Delete %s for good?
+fr Supprimer définitivement %s ?
+
+en The files go from the disk, not to the trash. Their lines stay in the history, marked missing.
+fr Les fichiers quittent le disque, sans passer par la corbeille. Leurs lignes restent dans l'historique, marquées manquantes.
+
+en Delete
+fr Supprimer
+
+en The file is deleted
+fr Le fichier est supprimé
+
+en %d files are deleted
+fr %d fichiers sont supprimés
+
+en The path is on the clipboard
+fr Le chemin est dans le presse-papiers
+
+en The paths are on the clipboard
+fr Les chemins sont dans le presse-papiers
+
+en The URL is on the clipboard
+fr L'URL est dans le presse-papiers
+
+en The URLs are on the clipboard
+fr Les URL sont dans le presse-papiers
+
+en The text is on the clipboard
+fr Le texte est dans le presse-papiers
+
+en The texts are on the clipboard
+fr Les textes sont dans le presse-papiers
+
+en Uploading…
+fr Mise en ligne…
+
+en Removed from the history
+fr Retirée de l'historique
+
+en %d removed from the history
+fr %d retirées de l'historique
+
+en The file stays.
+fr Le fichier reste.
+
+en The files stay.
+fr Les fichiers restent.
+
+en Licence registered: thank you
+fr Licence enregistrée : merci
+
+en Licence removed
+fr Licence retirée
+
+en This licence is not cliche's.
+fr Cette licence n'est pas celle de cliche.
+
+en This key is not a valid licence of cliche: check that it was copied whole.
+fr Cette clé n'est pas une licence valide de cliche : vérifiez qu'elle a été copiée en entier.
+
+en This build of cliche accepts no licence yet.
+fr Cette version de cliche n'accepte pas encore de licence.
+
+en The licence file cannot be read.
+fr Le fichier de licence ne peut pas être lu.
+
+en The licence cannot be saved.
+fr La licence ne peut pas être enregistrée.
+
+en Licence
+fr Licence
+
+en Reading the licence…
+fr Lecture de la licence…
+
+en Registered to %s (%s). Thank you for supporting cliche.
+fr Enregistrée au nom de %s (%s). Merci de soutenir cliche.
+
+en Remove the licence
+fr Retirer la licence
+
+en Unregistered. cliche is free; a licence supports its work.
+fr Non enregistrée. cliche est gratuit ; une licence soutient son développement.
+
+en The licence stored here is not valid: %s
+fr La licence enregistrée ici n'est pas valide : %s
+
+en Support cliche: buy a licence
+fr Soutenir cliche : acheter une licence
+
+en Paste a licence key
+fr Collez une clé de licence
+
+en Register
+fr Enregistrer
+
+en Choose a file…
+fr Choisir un fichier…
+
+en Choose a licence file
+fr Choisir un fichier de licence
+
+en cliche licence
+fr Licence de cliche
+
+en this desktop offers no way to record this
+fr ce bureau ne permet pas d'enregistrer ceci
+
+en the recording was refused
+fr l'enregistrement a été refusé
+
+en the system stopped the recording
+fr le système a arrêté l'enregistrement
+
+en this system has no H.264 encoder (a GPU's, or openh264)
+fr ce système n'a pas d'encodeur H.264 (celui d'un GPU, ou openh264)
+
+en the video encoder failed
+fr l'encodeur vidéo a échoué
+
+en the recording was stopped before it began
+fr l'enregistrement a été arrêté avant de commencer
+
+en the recording could not be saved
+fr l'enregistrement n'a pas pu être sauvegardé
+
+en %d KB
+fr %d Ko
+
+en %.1f MB
+fr %.1f Mo
+
+en %.2f GB
+fr %.2f Go
+
+en Press %s again, or click cliche's icon, to stop it.
+fr Appuyez de nouveau sur %s, ou cliquez sur l'icône de cliche, pour l'arrêter.
+
+en Click cliche's icon in the notification area to stop it.
+fr Cliquez sur l'icône de cliche dans la zone de notification pour l'arrêter.
+
+en Recording
+fr Enregistrement
+
+en cliche: recording, %s
+fr cliche : enregistrement, %s
+
+en GIF saved
+fr GIF sauvegardé
+
+en Recording saved
+fr Enregistrement sauvegardé
+
+en No recording
+fr Aucun enregistrement
+
+ctx record button
+en Record
+fr Démarrer
+
+en Start recording (%s)
+fr Démarrer l'enregistrement (%s)
+
+en A video (H.264)
+fr Une vidéo (H.264)
+
+en An animated GIF
+fr Un GIF animé
+
+en Cancel (Escape)
+fr Annuler (Échap)
+
+en Starting…
+fr Démarrage…
+
+en Saving…
+fr Sauvegarde…
+
+en Deleting…
+fr Suppression…
+
+en Stop and save (%s)
+fr Arrêter et sauvegarder (%s)
+
+en Stop and save
+fr Arrêter et sauvegarder
+
+en Cancel: the recording is deleted
+fr Annuler : l'enregistrement est supprimé
+
+en A click on the icon
+fr Un clic sur l'icône
+
+en What a click on cliche's icon in the notification area does.
+fr Ce que fait un clic sur l'icône de cliche dans la zone de notification.
+
+en Delay before a screen or a window
+fr Délai avant un écran ou une fenêtre
+
+en Seconds to wait before a screen or a window is taken (a menu opened meanwhile is in the picture). A region's picture is taken at once, frozen while you choose.
+fr Les secondes d'attente avant de prendre un écran ou une fenêtre (un menu ouvert entre-temps est dans l'image). L'image d'une zone est prise tout de suite, figée pendant que vous choisissez.
+
+en Languages of the text read
+fr Langues du texte lu
+
+en The languages of the text read in a region (cliche --ocr), as the engine names them, "+" between them (Tesseract: eng+fra). Empty: your languages.
+fr Les langues du texte lu dans une zone (cliche --ocr), telles que le moteur les nomme, séparées par « + » (Tesseract : eng+fra). Vide : vos langues.
+
+en Video frame rate
+fr Images par seconde (vidéo)
+
+en The most frames a second of a video. Fewer come when the screen changes less.
+fr Le nombre maximal d'images par seconde d'une vidéo. Il en vient moins quand l'écran change moins.
+
+en GIF frame rate
+fr Images par seconde (GIF)
+
+en The most frames a second of a GIF. Fewer make smaller files.
+fr Le nombre maximal d'images par seconde d'un GIF. Moins d'images font des fichiers plus petits.
+
+en Largest GIF width
+fr Largeur maximale d'un GIF
+
+en The largest width of a GIF: a wider recording is scaled down. 0: its own size.
+fr La largeur maximale d'un GIF : un enregistrement plus large est réduit. 0 : sa propre taille.
+
+en Show the pointer
+fr Afficher le pointeur
+
+en Show the pointer in recordings, where the desktop can draw it in.
+fr Afficher le pointeur dans les enregistrements, quand le bureau peut le dessiner.
+
+en Notify
+fr Notifier
+
+en Show a notification when a recording starts and when its file is written.
+fr Afficher une notification quand un enregistrement commence et quand son fichier est écrit.
+
+en Show the file in its folder
+fr Afficher le fichier dans son dossier
+
+en Show a recording's file in its folder, in the file manager, once it is written.
+fr Afficher le fichier d'un enregistrement dans son dossier, dans le gestionnaire de fichiers, une fois écrit.
+
+en Longest recording
+fr Durée maximale d'un enregistrement
+
+en Stop a recording after this many seconds. 0: only when you stop it.
+fr Arrêter un enregistrement après ce nombre de secondes. 0 : seulement quand vous l'arrêtez.
+
+en Captures kept
+fr Captures gardées
+
+en How many captures the history keeps: the oldest go first. The files stay where they are.
+fr Le nombre de captures que l'historique garde : les plus anciennes partent d'abord. Les fichiers restent où ils sont.
+
+en How the history shows the captures: thumbnails in a grid, or a list with their details.
+fr La façon dont l'historique affiche les captures : des miniatures en grille, ou une liste avec leurs détails.
+
+en Thumbnail size
+fr Taille des miniatures
+
+en The size of the thumbnails in the grid.
+fr La taille des miniatures dans la grille.
+
+en Take the rectangle on release
+fr Prendre le rectangle au relâchement
+
+en Take the rectangle as soon as the button is released. Off: adjust it with the arrow keys (Shift: resize), then press Enter or click inside it.
+fr Prendre le rectangle dès que le bouton est relâché. Désactivé : ajustez-le avec les flèches (Maj : redimensionner), puis appuyez sur Entrée ou cliquez dedans.
+
+en Frame the window under the pointer
+fr Encadrer la fenêtre sous le pointeur
+
+en Frame the window under the pointer: a click takes it. Off: a click does nothing, only a drag chooses.
+fr Encadrer la fenêtre sous le pointeur : un clic la prend. Désactivé : un clic ne fait rien, seul un glissement choisit.
+
+en Magnifier
+fr Loupe
+
+en Show a magnifier near the pointer, with the pointer's position and the selection's size.
+fr Afficher une loupe près du pointeur, avec la position du pointeur et la taille de la sélection.
+
+en Shade around the selection
+fr Ombre autour de la sélection
+
+en How dark the screen is outside what is chosen.
+fr L'assombrissement de l'écran hors de ce qui est choisi.
+
+en Default host
+fr Hébergeur par défaut
+
+en Where a workflow's Upload step sends pictures when it names no host, and where the history uploads again: the built-in host (anonymous, files kept 72 hours), or one of the ShareX uploaders (.sxcu files) in the uploaders' folder.
+fr Où l'étape Mettre en ligne d'un workflow envoie les images quand elle ne nomme aucun hébergeur, et où l'historique les remet en ligne : l'hébergeur intégré (anonyme, fichiers gardés 72 heures), ou l'un des hébergeurs ShareX (fichiers .sxcu) du dossier des hébergeurs.
+
+en Default folder
+fr Dossier par défaut
+
+en The folder of a workflow's Save step that names none, of the editor's Save, and of recordings. Empty: Pictures/Screenshots when it exists, else Pictures/cliche.
+fr Le dossier de l'étape Enregistrer le fichier d'un workflow qui n'en nomme aucun, de l'enregistrement de l'éditeur, et des enregistrements vidéo. Vide : Pictures/Screenshots s'il existe, sinon Pictures/cliche.
+
+en Default file name
+fr Nom de fichier par défaut
+
+en The name of a saved file when its Save step names none: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets " (2)".
+fr Le nom d'un fichier enregistré quand son étape Enregistrer le fichier n'en nomme aucun : %Y année, %m mois, %d jour, %H heure, %M minute, %S seconde, %f millisecondes, %s la source (region, screen, window), %% un %. Un nom déjà pris reçoit « (2) ».
+
+en Capture the whole screen under the pointer.
+fr Capturer tout l'écran sous le pointeur.
+
+en Capture a region: drag a rectangle, click a window framed, or take a screen, on the frozen screen.
+fr Capturer une zone : tracez un rectangle, cliquez une fenêtre encadrée, ou prenez un écran, sur l'écran figé.
+
+en Choose a region to record as a video, then press Record. The same keys start the recording, then stop it.
+fr Choisissez une zone à enregistrer en vidéo, puis appuyez sur Démarrer. Les mêmes touches démarrent l'enregistrement, puis l'arrêtent.
+
+en Choose a region to record as a GIF, then press Record. The same keys start the recording, then stop it.
+fr Choisissez une zone à enregistrer en GIF, puis appuyez sur Démarrer. Les mêmes touches démarrent l'enregistrement, puis l'arrêtent.
+
+en Capture the window in front.
+fr Capturer la fenêtre au premier plan.
+
+en Read the text in a region: it goes to the clipboard.
+fr Lire le texte d'une zone : il va dans le presse-papiers.
+
+en Read a QR code in a region: its text goes to the clipboard.
+fr Lire un code QR dans une zone : son texte va dans le presse-papiers.
+
+en General
+fr Général
+
+en Appearance
+fr Apparence
+
+en Shortcuts
+fr Raccourcis
+
+en Save
+fr Fichiers
+
+en Upload
+fr Mettre en ligne
+
+en Scrolling
+fr Défilement
+
+en Input
+fr Saisie
+
+en Delays and menus
+fr Délais et menus
+
+en Rendering
+fr Rendu
+
+en Capture the screen under the pointer
+fr Capturer l'écran sous le pointeur
+
+en Record
+fr Enregistrer
+
+en Choose the save folder…
+fr Choisir le dossier des captures…
+
+en Open the uploaders' folder
+fr Ouvrir le dossier des hébergeurs
+
+en Import a ShareX uploader…
+fr Importer un hébergeur ShareX…
+
+en The system's shortcut settings…
+fr Les réglages des raccourcis du système…
+
+en Back to the history (Escape)
+fr Retour à l'historique (Échap)
+
+en Capture the window
+fr Capturer la fenêtre
+
+en Open the history
+fr Ouvrir l'historique
+
+en Open the settings
+fr Ouvrir les réglages
+
+en Small
+fr Petite
+
+en Medium
+fr Moyenne
+
+en Large
+fr Grande
+
+en For example: %s
+fr Par exemple : %s
+
+en Now: %s
+fr Actuellement : %s
+
+en Choose a folder…
+fr Choisir un dossier…
+
+en The desktop keeps cliche's shortcuts while cliche runs. It may ask you to confirm them, and you may change the keys in its own settings.
+fr Le bureau garde les raccourcis de cliche tant que cliche tourne. Il peut vous demander de les confirmer, et vous pouvez changer les touches dans ses propres réglages.
+
+en Windows gives these keys to cliche in every program. Keys that another program holds cannot be used.
+fr Windows donne ces touches à cliche dans tous les programmes. Les touches qu'un autre programme tient ne peuvent pas servir.
+
+en This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = CTRL, Print, exec, cliche --region; sway: bindsym Ctrl+Print exec cliche --region):
+fr Ce bureau ne donne pas de raccourcis propres aux programmes. Associez des touches à ces commandes dans ses réglages (Hyprland : bind = CTRL, Print, exec, cliche --region ; sway : bindsym Ctrl+Print exec cliche --region) :
+
+en COMMANDS
+fr COMMANDES
+
+en Copied
+fr Copiée
+
+en Copy
+fr Copier
+
+en Add a host: put its ShareX uploader (.sxcu) in the uploaders' folder, or import it. The list above shows them.
+fr Ajouter un hébergeur : mettez son fichier ShareX (.sxcu) dans le dossier des hébergeurs, ou importez-le. La liste ci-dessus les montre.
+
+en Import a .sxcu file…
+fr Importer un fichier .sxcu…
+
+en Record a region as a video (again: start, then stop)
+fr Enregistrer une zone en vidéo (de nouveau : démarrer, puis arrêter)
+
+en Record a region as a GIF (again: start, then stop)
+fr Enregistrer une zone en GIF (de nouveau : démarrer, puis arrêter)
+
+en Read the text in a region
+fr Lire le texte d'une zone
+
+en Read a QR code in a region
+fr Lire un code QR dans une zone
+
+en the file is not JSON
+fr le fichier n'est pas du JSON
+
+en the file is not a JSON object
+fr le fichier n'est pas un objet JSON
+
+en the file is for a ShareX older than 12.4: export it again from a recent ShareX
+fr le fichier est pour un ShareX antérieur à 12.4 : exportez-le de nouveau depuis un ShareX récent
+
+en the file has no RequestURL
+fr le fichier n'a pas de RequestURL
+
+en the RequestMethod %q is not one of ShareX's
+fr la RequestMethod %q n'est pas une de celles de ShareX
+
+en the RequestMethod is not one of ShareX's
+fr la RequestMethod n'est pas une de celles de ShareX
+
+en the Body %q is not one of ShareX's
+fr le Body %q n'est pas un de ceux de ShareX
+
+en the Body is not one of ShareX's
+fr le Body n'est pas un de ceux de ShareX
+
+en the uploader has no FileFormName: the form field of the file
+fr l'hébergeur n'a pas de FileFormName : le champ de formulaire du fichier
+
+en the uploader's body is %s: cliche sends a file as MultipartFormData or Binary
+fr le corps de l'hébergeur est %s : cliche envoie un fichier en MultipartFormData ou en Binary
+
+en %s answered: %s
+fr %s a répondu : %s
+
+en %s answered with the status %d
+fr %s a répondu avec le statut %d
+
+en %s answered with the status %d: %s
+fr %s a répondu avec le statut %d : %s
+
+en %s gave no URL in its answer
+fr %s n'a donné aucune URL dans sa réponse
+
+en %s: cannot be read
+fr %s : ne peut pas être lu
+
+en the uploaders' folder cannot be made
+fr le dossier des hébergeurs ne peut pas être créé
+
+en the file cannot be written in the uploaders' folder
+fr le fichier ne peut pas être écrit dans le dossier des hébergeurs
+
+en the uploaders' folder has too many files of that name
+fr le dossier des hébergeurs a trop de fichiers de ce nom
+
+en {%s} reads the host's answer: it is only for the URLs read from it
+fr {%s} lit la réponse de l'hébergeur : il ne sert qu'aux URL lues dans celle-ci
+
+en {random} needs values: {random:a|b}
+fr {random} a besoin de valeurs : {random:a|b}
+
+en an empty {} in the uploader
+fr un {} vide dans l'hébergeur
+
+en the uploader uses {%s}, which cliche does not know
+fr l'hébergeur utilise {%s}, que cliche ne connaît pas
+
+en the host's answer is not JSON
+fr la réponse de l'hébergeur n'est pas du JSON
+
+en the JSON path %q has a [ with no ]
+fr le chemin JSON %q a un [ sans ]
+
+en the JSON path %q has an index cliche does not read: [%s]
+fr le chemin JSON %q a un index que cliche ne lit pas : [%s]
+
+en the JSON path %q is a list or an object, not a text
+fr le chemin JSON %q est une liste ou un objet, pas un texte
+
+en the host's answer is not XML
+fr la réponse de l'hébergeur n'est pas du XML
+
+en the XPath %q has an empty step
+fr le XPath %q a une étape vide
+
+en the XPath %q has a [ with no ]
+fr le XPath %q a un [ sans ]
+
+en the XPath %q has a condition cliche does not read: %s
+fr le XPath %q a une condition que cliche ne lit pas : %s
+
+en cliche cannot read the regular expression %q (no lookahead or lookbehind here)
+fr cliche ne peut pas lire l'expression régulière %q (pas de lookahead ni de lookbehind ici)
+
+en the regular expression %q has no group named %q
+fr l'expression régulière %q n'a pas de groupe nommé %q
+
+en region
+fr zone
+
+en screen
+fr écran
+
+en window
+fr fenêtre
+
+en edit
+fr édition
+
+en qr
+fr qr
+
+en ocr
+fr ocr
+
+en Screenshot
+fr Capture d'écran
+
+en Edit then share
+fr Modifier puis partager
+
+en the text cannot go to the clipboard
+fr le texte ne peut pas aller dans le presse-papiers
+
+en this step cannot run here
+fr cette étape ne peut pas s'exécuter ici
+
+en the picture cannot go to the clipboard
+fr l'image ne peut pas aller dans le presse-papiers
+
+en The newest capture of the history cannot be read.
+fr La capture la plus récente de l'historique ne peut pas être lue.
+
+en no picture came in
+fr aucune image n'est arrivée
+
+en the editor cannot open
+fr l'éditeur ne peut pas s'ouvrir
+
+en cancelled in the editor
+fr annulé dans l'éditeur
+
+en Nothing ran
+fr Rien ne s'est exécuté
+
+en WORKFLOWS
+fr WORKFLOWS
+
+en New workflow
+fr Nouveau workflow
+
+en Rename (or double-click its name)
+fr Renommer (ou double-cliquer sur son nom)
+
+en Duplicate
+fr Dupliquer
+
+en Delete…
+fr Supprimer…
+
+en No workflow runs for: %s. Choose one in a workflow's triggers.
+fr Aucun workflow ne s'exécute pour : %s. Choisissez-en un dans les déclencheurs d'un workflow.
+
+en Double-click to rename
+fr Double-cliquer pour renommer
+
+en %s (copy)
+fr %s (copie)
+
+en Last run: %s
+fr Dernière exécution : %s
+
+en The default: %s
+fr Par défaut : %s
+
+en Reset
+fr Réinitialiser
+
+en Where the workflow starts: the picture of the capture.
+fr Le début du workflow : l'image de la capture.
+
+en Opens the picture in the editor. Done sends its picture on and fires "done"; Cancel stops this branch and fires "cancelled".
+fr Ouvre l'image dans l'éditeur. Terminé transmet son image et déclenche « terminé » ; Annuler arrête cette branche et déclenche « annulé ».
+
+en Sends the picture to "yes" or to "no".
+fr Envoie l'image vers « oui » ou vers « non ».
+
+en One notification at the end of the run: its title, and what comes in or a summary. Linked to "when", it waits for that action.
+fr Une notification à la fin de l'exécution : son titre, et ce qui arrive ou un résumé. Reliée à « quand », elle attend cette action.
+
+en Keeps the file, the address or the text that comes in, in the history.
+fr Garde dans l'historique le fichier, l'adresse ou le texte qui arrive.
+
+en %s. Off in a preview. Linked to "when", it waits for that action (an editor's Done or Cancel).
+fr %s. Désactivée dans un aperçu. Reliée à « quand », elle attend cette action (Terminé ou Annuler d'un éditeur).
+
+en %s: makes a new picture; the others that read this one keep it as it is.
+fr %s : crée une nouvelle image ; les autres étapes qui lisent celle-ci la gardent telle quelle.
+
+en The captures that run this workflow. Each capture runs one workflow: one chosen here leaves the workflow that had it.
+fr Les captures qui exécutent ce workflow. Chaque capture exécute un seul workflow : une capture choisie ici quitte le workflow qui l'avait.
+
+en %s; runs "%s" now
+fr %s ; exécute « %s » actuellement
+
+en PNG (fast)
+fr PNG (rapide)
+
+en WebP (lossless)
+fr WebP (sans perte)
+
+en action
+fr action
+
+en picture
+fr image
+
+en text
+fr texte
+
+en address
+fr adresse
+
+en file
+fr fichier
+
+en anything
+fr tout
+
+en Source
+fr Source
+
+en Resize
+fr Redimensionner
+
+en Geometry
+fr Géométrie
+
+en By
+fr Par
+
+en Percent
+fr Pourcentage
+
+en Largest size
+fr Taille maximale
+
+en Scale
+fr Échelle
+
+en Largest width
+fr Largeur maximale
+
+en Largest height
+fr Hauteur maximale
+
+en Filter
+fr Filtre
+
+en Sharp
+fr Net
+
+en Smooth
+fr Lisse
+
+en Fast
+fr Rapide
+
+en Left
+fr Gauche
+
+en Top
+fr Haut
+
+en Right
+fr Droite
+
+en Bottom
+fr Bas
+
+en Rotate
+fr Pivoter
+
+en Turn
+fr Rotation
+
+en 90° right
+fr 90° à droite
+
+en 180°
+fr 180°
+
+en 90° left
+fr 90° à gauche
+
+en Flip
+fr Retourner
+
+en Direction
+fr Sens
+
+en Left to right
+fr De gauche à droite
+
+en Top to bottom
+fr De haut en bas
+
+en Pad
+fr Marges
+
+en Margin
+fr Marge
+
+en Colour
+fr Couleur
+
+en Border
+fr Bordure
+
+en Look
+fr Apparence
+
+en Width
+fr Largeur
+
+en Inside the picture
+fr Dans l'image
+
+en Rounded corners
+fr Coins arrondis
+
+en Radius
+fr Rayon
+
+en Drop shadow
+fr Ombre portée
+
+en Blur
+fr Flou
+
+en Offset right
+fr Décalage à droite
+
+en Offset down
+fr Décalage vers le bas
+
+en Background
+fr Arrière-plan
+
+en Gradient
+fr Dégradé
+
+en Second colour
+fr Seconde couleur
+
+en Angle
+fr Angle
+
+en Picture's corners
+fr Coins de l'image
+
+en Shadow under the picture
+fr Ombre sous l'image
+
+en Watermark
+fr Filigrane
+
+en Position
+fr Position
+
+en Top left
+fr En haut à gauche
+
+en Top right
+fr En haut à droite
+
+en Bottom left
+fr En bas à gauche
+
+en Bottom right
+fr En bas à droite
+
+en Centre
+fr Centre
+
+en Opacity
+fr Opacité
+
+en Grayscale
+fr Niveaux de gris
+
+en Invert
+fr Inverser
+
+en Brightness and contrast
+fr Luminosité et contraste
+
+en Brightness
+fr Luminosité
+
+en Contrast
+fr Contraste
+
+en Saturation
+fr Saturation
+
+en Amount
+fr Intensité
+
+en Hue
+fr Teinte
+
+en Sepia
+fr Sépia
+
+en Threshold
+fr Seuil
+
+en Level
+fr Niveau
+
+en Filters
+fr Filtres
+
+en Sharpen
+fr Netteté
+
+en Cell
+fr Cellule
+
+en Annotate
+fr Annoter
+
+en Interactive
+fr Interactif
+
+en done
+fr terminé
+
+en cancelled
+fr annulé
+
+en Condition
+fr Condition
+
+en Flow control
+fr Contrôle du flux
+
+en yes
+fr oui
+
+en no
+fr non
+
+en When
+fr Quand
+
+en Height
+fr Hauteur
+
+en Width / height
+fr Largeur / hauteur
+
+en Is
+fr Est
+
+en More than
+fr Plus que
+
+en Less than
+fr Moins que
+
+en Equal to
+fr Égal à
+
+en Value
+fr Valeur
+
+en Copy image
+fr Copier l'image
+
+en Outputs
+fr Sorties
+
+en when
+fr quand
+
+en Save file
+fr Enregistrer le fichier
+
+en Folder
+fr Dossier
+
+en The default folder (Settings, Save)
+fr Le dossier par défaut (Réglages, Fichiers)
+
+en File name
+fr Nom du fichier
+
+en The default name (Settings, Save)
+fr Le nom par défaut (Réglages, Fichiers)
+
+en Format
+fr Format
+
+en PNG, small
+fr PNG, léger
+
+en PNG, fast
+fr PNG, rapide
+
+en JPEG
+fr JPEG
+
+en WebP
+fr WebP
+
+en WebP, lossless
+fr WebP, sans perte
+
+en Quality
+fr Qualité
+
+en Host
+fr Hébergeur
+
+en Copy text
+fr Copier le texte
+
+en Read QR code
+fr Lire le code QR
+
+en Read text
+fr Lire le texte
+
+en Languages
+fr Langues
+
+en The default languages (Settings, Capture)
+fr Les langues par défaut (Réglages, Capture)
+
+en what
+fr quoi
+
+en Title
+fr Titre
+
+en Said for you: "Screenshot saved"
+fr Écrit pour vous : « Capture d'écran enregistrée »
+
+en Show
+fr Afficher
+
+en What comes in
+fr Ce qui arrive
+
+en A summary of the run
+fr Un résumé de l'exécution
+
+en Show in folder
+fr Afficher dans le dossier
+
+en Add to history
+fr Ajouter à l'historique
+
+en at most %d × %d px
+fr au plus %d × %d px
+
+en at most %d px wide
+fr au plus %d px de large
+
+en at most %d px high
+fr au plus %d px de haut
+
+en no change
+fr aucun changement
+
+en %d px each side
+fr %d px de chaque côté
+
+en , inside
+fr , à l'intérieur
+
+en blur %d px, %+d %+d
+fr flou %d px, %+d %+d
+
+en %d px, %s to %s
+fr %d px, de %s à %s
+
+en no text
+fr aucun texte
+
+en %+d %%, contrast %+d %%
+fr %+d %%, contraste %+d %%
+
+en level %d
+fr niveau %d
+
+en cells of %d px
+fr cellules de %d px
+
+en the source is a %s
+fr source : %s
+
+en width
+fr largeur
+
+en height
+fr hauteur
+
+en width / height
+fr largeur / hauteur
+
+en %s to the default folder
+fr %s dans le dossier par défaut
+
+en %s to %s
+fr %s dans %s
+
+en to %s
+fr vers %s
+
+en to the default host
+fr vers l'hébergeur par défaut
+
+en a summary
+fr un résumé
+
+en what comes in
+fr ce qui arrive
+
+en transparent
+fr transparent
+
+en the file cannot be shown in its folder
+fr le fichier ne peut pas être affiché dans son dossier
+
+en the picture could not be made
+fr l'image n'a pas pu être créée
+
+en this system has no WebP encoder (install libwebp)
+fr ce système n'a pas d'encodeur WebP (installez libwebp)
+
+en a step failed
+fr une étape a échoué
+
+en QR code copied
+fr Code QR copié
+
+en QR code read
+fr Code QR lu
+
+en Text copied
+fr Texte copié
+
+en Text read
+fr Texte lu
+
+en Screenshot saved and uploaded
+fr Capture d'écran enregistrée et mise en ligne
+
+en Screenshot uploaded
+fr Capture d'écran mise en ligne
+
+en Screenshot saved, not uploaded
+fr Capture d'écran enregistrée, non mise en ligne
+
+en Screenshot saved and copied
+fr Capture d'écran enregistrée et copiée
+
+en Screenshot saved
+fr Capture d'écran enregistrée
+
+en Screenshot copied to the clipboard
+fr Capture d'écran copiée dans le presse-papiers
+
+en A picture
+fr Une image
+
+en %s cannot be read: the default workflows are in its place.
+fr %s ne peut pas être lu : les workflows par défaut sont à sa place.
+
+en %s cannot be read (%s): it is kept as %s, and the default workflows are in its place.
+fr %s ne peut pas être lu (%s) : il est gardé sous le nom %s, et les workflows par défaut sont à sa place.
+
+en Back to the history
+fr Retour à l'historique
+
+en Add a step…
+fr Ajouter une étape…
+
+en Show the whole workflow
+fr Afficher tout le workflow
+
+en Run on the last capture
+fr Exécuter sur la dernière capture
+
+en The preview ran on the newest capture of the history: nothing was copied, saved or sent.
+fr L'aperçu s'est exécuté sur la capture la plus récente de l'historique : rien n'a été copié, enregistré ni envoyé.
+
+en The history holds no picture to run the workflow on.
+fr L'historique ne contient aucune image sur laquelle exécuter le workflow.
+
+en Running on the newest capture…
+fr Exécution sur la capture la plus récente…
+
+en Add a step (Shift+A, a right click on the graph)
+fr Ajouter une étape (Maj+A, un clic droit sur le graphe)
+
+en Undo (Ctrl+Z)
+fr Annuler (Ctrl+Z)
+
+en Redo (Ctrl+Shift+Z)
+fr Rétablir (Ctrl+Maj+Z)
+
+en Show the whole workflow (F)
+fr Afficher tout le workflow (F)
+
+en No workflow
+fr Aucun workflow
+
+en A workflow says what happens after a capture: the steps the picture goes through, and where it goes.
+fr Un workflow dit ce qui se passe après une capture : les étapes que l'image traverse, et où elle va.
+
+en The default workflows
+fr Les workflows par défaut
+
+en Right click the graph, or drag from the Capture's picture, to add a step.
+fr Faites un clic droit sur le graphe, ou glissez depuis l'image de la Capture, pour ajouter une étape.
+
+en no capture runs it
+fr aucune capture ne l'exécute
+
+en Reset its settings
+fr Réinitialiser ses réglages
+
+en Delete the workflow %q?
+fr Supprimer le workflow %q ?
+
+en Delete the workflow?
+fr Supprimer le workflow ?
+
+en Its steps go with it. Undo cannot bring it back.
+fr Ses étapes partent avec lui. Annuler ne peut pas le rétablir.
+
+en Its steps go with it, and the captures it runs will run nothing until another workflow takes them.
+fr Ses étapes partent avec lui, et les captures qu'il exécute n'exécuteront rien tant qu'un autre workflow ne les prend pas.

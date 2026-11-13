@@ -12,6 +12,7 @@ import "gt:font"
 import "gt:platform"
 import pic "gt:image"
 import png "gt:png"
+import i18n "gt:i18n"
 
 // The largest side of a node's thumbnail in the Workflows mode, in pixels.
 THUMBNAIL_SIDE :: 192
@@ -92,7 +93,7 @@ node_work :: proc(j: ^Job_Node, fonts: ^Worker_Fonts) -> (out: Result_Node) {
 	case .Copy_Image:
 		// (only the file: the picture's references are the interface's, which sets the clipboard and passes it on)
 		out.clipboard_png = png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
-		if len(out.clipboard_png) == 0 { return node_failed(out, "the picture cannot go to the clipboard") }
+		if len(out.clipboard_png) == 0 { return node_failed(out, i18n.tr("the picture cannot go to the clipboard")) }
 	case .Save_File:
 		path, size, bytes, err := node_save(n, shot, j.defaults)
 		if err != "" { return node_failed(out, err) }
@@ -103,20 +104,20 @@ node_work :: proc(j: ^Job_Node, fonts: ^Worker_Fonts) -> (out: Result_Node) {
 		out.result.outputs[0] = run_value(PORT_URL, {text = url, origin = .Upload})
 	case .Read_Qr:
 		text, ok := qr_read(shot)
-		if !ok { return node_failed(out, FLOW_ERROR_TEXT[.No_Qr]) }
+		if !ok { return node_failed(out, i18n.tr(FLOW_ERROR_TEXT[.No_Qr])) }
 		out.result.outputs[0] = run_value(PORT_TEXT, {text = text, origin = .Read_Qr})
 	case .Read_Text:
 		langs := flowgraph.param_text(&CATALOG, n, "languages")
 		if langs == "" { langs = j.defaults.languages }
 		text, err := ocr_read(shot, strings.trim_space(langs))
-		if err != .None { return node_failed(out, FLOW_ERROR_TEXT[err]) }
+		if err != .None { return node_failed(out, i18n.tr(FLOW_ERROR_TEXT[err])) }
 		out.result.outputs[0] = run_value(PORT_TEXT, {text = text, origin = .Read_Text})
 	case .Show_In_Folder:
-		if in_text == "" || !platform.reveal_in_folder(in_text) { return node_failed(out, "the file cannot be shown in its folder") }
+		if in_text == "" || !platform.reveal_in_folder(in_text) { return node_failed(out, i18n.tr("the file cannot be shown in its folder")) }
 	case:
-		if shot.rgba == nil { return node_failed(out, "no picture came in") }
+		if shot.rgba == nil { return node_failed(out, i18n.tr("no picture came in")) }
 		made, ok := node_transform(n, shot, Node_Kind(n.kind) == .Watermark ? worker_fonts(fonts) : nil)
-		if !ok { return node_failed(out, "the picture could not be made") }
+		if !ok { return node_failed(out, i18n.tr("the picture could not be made")) }
 		made.source, made.scale = shot.source, shot.scale
 		out.result.outputs[0] = run_value(PORT_IMAGE, {shot = made, origin = Node_Kind(n.kind)})
 		if j.thumbnail { out.thumbnail, out.thumbnail_size = thumbnail_of(made) }
@@ -247,7 +248,7 @@ background_make :: proc(n: ^flowgraph.Node, src: pic.Image) -> pic.Image {
 // PNG small or fast. path: owned; err "" when saved.
 @(private = "file")
 node_save :: proc(n: ^flowgraph.Node, shot: Shot, d: Node_Defaults) -> (path: string, size: [2]int, bytes: i64, err: string) {
-	if shot.rgba == nil { return "", {}, 0, "no picture came in" }
+	if shot.rgba == nil { return "", {}, 0, i18n.tr("no picture came in") }
 	format := Save_Format(clamp(flowgraph.param_int(&CATALOG, n, "format"), 0, len(Save_Format) - 1))
 	quality := clamp(flowgraph.param_int(&CATALOG, n, "quality"), 1, 100)
 	img := pic.Image{pixels = shot.rgba, width = shot.size.x, height = shot.size.y}
@@ -257,11 +258,11 @@ node_save :: proc(n: ^flowgraph.Node, shot: Shot, d: Node_Defaults) -> (path: st
 	case .Png_Fast:      file = png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
 	case .Jpeg:          file = pic.jpeg_encode(img, quality)
 	case .Webp, .Webp_Lossless:
-		if !pic.webp_available() { return "", {}, 0, "this system has no WebP encoder (install libwebp)" }
+		if !pic.webp_available() { return "", {}, 0, i18n.tr("this system has no WebP encoder (install libwebp)") }
 		file = pic.webp_encode(img, quality, format == .Webp_Lossless)
 	}
 	defer delete(file)
-	if file == nil { return "", {}, 0, FLOW_ERROR_TEXT[.Empty] }
+	if file == nil { return "", {}, 0, i18n.tr(FLOW_ERROR_TEXT[.Empty]) }
 	pattern := flowgraph.param_text(&CATALOG, n, "name")
 	if pattern == "" { pattern = d.pattern }
 	if pattern == "" { pattern = DEFAULT_NAME_PATTERN }
@@ -269,22 +270,22 @@ node_save :: proc(n: ^flowgraph.Node, shot: Shot, d: Node_Defaults) -> (path: st
 	if folder == "" { folder = d.folder }
 	name := name_with_extension(name_expand(pattern, stamp_now(), shot.source, context.temp_allocator), SAVE_FORMAT_EXTENSION[format])
 	p, e := save_file(file, folder, name)
-	if e != .None { return "", {}, 0, FLOW_ERROR_TEXT[e] }
+	if e != .None { return "", {}, 0, i18n.tr(FLOW_ERROR_TEXT[e]) }
 	return p, shot.size, i64(len(file)), ""
 }
 
 // The picture sent to the node's host (empty: the default one). url: owned.
 @(private = "file")
 node_upload :: proc(n: ^flowgraph.Node, shot: Shot, d: Node_Defaults) -> (url: string, problem: string) {
-	if shot.rgba == nil { return "", "no picture came in" }
+	if shot.rgba == nil { return "", i18n.tr("no picture came in") }
 	file := png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
 	defer delete(file)
-	if file == nil { return "", FLOW_ERROR_TEXT[.Empty] }
+	if file == nil { return "", i18n.tr(FLOW_ERROR_TEXT[.Empty]) }
 	list, _ := uploaders_load(context.temp_allocator)
 	name := flowgraph.param_text(&CATALOG, n, "uploader")
 	if name == "" { name = d.uploader }
 	u, _ := uploader_find(list, name)
-	if u == nil { return "", "no uploader is set up" }
+	if u == nil { return "", i18n.tr("no uploader is set up") }
 	file_name := name_expand(d.pattern != "" ? d.pattern : DEFAULT_NAME_PATTERN, stamp_now(), shot.source, context.temp_allocator)
 	url, problem = upload_shot(u^, file, file_name)
 	if problem != "" {

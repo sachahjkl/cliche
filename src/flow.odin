@@ -12,6 +12,7 @@ package cliche
 // capture may start at once. A trigger while a capture goes on is refused: one capture at a time.
 
 import capture "gt:capture"
+import i18n "gt:i18n"
 
 // Where the picture comes from.
 Source :: enum u8 {
@@ -40,17 +41,17 @@ Flow_Error :: enum u8 {
 
 FLOW_ERROR_TEXT := [Flow_Error]string{
 	.None        = "",
-	.Unsupported = "this desktop offers no way to capture this",
-	.Denied      = "the capture was refused",
-	.Gone        = "the screen or the window is gone",
-	.Failed      = "the system could not capture the screen",
-	.Empty       = "there is nothing to capture",
-	.Not_Saved   = "the picture could not be saved",
-	.No_Qr       = "no QR code could be read in the picture",
-	.Not_Uploaded = "the picture could not be uploaded",
-	.No_Text     = "no text could be read in the picture",
-	.No_Ocr      = "this system reads no text: install Tesseract and its languages (Linux), or a Windows language with text recognition",
-	.No_Workflow = "no workflow runs for this capture: choose one in the Workflows of the main window",
+	.Unsupported = i18n.later("this desktop offers no way to capture this"),
+	.Denied      = i18n.later("the capture was refused"),
+	.Gone        = i18n.later("the screen or the window is gone"),
+	.Failed      = i18n.later("the system could not capture the screen"),
+	.Empty       = i18n.later("there is nothing to capture"),
+	.Not_Saved   = i18n.later("the picture could not be saved"),
+	.No_Qr       = i18n.later("no QR code could be read in the picture"),
+	.Not_Uploaded = i18n.later("the picture could not be uploaded"),
+	.No_Text     = i18n.later("no text could be read in the picture"),
+	.No_Ocr      = i18n.later("this system reads no text: install Tesseract and its languages (Linux), or a Windows language with text recognition"),
+	.No_Workflow = i18n.later("no workflow runs for this capture: choose one in the Workflows of the main window"),
 }
 
 Flow_Idle      :: struct {}

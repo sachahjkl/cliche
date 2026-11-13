@@ -9,6 +9,7 @@ package cliche
 // it is given the service and SHORTCUT_PAGE_PREFS.
 
 import "core:strings"
+import i18n "gt:i18n"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
 import shortcuts "gt:shortcuts"
@@ -36,13 +37,13 @@ SHORTCUT_PAGE_PREFS := [Shortcut_Action]prefs_page.Shortcut_Pref{
 
 // What each one does, as the system's list of shortcuts shows it.
 SHORTCUT_TEXT := [Shortcut_Action]string{
-	.Screen     = "Capture the screen under the pointer",
-	.Region     = "Capture a region",
-	.Record     = "Record a region as a video (again: start, then stop)",
-	.Record_Gif = "Record a region as a GIF (again: start, then stop)",
-	.Window     = "Capture the window in front",
-	.Ocr        = "Read the text in a region",
-	.Qr         = "Read a QR code in a region",
+	.Screen     = i18n.later("Capture the screen under the pointer"),
+	.Region     = i18n.later("Capture a region"),
+	.Record     = i18n.later("Record a region as a video (again: start, then stop)"),
+	.Record_Gif = i18n.later("Record a region as a GIF (again: start, then stop)"),
+	.Window     = i18n.later("Capture the window in front"),
+	.Ocr        = i18n.later("Read the text in a region"),
+	.Qr         = i18n.later("Read a QR code in a region"),
 }
 
 // The command that does the same, for a compositor's own bindings.
@@ -67,7 +68,7 @@ app_shortcuts_bind :: proc(app: ^App) {
 	list: [len(Shortcut_Action)]shortcuts.Shortcut
 	for a in Shortcut_Action {
 		hk, _ := platform.hotkey_parse(app.settings.shortcuts[a])   // ("": none asked)
-		list[a] = {id = SHORTCUT_IDS[a], description = SHORTCUT_TEXT[a], trigger = hk}
+		list[a] = {id = SHORTCUT_IDS[a], description = i18n.tr(SHORTCUT_TEXT[a]), trigger = hk}
 	}
 	for &k, a in app.shortcuts_bound {
 		delete(k)

@@ -18,6 +18,7 @@ package cliche
 
 import "core:strings"
 import flowgraph "gt:flowgraph"
+import i18n "gt:i18n"
 
 // What a value holds (flowgraph.Value's data): a picture, or a text (an address, a file's path).
 Run_Data :: struct {
@@ -103,7 +104,7 @@ run_decide :: proc(run: ^Run, task: flowgraph.Task) -> bool {
 	#partial switch Node_Kind(task.kind) {
 	case .Capture:
 		if run.picture.payload == nil {
-			r = {outcome = .Failed, message = "no picture came in"}
+			r = {outcome = .Failed, message = i18n.tr("no picture came in")}
 		} else {
 			r.outputs[0] = run.picture   // (taken: let go as soon as the nodes that read it are decided)
 			run.picture = {}
@@ -166,7 +167,7 @@ run_summary :: proc(run: ^Run) -> (s: Run_Summary) {
 		kind := Node_Kind(n.kind)
 		if rn.state == .Failed {
 			s.failed = true
-			if problem == "" { problem = rn.message != "" ? rn.message : "a step failed" }
+			if problem == "" { problem = rn.message != "" ? rn.message : i18n.tr("a step failed") }
 			#partial switch kind {
 			case .Upload:    upload_failed = true
 			case .Save_File: saved_failed = true
@@ -190,19 +191,19 @@ run_summary :: proc(run: ^Run) -> (s: Run_Summary) {
 		}
 	}
 	switch {
-	case read_qr && copied_text:   s.title = "QR code copied"
-	case read_qr:                  s.title = "QR code read"
-	case read_text && copied_text: s.title = "Text copied"
-	case read_text:                s.title = "Text read"
-	case url != "":                s.title = path != "" ? "Screenshot saved and uploaded" : "Screenshot uploaded"
-	case upload_failed && path != "": s.title = "Screenshot saved, not uploaded"
-	case path != "" && copied_image: s.title = "Screenshot saved and copied"
-	case path != "":               s.title = "Screenshot saved"
-	case copied_image:             s.title = "Screenshot copied to the clipboard"
-	case copied_text:              s.title = "Text copied"
+	case read_qr && copied_text:   s.title = i18n.tr("QR code copied")
+	case read_qr:                  s.title = i18n.tr("QR code read")
+	case read_text && copied_text: s.title = i18n.tr("Text copied")
+	case read_text:                s.title = i18n.tr("Text read")
+	case url != "":                s.title = path != "" ? i18n.tr("Screenshot saved and uploaded") : i18n.tr("Screenshot uploaded")
+	case upload_failed && path != "": s.title = i18n.tr("Screenshot saved, not uploaded")
+	case path != "" && copied_image: s.title = i18n.tr("Screenshot saved and copied")
+	case path != "":               s.title = i18n.tr("Screenshot saved")
+	case copied_image:             s.title = i18n.tr("Screenshot copied to the clipboard")
+	case copied_text:              s.title = i18n.tr("Text copied")
 	case s.failed && (saved_failed || s.entries == 0):
-		s.title = run_has(run, .Read_Qr) ? "No QR code" : run_has(run, .Read_Text) ? "No text" : "No screenshot"
-	case:                          s.title = "Done"
+		s.title = run_has(run, .Read_Qr) ? i18n.tr("No QR code") : run_has(run, .Read_Text) ? i18n.tr("No text") : i18n.tr("No screenshot")
+	case:                          s.title = i18n.tr("Done")
 	}
 	switch {
 	case s.failed && s.entries == 0: s.body = problem
@@ -244,7 +245,7 @@ run_notify_body :: proc(run: ^Run, i: int) -> string {
 		if !o.made { continue }   // (an action, or an output the node did not give)
 		line: string
 		if o.value.kind == PORT_IMAGE {
-			line = "A picture"
+			line = i18n.tr("A picture")
 		} else if d := run_data(o.value); d != nil {
 			line = notice_text(d.text)
 		}

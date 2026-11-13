@@ -30,6 +30,7 @@ import prefs_page "gt:prefs_page"
 import "gt:render"
 import timefmt "gt:timefmt"
 import "gt:ui"
+import i18n "gt:i18n"
 
 HISTORY_WINDOW_SIZE :: [2]int{1000, 680}
 
@@ -59,11 +60,11 @@ HISTORY_THUMBNAIL_NAMES := [3]string{"small", "medium", "large"}
 
 // The list's columns, in the order of History_Column.
 HISTORY_COLUMNS := [History_Column]ui.Table_Column{
-	.Name = {title = "Name", width = 0},
-	.Kind = {title = "Kind", width = 7},
-	.Size = {title = "Size", width = 13, number = true},
-	.Date = {title = "Date", width = 10, number = true},
-	.Url  = {title = "URL", width = 18, weak = true},
+	.Name = {title = i18n.later("Name"), width = 0},
+	.Kind = {title = i18n.later("Kind"), width = 7},
+	.Size = {title = i18n.later("Size"), width = 13, number = true},
+	.Date = {title = i18n.later("Date"), width = 10, number = true},
+	.Url  = {title = i18n.later("URL"), width = 18, weak = true},
 }
 
 History_Thumb_State :: enum u8 { Asked, Ready, None }
@@ -145,29 +146,29 @@ History_Action :: enum u8 {
 }
 
 HISTORY_ACTIONS := [History_Action]ui.Command{
-	.Open           = {label = "Open", group = "Capture", keys = {{.Return, {}}, {}}, icon = lucide.EXTERNAL_LINK, tags = {"view", "launch"}},
-	.Reveal         = {label = "Open the folder", group = "Capture", keys = {{.Return, {.Ctrl}}, {}}, icon = lucide.FOLDER_OPEN, tags = {"reveal", "show", "file manager", "explorer"}},
-	.Copy_Picture   = {label = "Copy the picture", group = "Capture", keys = {{.C, {.Ctrl}}, {}}, icon = lucide.COPY, tags = {"clipboard", "image"}},
-	.Copy_Path      = {label = "Copy the path", group = "Capture", keys = {{.C, {.Ctrl, .Shift}}, {}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "file", "location"}},
-	.Copy_Url       = {label = "Copy the URL", group = "Capture", keys = {{.L, {.Ctrl}}, {}}, icon = lucide.LINK, tags = {"clipboard", "address", "link", "upload"}},
-	.Copy_Text      = {label = "Copy the text", group = "Capture", keys = {{.T, {.Ctrl}}, {}}, icon = lucide.FILE_TEXT, tags = {"clipboard", "ocr", "qr"}},
-	.Edit           = {label = "Edit", group = "Capture", keys = {{.E, {.Ctrl}}, {}}, icon = lucide.PENCIL, tags = {"editor", "annotate", "draw"}},
-	.Upload         = {label = "Upload again", group = "Capture", keys = {{.U, {.Ctrl}}, {}}, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link"}},
-	.Delete_File    = {label = "Delete the file…", group = "Capture", keys = {{.Delete, {.Shift}}, {}}, icon = lucide.TRASH_2, tags = {"erase", "remove", "disk"}},
-	.Remove         = {label = "Remove from the history", group = "Capture", keys = {{.Delete, {}}, {}}, icon = lucide.X, tags = {"forget", "clear"}},
-	.Preview        = {label = "Preview", group = "View", keys = {{.Space, {}}, {}}, icon = lucide.EYE, tags = {"zoom", "look"}},
-	.Select_All     = {label = "Select all", group = "View", keys = {{.A, {.Ctrl}}, {}}, icon = lucide.LIST_CHECKS, tags = {"every"}},
-	.Search         = {label = "Search", group = "View", keys = {{.F, {.Ctrl}}, {}}, icon = lucide.SEARCH, tags = {"find", "filter"}},
-	.Grid           = {label = "Show a grid", group = "View", keys = {{.N1, {.Ctrl}}, {}}, icon = lucide.LAYOUT_GRID, tags = {"thumbnails", "pictures"}},
-	.List           = {label = "Show a list", group = "View", keys = {{.N2, {.Ctrl}}, {}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
-	.Open_Folder    = {label = "Open the save folder", group = "View", icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
-	.Capture_Region = {label = "Capture a region", group = "Window", icon = lucide.IMAGE, tags = {"screenshot", "new"}},
-	.Workflows      = {label = "Workflows", group = "Window", keys = {{.W, {.Ctrl, .Shift}}, {}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}},
-	.Settings       = {label = "Settings", group = "Window", keys = {{.Comma, {.Ctrl}}, {}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}},
-	.Palette        = {label = "Command palette", group = "Window", keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
-	.Keys           = {label = "Keyboard shortcuts", group = "Window", keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
-	.Close          = {label = "Close the window", group = "Window", keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"hide"}},
-	.Quit           = {label = "Quit cliche", group = "Window", keys = {{.Q, {.Ctrl}}, {}}, icon = lucide.POWER, tags = {"exit", "stop"}},
+	.Open           = {label = i18n.later("Open"), group = i18n.later("Capture"), keys = {{.Return, {}}, {}}, icon = lucide.EXTERNAL_LINK, tags = {"view", "launch"}},
+	.Reveal         = {label = i18n.later("Open the folder"), group = i18n.later("Capture"), keys = {{.Return, {.Ctrl}}, {}}, icon = lucide.FOLDER_OPEN, tags = {"reveal", "show", "file manager", "explorer"}},
+	.Copy_Picture   = {label = i18n.later("Copy the picture"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl}}, {}}, icon = lucide.COPY, tags = {"clipboard", "image"}},
+	.Copy_Path      = {label = i18n.later("Copy the path"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl, .Shift}}, {}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "file", "location"}},
+	.Copy_Url       = {label = i18n.later("Copy the URL"), group = i18n.later("Capture"), keys = {{.L, {.Ctrl}}, {}}, icon = lucide.LINK, tags = {"clipboard", "address", "link", "upload"}},
+	.Copy_Text      = {label = i18n.later("Copy the text"), group = i18n.later("Capture"), keys = {{.T, {.Ctrl}}, {}}, icon = lucide.FILE_TEXT, tags = {"clipboard", "ocr", "qr"}},
+	.Edit           = {label = i18n.later("Edit"), group = i18n.later("Capture"), keys = {{.E, {.Ctrl}}, {}}, icon = lucide.PENCIL, tags = {"editor", "annotate", "draw"}},
+	.Upload         = {label = i18n.later("Upload again"), group = i18n.later("Capture"), keys = {{.U, {.Ctrl}}, {}}, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link"}},
+	.Delete_File    = {label = i18n.later("Delete the file…"), group = i18n.later("Capture"), keys = {{.Delete, {.Shift}}, {}}, icon = lucide.TRASH_2, tags = {"erase", "remove", "disk"}},
+	.Remove         = {label = i18n.later("Remove from the history"), group = i18n.later("Capture"), keys = {{.Delete, {}}, {}}, icon = lucide.X, tags = {"forget", "clear"}},
+	.Preview        = {label = i18n.later("Preview"), group = i18n.later("View"), keys = {{.Space, {}}, {}}, icon = lucide.EYE, tags = {"zoom", "look"}},
+	.Select_All     = {label = i18n.later("Select all"), group = i18n.later("View"), keys = {{.A, {.Ctrl}}, {}}, icon = lucide.LIST_CHECKS, tags = {"every"}},
+	.Search         = {label = i18n.later("Search"), group = i18n.later("View"), keys = {{.F, {.Ctrl}}, {}}, icon = lucide.SEARCH, tags = {"find", "filter"}},
+	.Grid           = {label = i18n.later("Show a grid"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}, {}}, icon = lucide.LAYOUT_GRID, tags = {"thumbnails", "pictures"}},
+	.List           = {label = i18n.later("Show a list"), group = i18n.later("View"), keys = {{.N2, {.Ctrl}}, {}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
+	.Open_Folder    = {label = i18n.later("Open the save folder"), group = i18n.later("View"), icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
+	.Capture_Region = {label = i18n.later("Capture a region"), group = i18n.later("Window"), icon = lucide.IMAGE, tags = {"screenshot", "new"}},
+	.Workflows      = {label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}, {}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}},
+	.Settings       = {label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}, {}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}},
+	.Palette        = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
+	.Keys           = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
+	.Close          = {label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"hide"}},
+	.Quit           = {label = i18n.later("Quit cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}, {}}, icon = lucide.POWER, tags = {"exit", "stop"}},
 }
 
 History_Actions :: bit_set[History_Action]
@@ -324,10 +325,10 @@ history_result :: proc(app: ^App, r: Result_History) {
 			history_set_url(&hw.history, v.id, v.url)
 			platform.clipboard_set(app.anchor, {text = v.url})
 			history_status(hw, "")
-			app_announce(app, .Good, "Uploaded: the address is on the clipboard", v.url, history_window_of(app))
+			app_announce(app, .Good, i18n.tr("Uploaded: the address is on the clipboard"), v.url, history_window_of(app))
 		} else {
 			history_status(hw, "")
-			app_announce(app, .Bad, "Not uploaded", v.problem, history_window_of(app))
+			app_announce(app, .Bad, i18n.tr("Not uploaded"), v.problem, history_window_of(app))
 		}
 	}
 }
@@ -337,11 +338,11 @@ history_pixels :: proc(app: ^App, v: History_Pixels) {
 	hw := &app.history_window
 	switch v.purpose {
 	case .Copy:
-		if !v.ok { app_announce(app, .Bad, "The picture cannot be read", "", history_window_of(app)); return }
+		if !v.ok { app_announce(app, .Bad, i18n.tr("The picture cannot be read"), "", history_window_of(app)); return }
 		if platform.clipboard_set_image(app.anchor, {rgba = v.rgba, size = v.size, png = v.png}) {
-			app_announce(app, .Good, "Copied to the clipboard", "", history_window_of(app))
+			app_announce(app, .Good, i18n.tr("Copied to the clipboard"), "", history_window_of(app))
 		} else {
-			app_announce(app, .Bad, "The picture cannot go to the clipboard", "", history_window_of(app))
+			app_announce(app, .Bad, i18n.tr("The picture cannot go to the clipboard"), "", history_window_of(app))
 		}
 	case .Preview:
 		if v.id != hw.preview_asked || !hw.visible { return }
@@ -518,7 +519,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 	if ui.row(id = "###toolbar") {
 		ui.spacer(ui.px(em * 0.6))
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9))})
-		r := ui.line_edit("###search", &hw.search, "Search names, texts, URLs", clearable = true)
+		r := ui.line_edit("###search", &hw.search, i18n.tr("Search names, texts, URLs"), clearable = true)
 		if r.box != nil { hw.search_key = r.box.key }
 		hw.search_focused = r.focused
 		if r.changed { hw.shown_due = true }
@@ -532,25 +533,25 @@ history_toolbar :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.8))
 		{
-			sizes := [3]string{"S", "M", "L"}
-			tips := [3]string{"Small thumbnails", "Medium thumbnails", "Large thumbnails"}
+			sizes := [3]string{i18n.tr("thumbnail size, short", "S"), i18n.tr("thumbnail size, short", "M"), i18n.tr("thumbnail size, short", "L")}
+			tips := [3]string{i18n.tr("Small thumbnails"), i18n.tr("Medium thumbnails"), i18n.tr("Large thumbnails")}
 			step := app.settings.history_thumbnail
 			ui.next({width = ui.px(math.round(em * 6.5)), height = ui.px(math.round(em * 1.9))})
 			if ui.segmented("thumb_size", sizes[:], &step, tips[:]) { history_pref(app, "history.thumbnail_size", HISTORY_THUMBNAIL_NAMES[clamp(step, 0, 2)]) }
 			ui.spacer(ui.px(em * 0.6))
 		}
-		views := [2]string{"Grid", "List"}
+		views := [2]string{i18n.tr("Grid"), i18n.tr("List")}
 		view := int(app.settings.history_view)
 		ui.next({width = ui.px(math.round(em * 8)), height = ui.px(math.round(em * 1.9))})
 		if ui.segmented("view", views[:], &view) {
 			if view == 0 { history_action(app, .Grid) } else { history_action(app, .List) }
 		}
 		ui.spacer(ui.px(em * 0.6))
-		if history_icon_button("preview", lucide.EYE, hw.preview_open ? "Hide the preview (Space)" : "Preview (Space)", em) { history_action(app, .Preview) }
-		if history_icon_button("folder", lucide.FOLDER_OPEN, "Open the save folder", em) { history_action(app, .Open_Folder) }
-		if history_icon_button("workflows", lucide.GIT_FORK, "Workflows: what happens after a capture (Ctrl+Shift+W)", em) { history_action(app, .Workflows) }
-		if history_icon_button("palette", lucide.COMMAND, "Command palette (Ctrl+K)", em) { history_action(app, .Palette) }
-		if history_icon_button("settings", lucide.SETTINGS, "Settings (Ctrl+,)", em) { history_action(app, .Settings) }
+		if history_icon_button("preview", lucide.EYE, hw.preview_open ? i18n.tr("Hide the preview (Space)") : i18n.tr("Preview (Space)"), em) { history_action(app, .Preview) }
+		if history_icon_button("folder", lucide.FOLDER_OPEN, i18n.tr("Open the save folder"), em) { history_action(app, .Open_Folder) }
+		if history_icon_button("workflows", lucide.GIT_FORK, i18n.tr("Workflows: what happens after a capture (Ctrl+Shift+W)"), em) { history_action(app, .Workflows) }
+		if history_icon_button("palette", lucide.COMMAND, i18n.tr("Command palette (Ctrl+K)"), em) { history_action(app, .Palette) }
+		if history_icon_button("settings", lucide.SETTINGS, i18n.tr("Settings (Ctrl+,)"), em) { history_action(app, .Settings) }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -567,15 +568,15 @@ history_main :: proc(app: ^App, em: f32) {
 	hw := &app.history_window
 	if len(hw.history.entries) == 0 {
 		keys := shortcut_keys(app, .Region)
-		note := keys != "" ? fmt.tprintf("Press %s, or click cliche's icon in the notification area: each capture comes here.", keys) : "Click cliche's icon in the notification area, or run cliche --region: each capture comes here."
-		if !hw.loaded { note = "Reading the history…" }
-		if ui.empty_state("empty", {icon = lucide.HISTORY, title = "No capture yet", note = note, actions = {{text = "Capture a region", icon = lucide.SCISSORS, intent = .Primary}}}) == 0 {
+		note := keys != "" ? fmt.tprintf(i18n.tr("Press %s, or click cliche's icon in the notification area: each capture comes here."), keys) : i18n.tr("Click cliche's icon in the notification area, or run cliche --region: each capture comes here.")
+		if !hw.loaded { note = i18n.tr("Reading the history…") }
+		if ui.empty_state("empty", {icon = lucide.HISTORY, title = i18n.tr("No capture yet"), note = note, actions = {{text = i18n.tr("Capture a region"), icon = lucide.SCISSORS, intent = .Primary}}}) == 0 {
 			history_action(app, .Capture_Region)
 		}
 		return
 	}
 	if len(hw.shown_ids) == 0 {
-		if ui.empty_state("nothing", {icon = lucide.SEARCH, title = "Nothing matches", note = "No capture has these words, or is of this kind.", actions = {{text = "Clear the search", icon = lucide.X}}}) == 0 {
+		if ui.empty_state("nothing", {icon = lucide.SEARCH, title = i18n.tr("Nothing matches"), note = i18n.tr("No capture has these words, or is of this kind."), actions = {{text = i18n.tr("Clear the search"), icon = lucide.X}}}) == 0 {
 			ui.field_set(&hw.search, "")
 			hw.filter = .All
 			hw.shown_due = true
@@ -597,8 +598,8 @@ history_footer :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.8))
 		if ui.tags("weak") {
 			n := len(hw.selection.marked)
-			count := len(hw.shown_ids) == len(hw.history.entries) ? fmt.tprintf("%d captures", len(hw.history.entries)) : fmt.tprintf("%d of %d captures", len(hw.shown_ids), len(hw.history.entries))
-			if n > 1 { count = fmt.tprintf("%s, %d selected", count, n) }
+			count := len(hw.shown_ids) == len(hw.history.entries) ? fmt.tprintf(i18n.tr(len(hw.history.entries), "%d captures", "%d captures"), len(hw.history.entries)) : fmt.tprintf(i18n.tr(len(hw.shown_ids), "%d of %d captures", "%d of %d captures"), len(hw.shown_ids), len(hw.history.entries))
+			if n > 1 { count = fmt.tprintf(i18n.tr("%s, %d selected"), count, n) }
 			ui.next({width = ui.text_size(), height = ui.pct(1), text_pad = 0})
 			ui.label(fmt.tprintf("%s###count", count))
 			ui.spacer(ui.px(em * 1.2))
@@ -681,7 +682,7 @@ history_cell :: proc(app: ^App, i: int, cell, em: f32) {
 		ui.label(fmt.tprintf("%s###name", ui.text_shown(history_name(e))))
 		if ui.tags(e.missing ? "bad" : "weak") {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.3)), text_pad = em * 0.3, text_align = .Center, font_size = math.round(em * 0.85)})
-			ui.label(fmt.tprintf("%s###when", e.missing ? "File missing" : history_time_text(hw, e.time_ms)))
+			ui.label(fmt.tprintf("%s###when", e.missing ? i18n.tr("File missing") : history_time_text(hw, e.time_ms)))
 		}
 	}
 	if sig.pressed {
@@ -786,7 +787,7 @@ history_list :: proc(app: ^App, em: f32) {
 			e := hw.history.entries[p]
 			name := history_name(e)
 			ui.table_data_row(&hw.table_data, e.id, name, e.missing ? .Dim : .Normal)
-			ui.table_data_cell(&hw.table_data, e.missing ? fmt.tprintf("%s (missing)", name) : name)
+			ui.table_data_cell(&hw.table_data, e.missing ? fmt.tprintf(i18n.tr("%s (missing)"), name) : name)
 			ui.table_data_cell(&hw.table_data, HISTORY_KIND_TEXT[e.kind])
 			ui.table_data_cell(&hw.table_data, history_size_text(e), f64(e.bytes) + f64(e.size.x * e.size.y) * 1e-9)
 			ui.table_data_cell(&hw.table_data, history_time_text(hw, e.time_ms), f64(e.time_ms))
@@ -878,7 +879,7 @@ history_preview_pane :: proc(app: ^App, em: f32) {
 	if ui.column(id = "###preview_pane") {
 		e := history_find(&hw.history, hw.selection.focus)
 		if e == nil {
-			ui.empty_state("no_preview", {icon = lucide.EYE, title = "Nothing selected", note = "Select a capture to see it here."})
+			ui.empty_state("no_preview", {icon = lucide.EYE, title = i18n.tr("Nothing selected"), note = i18n.tr("Select a capture to see it here.")})
 			return
 		}
 		picture := e.kind == .Region || e.kind == .Screen || e.kind == .Window
@@ -892,7 +893,7 @@ history_preview_pane :: proc(app: ^App, em: f32) {
 			if hw.preview_id == e.id {
 				ui.preview_image("###preview", &hw.preview, hw.preview_tex, {f32(hw.preview_size.x), f32(hw.preview_size.y)}, {buttons = true, radius = 6})
 			} else {
-				ui.empty_state("loading", {icon = lucide.LOADER, title = "Reading the picture…"})
+				ui.empty_state("loading", {icon = lucide.LOADER, title = i18n.tr("Reading the picture…")})
 			}
 		case e.kind == .Qr || e.kind == .Text:
 			if ui.scroll_y("###preview_text") {
@@ -905,7 +906,7 @@ history_preview_pane :: proc(app: ^App, em: f32) {
 			if found && t.state == .Ready {
 				ui.preview_image("###preview", &hw.preview, t.tex, {f32(t.size.x), f32(t.size.y)}, {radius = 6})
 			} else {
-				ui.empty_state("no_picture", {icon = e.missing ? lucide.FILE : lucide.FILM, title = e.missing ? "The file is missing" : "No picture", note = e.missing ? e.path : ""})
+				ui.empty_state("no_picture", {icon = e.missing ? lucide.FILE : lucide.FILM, title = e.missing ? i18n.tr("The file is missing") : i18n.tr("No picture"), note = e.missing ? e.path : ""})
 			}
 		}
 		history_details(hw, e^, em)
@@ -920,7 +921,7 @@ history_details :: proc(hw: ^History_Window, e: History_Entry, em: f32) {
 	append(&lines, history_name(e))
 	append(&lines, fmt.tprintf("%s, %s", HISTORY_KIND_TEXT[e.kind], history_time_text(hw, e.time_ms)))
 	if s := history_size_text(e); s != "" { append(&lines, s) }
-	if e.path != "" { append(&lines, e.missing ? fmt.tprintf("%s (missing)", e.path) : e.path) }
+	if e.path != "" { append(&lines, e.missing ? fmt.tprintf(i18n.tr("%s (missing)"), e.path) : e.path) }
 	if e.url != "" { append(&lines, e.url) }
 	ui.spacer(ui.px(em * 0.4))
 	for line, i in lines {
@@ -1032,18 +1033,18 @@ history_dialogs :: proc(app: ^App) {
 		}
 	}
 	sheet := slice.concatenate([][]ui.Command{history_commands, settings_commands, slice.enumerated_array(&WORKFLOW_ACTIONS)}, context.temp_allocator)
-	ui.shortcuts_sheet("keys", sheet, &hw.sheet_open, "cliche's keys")
+	ui.shortcuts_sheet("keys", sheet, &hw.sheet_open, i18n.tr("cliche's keys"))
 	if hw.confirm_open {
 		names := make([dynamic]string, context.temp_allocator)
 		for id in hw.delete_ids {
 			if e := history_find(&hw.history, id); e != nil { append(&names, e.path) }
 		}
-		title := fmt.tprintf("Delete %d files for good?", len(names))
-		if len(names) == 1 { title = fmt.tprintf("Delete %s for good?", names[0][strings.last_index_any(names[0], "/\\") + 1:]) }
-		switch ui.confirm("delete", &hw.confirm_open, {title = title, note = "The files go from the disk, not to the trash. Their lines stay in the history, marked missing.", lines = names[:], act = "Delete"}) {
+		title := fmt.tprintf(i18n.tr("Delete %d files for good?"), len(names))
+		if len(names) == 1 { title = fmt.tprintf(i18n.tr("Delete %s for good?"), names[0][strings.last_index_any(names[0], "/\\") + 1:]) }
+		switch ui.confirm("delete", &hw.confirm_open, {title = title, note = i18n.tr("The files go from the disk, not to the trash. Their lines stay in the history, marked missing."), lines = names[:], act = i18n.tr("Delete")}) {
 		case .Confirmed:
 			worker_send(&app.worker, Job_History(History_Delete{ids = clone_ids(hw.delete_ids[:])}))
-			app_announce(app, .Good, len(names) == 1 ? "The file is deleted" : fmt.tprintf("%d files are deleted", len(names)), "", history_window_of(app))
+			app_announce(app, .Good, len(names) == 1 ? i18n.tr("The file is deleted") : fmt.tprintf(i18n.tr("%d files are deleted"), len(names)), "", history_window_of(app))
 			clear(&hw.delete_ids)
 		case .Cancelled:
 			clear(&hw.delete_ids)
@@ -1123,11 +1124,11 @@ history_action :: proc(app: ^App, a: History_Action) {
 	case .Copy_Picture:
 		worker_send(&app.worker, Job_History(History_Picture_Ask{id = focus.id, path = strings.clone(focus.path), purpose = .Copy}))
 	case .Copy_Path:
-		history_copy_text(app, ids, proc(e: ^History_Entry) -> string { return e.path }, "\n", "The path is on the clipboard", "The paths are on the clipboard")
+		history_copy_text(app, ids, proc(e: ^History_Entry) -> string { return e.path }, "\n", i18n.tr("The path is on the clipboard"), i18n.tr("The paths are on the clipboard"))
 	case .Copy_Url:
-		history_copy_text(app, ids, proc(e: ^History_Entry) -> string { return e.url }, "\n", "The URL is on the clipboard", "The URLs are on the clipboard")
+		history_copy_text(app, ids, proc(e: ^History_Entry) -> string { return e.url }, "\n", i18n.tr("The URL is on the clipboard"), i18n.tr("The URLs are on the clipboard"))
 	case .Copy_Text:
-		history_copy_text(app, ids, proc(e: ^History_Entry) -> string { return e.text }, "\n\n", "The text is on the clipboard", "The texts are on the clipboard")
+		history_copy_text(app, ids, proc(e: ^History_Entry) -> string { return e.text }, "\n\n", i18n.tr("The text is on the clipboard"), i18n.tr("The texts are on the clipboard"))
 	case .Edit:
 		editor_open_file(app, focus.path)
 	case .Upload:
@@ -1136,7 +1137,7 @@ history_action :: proc(app: ^App, a: History_Action) {
 			if e == nil || !history_is_picture(e^) || e.missing { continue }
 			worker_send(&app.worker, Job_History(History_Upload{id = e.id, path = strings.clone(e.path), uploader = strings.clone(app.settings.uploader)}))
 		}
-		history_status(hw, "Uploading…")
+		history_status(hw, i18n.tr("Uploading…"))
 	case .Delete_File:
 		clear(&hw.delete_ids)
 		for id in ids {
@@ -1147,7 +1148,7 @@ history_action :: proc(app: ^App, a: History_Action) {
 		gone := clone_ids(ids)
 		history_remove(&hw.history, gone)
 		worker_send(&app.worker, Job_History(History_Remove{ids = gone}))
-		app_announce(app, .Good, len(gone) == 1 ? "Removed from the history" : fmt.tprintf("%d removed from the history", len(gone)), len(gone) == 1 ? "The file stays." : "The files stay.", history_window_of(app))
+		app_announce(app, .Good, len(gone) == 1 ? i18n.tr("Removed from the history") : fmt.tprintf(i18n.tr("%d removed from the history"), len(gone)), len(gone) == 1 ? i18n.tr("The file stays.") : i18n.tr("The files stay."), history_window_of(app))
 	case .Preview:
 		hw.preview_open = !hw.preview_open
 		if !hw.preview_open { history_preview_drop(app) }

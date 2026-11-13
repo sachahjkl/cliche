@@ -23,6 +23,7 @@ import desktop "gt:desktop"
 import "gt:fsx"
 import "gt:platform"
 import png "gt:png"
+import i18n "gt:i18n"
 
 HISTORY_HEADER :: "cliche history 1"
 
@@ -39,16 +40,17 @@ HISTORY_KIND_NAMES := [History_Kind]string{
 	.Region = "region", .Screen = "screen", .Window = "window", .Video = "video", .Gif = "gif", .Qr = "qr", .Text = "text",
 }
 
-// The words the window shows for a kind (the Kind column, the search finds them too).
+// The words the window shows for a kind (the Kind column, the search finds them too): in the language in use from the
+// start (tables_translate).
 HISTORY_KIND_TEXT := [History_Kind]string{
-	.Region = "Region", .Screen = "Screen", .Window = "Window", .Video = "Video", .Gif = "GIF", .Qr = "QR code", .Text = "Text",
+	.Region = i18n.later("Region"), .Screen = i18n.later("Screen"), .Window = i18n.later("Window"), .Video = i18n.later("Video"), .Gif = "GIF", .Qr = i18n.later("QR code"), .Text = i18n.later("Text"),
 }
 
 // The window's filter by kind.
 History_Filter :: enum u8 { All, Screenshots, Recordings, Uploads, Text }
 
 HISTORY_FILTER_TEXT := [History_Filter]string{
-	.All = "All", .Screenshots = "Screenshots", .Recordings = "Recordings", .Uploads = "Uploads", .Text = "Text",
+	.All = i18n.later("All"), .Screenshots = i18n.later("Screenshots"), .Recordings = i18n.later("Recordings"), .Uploads = i18n.later("Uploads"), .Text = i18n.later("Text"),
 }
 
 // The columns of the list, and what the entries sort by.
@@ -608,13 +610,13 @@ history_job_run :: proc(d: ^History_Disk, j: Job_History) -> (r: Result_History,
 		out := History_Uploaded{id = v.id}
 		data, ok := fsx.read_all(v.path, context.temp_allocator)
 		if !ok {
-			out.problem = strings.clone("the file cannot be read")
+			out.problem = strings.clone(i18n.tr("the file cannot be read"))
 			return out, true
 		}
 		list, _ := uploaders_load(context.temp_allocator)
 		u, _ := uploader_find(list, v.uploader)
 		if u == nil {
-			out.problem = strings.clone("no uploader is set up")
+			out.problem = strings.clone(i18n.tr("no uploader is set up"))
 			return out, true
 		}
 		out.url, out.problem = upload_shot(u^, data, v.path[strings.last_index_any(v.path, "/\\") + 1:])

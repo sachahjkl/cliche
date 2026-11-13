@@ -21,6 +21,7 @@ import lucide "gt:lucide"
 import "gt:render"
 import "gt:ui"
 import undo "gt:undo"
+import i18n "gt:i18n"
 
 // Steps of undo kept.
 WORKFLOW_UNDO_MAX :: 100
@@ -101,13 +102,13 @@ GROUP_COLORS := [?]struct { group: string, color: [3]f32 }{
 Workflow_Action :: enum u8 { Back, Add_Node, Add_Workflow, Undo, Redo, Fit, Preview }
 
 WORKFLOW_ACTIONS := [Workflow_Action]ui.Command{
-	.Back         = {label = "Back to the history", group = "Workflows", keys = {{.Escape, {}}, {}}, icon = lucide.ARROW_LEFT, tags = {"close", "leave"}},
-	.Add_Node     = {label = "Add a step…", group = "Workflows", keys = {{.A, {.Shift}}, {}}, icon = lucide.PLUS, tags = {"node", "new", "insert"}},
-	.Add_Workflow = {label = "New workflow", group = "Workflows", icon = lucide.FILE_PLUS, tags = {"create", "graph"}},
-	.Undo         = {label = "Undo", group = "Workflows", keys = {{.Z, {.Ctrl}}, {}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
-	.Redo         = {label = "Redo", group = "Workflows", keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again"}},
-	.Fit          = {label = "Show the whole workflow", group = "Workflows", keys = {{.F, {}}, {}}, icon = lucide.ZOOM_OUT, tags = {"fit", "zoom", "all"}},
-	.Preview      = {label = "Run on the last capture", group = "Workflows", keys = {{.R, {.Ctrl}}, {}}, icon = lucide.PLAY, tags = {"preview", "test", "try"}},
+	.Back         = {label = i18n.later("Back to the history"), group = i18n.later("Workflows"), keys = {{.Escape, {}}, {}}, icon = lucide.ARROW_LEFT, tags = {"close", "leave"}},
+	.Add_Node     = {label = i18n.later("Add a step…"), group = i18n.later("Workflows"), keys = {{.A, {.Shift}}, {}}, icon = lucide.PLUS, tags = {"node", "new", "insert"}},
+	.Add_Workflow = {label = i18n.later("New workflow"), group = i18n.later("Workflows"), icon = lucide.FILE_PLUS, tags = {"create", "graph"}},
+	.Undo         = {label = i18n.later("Undo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl}}, {}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
+	.Redo         = {label = i18n.later("Redo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again"}},
+	.Fit          = {label = i18n.later("Show the whole workflow"), group = i18n.later("Workflows"), keys = {{.F, {}}, {}}, icon = lucide.ZOOM_OUT, tags = {"fit", "zoom", "all"}},
+	.Preview      = {label = i18n.later("Run on the last capture"), group = i18n.later("Workflows"), keys = {{.R, {.Ctrl}}, {}}, icon = lucide.PLAY, tags = {"preview", "test", "try"}},
 }
 
 ////////////////////////////////
@@ -240,7 +241,7 @@ workflow_view_follow :: proc(app: ^App, run: ^Run) {
 
 workflow_view_run_ended :: proc(app: ^App, run: ^Run) {
 	workflow_view_follow(app, run)
-	if run.preview { workflow_view_status(app, "The preview ran on the newest capture of the history: nothing was copied, saved or sent.") }
+	if run.preview { workflow_view_status(app, i18n.tr("The preview ran on the newest capture of the history: nothing was copied, saved or sent.")) }
 }
 
 // A node's thumbnail from the worker (`rgba` is not kept: the texture holds a copy).
@@ -289,7 +290,7 @@ workflow_action :: proc(app: ^App, a: Workflow_Action) {
 	case .Fit:          m.fit_due = true
 	case .Preview:
 		if wf == nil { return }
-		if !workflow_preview(app, wf) { workflow_view_status(app, "The history holds no picture to run the workflow on.") } else { workflow_view_status(app, "Running on the newest capture…") }
+		if !workflow_preview(app, wf) { workflow_view_status(app, i18n.tr("The history holds no picture to run the workflow on.")) } else { workflow_view_status(app, i18n.tr("Running on the newest capture…")) }
 	}
 }
 
@@ -321,17 +322,17 @@ workflow_bar :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.6)), axis = .X, cross = .Center})
 	if ui.row(id = "###workflow_bar") {
 		ui.spacer(ui.px(em * 0.5))
-		if workflow_icon_button("back", lucide.ARROW_LEFT, "Back to the history (Escape)", em) { workflow_mode_leave(app) }
+		if workflow_icon_button("back", lucide.ARROW_LEFT, i18n.tr("Back to the history (Escape)"), em) { workflow_mode_leave(app) }
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 1.05), text_pad = 0})
-		ui.label("Workflows###workflow_title")
-		if workflow_icon_button("add_node", lucide.PLUS, "Add a step (Shift+A, a right click on the graph)", em) { workflow_action(app, .Add_Node) }
-		if workflow_icon_button("undo", lucide.UNDO_2, "Undo (Ctrl+Z)", em, undo.can_undo(&m.history)) { workflow_action(app, .Undo) }
-		if workflow_icon_button("redo", lucide.REDO_2, "Redo (Ctrl+Shift+Z)", em, undo.can_redo(&m.history)) { workflow_action(app, .Redo) }
-		if workflow_icon_button("fit", lucide.ZOOM_OUT, "Show the whole workflow (F)", em) { workflow_action(app, .Fit) }
+		ui.label(fmt.tprintf("%s###workflow_title", i18n.tr("Workflows")))
+		if workflow_icon_button("add_node", lucide.PLUS, i18n.tr("Add a step (Shift+A, a right click on the graph)"), em) { workflow_action(app, .Add_Node) }
+		if workflow_icon_button("undo", lucide.UNDO_2, i18n.tr("Undo (Ctrl+Z)"), em, undo.can_undo(&m.history)) { workflow_action(app, .Undo) }
+		if workflow_icon_button("redo", lucide.REDO_2, i18n.tr("Redo (Ctrl+Shift+Z)"), em, undo.can_redo(&m.history)) { workflow_action(app, .Redo) }
+		if workflow_icon_button("fit", lucide.ZOOM_OUT, i18n.tr("Show the whole workflow (F)"), em) { workflow_action(app, .Fit) }
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({height = ui.px(math.round(em * 2))})
-		if ui.button_icon("###preview", lucide.PLAY, "Run on the last capture", disabled = m.shown == 0).clicked { workflow_action(app, .Preview) }
+		if ui.button_icon("###preview", lucide.PLAY, i18n.tr("Run on the last capture"), disabled = m.shown == 0).clicked { workflow_action(app, .Preview) }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -359,7 +360,7 @@ workflow_graph :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
 	wf := workflows_find(&app.workflows, m.shown)
 	if wf == nil {
-		switch ui.empty_state("no_workflow", {icon = lucide.GIT_FORK, title = "No workflow", note = "A workflow says what happens after a capture: the steps the picture goes through, and where it goes.", actions = {{text = "New workflow", icon = lucide.PLUS, intent = .Primary}, {text = "The default workflows", icon = lucide.ROTATE_CCW}}}) {
+		switch ui.empty_state("no_workflow", {icon = lucide.GIT_FORK, title = i18n.tr("No workflow"), note = i18n.tr("A workflow says what happens after a capture: the steps the picture goes through, and where it goes."), actions = {{text = i18n.tr("New workflow"), icon = lucide.PLUS, intent = .Primary}, {text = i18n.tr("The default workflows"), icon = lucide.ROTATE_CCW}}}) {
 		case 0: workflow_new(app)
 		case 1: workflow_defaults_back(app)
 		}
@@ -391,7 +392,7 @@ workflow_graph :: proc(app: ^App, em: f32) {
 		// (a workflow with its Capture alone: what to do next, under the graph)
 		if ui.tags("weak") {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), text_pad = em * 0.6})
-			ui.label("Right click the graph, or drag from the Capture's picture, to add a step.###workflow_hint")
+			ui.label(fmt.tprintf("%s###workflow_hint", i18n.tr("Right click the graph, or drag from the Capture's picture, to add a step.")))
 		}
 	}
 }
@@ -403,7 +404,7 @@ workflow_graph_make :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) {
 	stamp := [3]u64{app.workflows.version, m.shown, m.last_version}
 	if stamp == m.made && len(m.flow.nodes) == len(wf.graph.nodes) { return }
 	m.made = stamp
-	ui.flow_nodes_make(&m.flow, &wf.graph, &CATALOG, {user = app, look = workflow_node_look})
+	ui.flow_nodes_make(&m.flow, &wf.graph, &app.catalog_shown, {user = app, look = workflow_node_look})
 }
 
 // What a node shows beyond its kind: what it does with its parameters (a Capture: the captures that run its workflow),
@@ -418,7 +419,7 @@ workflow_node_look :: proc(user: rawptr, n: ^flowgraph.Node, def: ^flowgraph.Nod
 	} else {
 		subtitle = node_summary(n)
 	}
-	c := group_color(def.group)
+	c := group_color(CATALOG.nodes[n.kind].group)   // (the English group: `def` is the catalogue shown, in the language in use)
 	l := m.last[n.id]
 	return {
 		subtitle = subtitle, color = draw.srgb(c.x, c.y, c.z), state = ui.flow_state(l.state), message = l.message,
@@ -435,11 +436,11 @@ group_color :: proc(group: string) -> [3]f32 {
 // What a Capture node says under its title: the captures that run its workflow.
 workflow_triggers_text :: proc(wf: ^flowgraph.Graph_Entry) -> string {
 	triggers := workflow_triggers(wf)
-	if triggers == {} { return "no capture runs it" }
+	if triggers == {} { return i18n.tr("no capture runs it") }
 	b := strings.builder_make(context.temp_allocator)
 	for t in triggers {
 		if strings.builder_len(b) > 0 { strings.write_string(&b, ", ") }
-		strings.write_string(&b, TRIGGER_NAMES[t])
+		strings.write_string(&b, i18n.tr(TRIGGER_WORDS[t]))
 	}
 	return strings.to_string(b)
 }
@@ -573,7 +574,7 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
 	if m.add.open {
 		if wf := workflows_find(&app.workflows, m.shown); wf != nil {
-			commands, enabled := ui.flow_palette(&wf.graph, &CATALOG, m.add_from)
+			commands, enabled := ui.flow_palette(&wf.graph, &app.catalog_shown, m.add_from)
 			if i, _ := ui.palette(&m.add, commands, enabled); i >= 0 { workflow_add_chosen(app, i) }
 		} else {
 			m.add.open = false
@@ -588,7 +589,7 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 			id, kind := n.id, n.kind
 			def := &CATALOG.nodes[kind]
 			can_delete := flowgraph.graph_count(g, kind) > def.min_count
-			if ui.menu_item("Duplicate", icon = lucide.COPY, icon_font = app.history_window.icons, enabled = flowgraph.can_add(g, &CATALOG, kind)).clicked {
+			if ui.menu_item(i18n.tr("Duplicate"), icon = lucide.COPY, icon_font = app.history_window.icons, enabled = flowgraph.can_add(g, &CATALOG, kind)).clicked {
 				workflow_undo_push(app, wf)
 				if copied := flowgraph.node_copy(g, &CATALOG, id, {30, 30}); copied != 0 {
 					clear(&m.selection)
@@ -598,14 +599,14 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 					undo.drop_last(&m.history, flowgraph.graph_free)
 				}
 			}
-			if ui.menu_item("Reset its settings", icon = lucide.REFRESH_CW, icon_font = app.history_window.icons, enabled = len(def.params) > 0).clicked {
+			if ui.menu_item(i18n.tr("Reset its settings"), icon = lucide.REFRESH_CW, icon_font = app.history_window.icons, enabled = len(def.params) > 0).clicked {
 				workflow_undo_push(app, wf)
 				if reset := flowgraph.graph_node(g, id); reset != nil { flowgraph.node_params_default(&CATALOG, reset) }
 				m.inspector.node = 0
 				workflows_changed(app, now = true)
 			}
 			ui.menu_separator()
-			if ui.menu_item("Delete", "Delete", icon = lucide.TRASH_2, icon_font = app.history_window.icons, enabled = can_delete).clicked {
+			if ui.menu_item(i18n.tr("Delete"), "Delete", icon = lucide.TRASH_2, icon_font = app.history_window.icons, enabled = can_delete).clicked {
 				workflow_undo_push(app, wf)
 				ids := [1]u64{id}
 				flowgraph.nodes_delete(g, &CATALOG, ids[:])
@@ -616,10 +617,10 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 	} }
 	if m.confirm_open {
 		wf := workflows_find(&app.workflows, m.delete_id)
-		title := wf != nil ? fmt.tprintf("Delete the workflow %q?", wf.name) : "Delete the workflow?"
-		note := "Its steps go with it. Undo cannot bring it back."
-		if wf != nil && len(wf.labels) > 0 { note = "Its steps go with it, and the captures it runs will run nothing until another workflow takes them." }
-		switch ui.confirm("workflow_delete", &m.confirm_open, {title = title, note = note, act = "Delete"}) {
+		title := wf != nil ? fmt.tprintf(i18n.tr("Delete the workflow %q?"), wf.name) : i18n.tr("Delete the workflow?")
+		note := i18n.tr("Its steps go with it. Undo cannot bring it back.")
+		if wf != nil && len(wf.labels) > 0 { note = i18n.tr("Its steps go with it, and the captures it runs will run nothing until another workflow takes them.") }
+		switch ui.confirm("workflow_delete", &m.confirm_open, {title = title, note = note, act = i18n.tr("Delete")}) {
 		case .Confirmed:
 			workflows_remove(&app.workflows, m.delete_id)
 			if m.shown == m.delete_id { workflow_show(app, len(app.workflows.set.list) > 0 ? app.workflows.set.list[0].id : 0) }
@@ -631,7 +632,7 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 
 // A new workflow with its Capture node, shown, its name being typed.
 workflow_new :: proc(app: ^App) {
-	wf := flowgraph.Graph_Entry{name = strings.clone("New workflow")}
+	wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("New workflow"))}
 	flowgraph.node_add(&wf.graph, &CATALOG, int(Node_Kind.Capture), {0, 0})
 	id := workflows_add(&app.workflows, wf)
 	workflow_show(app, id)

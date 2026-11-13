@@ -19,6 +19,7 @@ import "core:os"
 import "core:strings"
 import flowgraph "gt:flowgraph"
 import "gt:platform"
+import i18n "gt:i18n"
 
 WORKFLOWS_FORMAT :: flowgraph.Store_Format{version = 1, list = "workflows", labels = "triggers"}
 
@@ -36,7 +37,7 @@ workflows_load :: proc() -> (ws: Workflows, problem: string) {
 workflows_load_from :: proc(path: string) -> (ws: Workflows, problem: string) {
 	data, err := os.read_entire_file(path, context.temp_allocator)
 	if err != nil {
-		if os.exists(path) { return workflows_default(), fmt.aprintf("%s cannot be read: the default workflows are in its place.", path) }
+		if os.exists(path) { return workflows_default(), fmt.aprintf(i18n.tr("%s cannot be read: the default workflows are in its place."), path) }
 		return workflows_default(), ""
 	}
 	list, why := workflows_parse(string(data))
@@ -44,7 +45,7 @@ workflows_load_from :: proc(path: string) -> (ws: Workflows, problem: string) {
 	workflows_free(&list)
 	aside := strings.concatenate({path, ".broken"}, context.temp_allocator)
 	_ = os.rename(path, aside)
-	return workflows_default(), fmt.aprintf("%s cannot be read (%s): it is kept as %s, and the default workflows are in its place.", path, why, aside)
+	return workflows_default(), fmt.aprintf(i18n.tr("%s cannot be read (%s): it is kept as %s, and the default workflows are in its place."), path, why, aside)
 }
 
 // The file's text (owned).

@@ -30,6 +30,7 @@ import "core:strings"
 import "core:text/regex"
 import "gt:ascii"
 import http "gt:http"
+import i18n "gt:i18n"
 
 // An upload's answer, as the syntax reads it.
 Answer :: struct {
@@ -117,13 +118,13 @@ call :: proc(e: ^Expander, name: string, params: []string) -> string {
 	n := ascii.lower(name, context.temp_allocator)
 	answer_names := n == "response" || n == "responseurl" || n == "header" || n == "json" || n == "xml" || n == "regex"
 	if answer_names && s.answer == nil {
-		return fail(e, fmt.tprintf("{%s} reads the host's answer: it is only for the URLs read from it", name))
+		return fail(e, fmt.tprintf(i18n.tr("{%s} reads the host's answer: it is only for the URLs read from it"), name))
 	}
 	switch n {
 	case "filename":    return s.url_encode ? url_encode(s.file_name) : s.file_name
 	case "input":       return ""
 	case "random":
-		if len(params) == 0 { return fail(e, "{random} needs values: {random:a|b}") }
+		if len(params) == 0 { return fail(e, i18n.tr("{random} needs values: {random:a|b}")) }
 		return rand.choice(params)
 	case "select":      return param(params, 0)
 	case "inputbox":    return param(params, 1)
@@ -159,8 +160,8 @@ call :: proc(e: ^Expander, name: string, params: []string) -> string {
 		if problem != "" { return fail(e, problem) }
 		return text
 	}
-	if name == "" { return fail(e, "an empty {} in the uploader") }
-	return fail(e, fmt.tprintf("the uploader uses {%s}, which cliche does not know", name))
+	if name == "" { return fail(e, i18n.tr("an empty {} in the uploader")) }
+	return fail(e, fmt.tprintf(i18n.tr("the uploader uses {%s}, which cliche does not know"), name))
 }
 
 // Percent-encoding of everything but A-Z a-z 0-9 - _ . ~ (ShareX's URLHelpers.URLEncode).
@@ -185,7 +186,7 @@ url_encode :: proc(s: string, allocator := context.temp_allocator) -> string {
 // null or nothing there "". An object or an array is a problem (ShareX refuses them too).
 json_select :: proc(text, path: string) -> (out: string, problem: string) {
 	value, err := json.parse(transmute([]u8)text, .JSON5, parse_integers = true, allocator = context.temp_allocator)
-	if err != .None { return "", "the host's answer is not JSON" }
+	if err != .None { return "", i18n.tr("the host's answer is not JSON") }
 	p := path
 	if strings.has_prefix(p, "$") { p = p[1:] }
 	v := value
@@ -195,7 +196,7 @@ json_select :: proc(text, path: string) -> (out: string, problem: string) {
 			p = p[1:]
 		case '[':
 			close := strings.index_byte(p, ']')
-			if close < 0 { return "", fmt.tprintf("the JSON path %q has a [ with no ]", path) }
+			if close < 0 { return "", fmt.tprintf(i18n.tr("the JSON path %q has a [ with no ]"), path) }
 			inner := strings.trim_space(p[1:close])
 			p = p[close + 1:]
 			if len(inner) >= 2 && (inner[0] == '\'' || inner[0] == '"') && inner[len(inner) - 1] == inner[0] {
@@ -204,7 +205,7 @@ json_select :: proc(text, path: string) -> (out: string, problem: string) {
 				v = obj[inner[1:len(inner) - 1]] or_else nil
 			} else {
 				index, ok := strconv.parse_int(inner, 10)
-				if !ok { return "", fmt.tprintf("the JSON path %q has an index cliche does not read: [%s]", path, inner) }
+				if !ok { return "", fmt.tprintf(i18n.tr("the JSON path %q has an index cliche does not read: [%s]"), path, inner) }
 				arr, is_arr := v.(json.Array)
 				if !is_arr { return "", "" }
 				if index < 0 { index += len(arr) }
@@ -228,7 +229,7 @@ json_select :: proc(text, path: string) -> (out: string, problem: string) {
 	case json.Boolean: return x ? "True" : "False", ""   // (as .NET writes them: ShareX's own)
 	case json.Null:    return "", ""
 	case json.Array, json.Object:
-		return "", fmt.tprintf("the JSON path %q is a list or an object, not a text", path)
+		return "", fmt.tprintf(i18n.tr("the JSON path %q is a list or an object, not a text"), path)
 	}
 	return "", ""
 }
@@ -243,7 +244,7 @@ xml_select :: proc(text, xpath: string) -> (out: string, problem: string) {
 	options := xml.Options{flags = {.Ignore_Unsupported, .Decode_SGML_Entities, .Unbox_CDATA}}
 	quiet :: proc(pos: xml.Pos, format: string, args: ..any) {}
 	doc, err := xml.parse(transmute([]u8)text, options, "", quiet, context.temp_allocator)
-	if err != .None || doc == nil || doc.element_count == 0 { return "", "the host's answer is not XML" }
+	if err != .None || doc == nil || doc.element_count == 0 { return "", i18n.tr("the host's answer is not XML") }
 	nodes := make([dynamic]xml.Element_ID, context.temp_allocator)
 	append(&nodes, XML_DOCUMENT)
 	rest := xpath
@@ -256,7 +257,7 @@ xml_select :: proc(text, xpath: string) -> (out: string, problem: string) {
 		end := strings.index_byte(rest, '/')
 		step := end < 0 ? rest : rest[:end]
 		rest = end < 0 ? "" : rest[end:]
-		if step == "" { return "", fmt.tprintf("the XPath %q has an empty step", xpath) }
+		if step == "" { return "", fmt.tprintf(i18n.tr("the XPath %q has an empty step"), xpath) }
 		if descendant { nodes = xml_descendants(doc, nodes[:]) }
 		if step[0] == '@' || step == "text()" {
 			if rest != "" || len(nodes) == 0 { return "", "" }
@@ -268,10 +269,10 @@ xml_select :: proc(text, xpath: string) -> (out: string, problem: string) {
 		}
 		name, position := step, 0
 		if open := strings.index_byte(step, '['); open >= 0 {
-			if !strings.has_suffix(step, "]") { return "", fmt.tprintf("the XPath %q has a [ with no ]", xpath) }
+			if !strings.has_suffix(step, "]") { return "", fmt.tprintf(i18n.tr("the XPath %q has a [ with no ]"), xpath) }
 			ok: bool
 			position, ok = strconv.parse_int(step[open + 1:len(step) - 1], 10)
-			if !ok || position < 1 { return "", fmt.tprintf("the XPath %q has a condition cliche does not read: %s", xpath, step[open:]) }
+			if !ok || position < 1 { return "", fmt.tprintf(i18n.tr("the XPath %q has a condition cliche does not read: %s"), xpath, step[open:]) }
 			name = step[:open]
 		}
 		next := make([dynamic]xml.Element_ID, context.temp_allocator)
@@ -340,7 +341,7 @@ xml_write_text :: proc(doc: ^xml.Document, el: xml.Element_ID, deep: bool, into:
 regex_select :: proc(text, pattern, group: string) -> (out: string, problem: string) {
 	plain, names := regex_names(pattern)
 	re, err := regex.create(plain, {.Unicode}, context.temp_allocator, context.temp_allocator)
-	if err != nil { return "", fmt.tprintf("cliche cannot read the regular expression %q (no lookahead or lookbehind here)", pattern) }
+	if err != nil { return "", fmt.tprintf(i18n.tr("cliche cannot read the regular expression %q (no lookahead or lookbehind here)"), pattern) }
 	capture, matched := regex.match(re, text, context.temp_allocator, context.temp_allocator)
 	if !matched { return "", "" }
 	index := 0
@@ -349,7 +350,7 @@ regex_select :: proc(text, pattern, group: string) -> (out: string, problem: str
 		switch {
 		case is_number: index = number
 		case group in names: index = names[group]
-		case: return "", fmt.tprintf("the regular expression %q has no group named %q", pattern, group)
+		case: return "", fmt.tprintf(i18n.tr("the regular expression %q has no group named %q"), pattern, group)
 		}
 	}
 	if index < 0 || index >= len(capture.groups) { return "", "" }

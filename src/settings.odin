@@ -7,6 +7,7 @@ import "core:os"
 import "core:strings"
 import "core:sync"
 import config "gt:config"
+import i18n "gt:i18n"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
 
@@ -21,53 +22,53 @@ DEFAULT_NAME_PATTERN :: "cliche-%Y%m%d-%H%M%S.png"
 // docs/settings.md).
 PREF_DEFS := [?]config.Def{
 	// General
-	{name = "general.tray_click", title = "A click on the icon", description = "What a click on cliche's icon in the notification area does.", kind = .String, default = {s = "region"}, tags = {"tray", "icon", "notification area", "panel"}},
+	{name = "general.tray_click", title = i18n.later("A click on the icon"), description = i18n.later("What a click on cliche's icon in the notification area does."), kind = .String, default = {s = "region"}, tags = {"tray", "icon", "notification area", "panel"}},
 
 	// Capture
-	{name = "capture.delay", title = "Delay before a screen or a window", description = "Seconds to wait before a screen or a window is taken (a menu opened meanwhile is in the picture). A region's picture is taken at once, frozen while you choose.", kind = .Int, default = {i = 0}, min = 0, max = 10, bounded = true, unit = "s", tags = {"timer", "wait", "countdown", "menu"}},
+	{name = "capture.delay", title = i18n.later("Delay before a screen or a window"), description = i18n.later("Seconds to wait before a screen or a window is taken (a menu opened meanwhile is in the picture). A region's picture is taken at once, frozen while you choose."), kind = .Int, default = {i = 0}, min = 0, max = 10, bounded = true, unit = "s", tags = {"timer", "wait", "countdown", "menu"}},
 
-	{name = "capture.ocr_languages", title = "Languages of the text read", description = "The languages of the text read in a region (cliche --ocr), as the engine names them, \"+\" between them (Tesseract: eng+fra). Empty: your languages.", kind = .String, default = {s = ""}, tags = {"ocr", "text", "language", "tesseract", "recognition"}},
+	{name = "capture.ocr_languages", title = i18n.later("Languages of the text read"), description = i18n.later("The languages of the text read in a region (cliche --ocr), as the engine names them, \"+\" between them (Tesseract: eng+fra). Empty: your languages."), kind = .String, default = {s = ""}, tags = {"ocr", "text", "language", "tesseract", "recognition"}},
 
 	// Recording
-	{name = "record.fps", title = "Video frame rate", description = "The most frames a second of a video. Fewer come when the screen changes less.", kind = .Int, default = {i = 30}, min = 1, max = 60, bounded = true, unit = "fps", tags = {"video", "mp4", "frame rate", "smooth"}},
-	{name = "record.gif_fps", title = "GIF frame rate", description = "The most frames a second of a GIF. Fewer make smaller files.", kind = .Int, default = {i = 12}, min = 1, max = 30, bounded = true, unit = "fps", tags = {"gif", "animation", "frame rate"}},
-	{name = "record.gif_width", title = "Largest GIF width", description = "The largest width of a GIF: a wider recording is scaled down. 0: its own size.", kind = .Int, default = {i = 960}, min = 0, max = 3840, bounded = true, unit = "px", tags = {"gif", "size", "scale", "resolution"}},
-	{name = "record.cursor", title = "Show the pointer", description = "Show the pointer in recordings, where the desktop can draw it in.", kind = .Bool, default = {b = true}, tags = {"mouse", "pointer", "cursor"}},
-	{name = "record.notify", title = "Notify", description = "Show a notification when a recording starts and when its file is written.", kind = .Bool, default = {b = true}, tags = {"toast", "message"}},
-	{name = "record.reveal", title = "Show the file in its folder", description = "Show a recording's file in its folder, in the file manager, once it is written.", kind = .Bool, default = {b = false}, tags = {"open", "folder", "explorer", "files"}},
-	{name = "record.max_length", title = "Longest recording", description = "Stop a recording after this many seconds. 0: only when you stop it.", kind = .Int, default = {i = 0}, min = 0, max = 3600, bounded = true, unit = "s", tags = {"limit", "duration", "timer"}},
+	{name = "record.fps", title = i18n.later("Video frame rate"), description = i18n.later("The most frames a second of a video. Fewer come when the screen changes less."), kind = .Int, default = {i = 30}, min = 1, max = 60, bounded = true, unit = "fps", tags = {"video", "mp4", "frame rate", "smooth"}},
+	{name = "record.gif_fps", title = i18n.later("GIF frame rate"), description = i18n.later("The most frames a second of a GIF. Fewer make smaller files."), kind = .Int, default = {i = 12}, min = 1, max = 30, bounded = true, unit = "fps", tags = {"gif", "animation", "frame rate"}},
+	{name = "record.gif_width", title = i18n.later("Largest GIF width"), description = i18n.later("The largest width of a GIF: a wider recording is scaled down. 0: its own size."), kind = .Int, default = {i = 960}, min = 0, max = 3840, bounded = true, unit = "px", tags = {"gif", "size", "scale", "resolution"}},
+	{name = "record.cursor", title = i18n.later("Show the pointer"), description = i18n.later("Show the pointer in recordings, where the desktop can draw it in."), kind = .Bool, default = {b = true}, tags = {"mouse", "pointer", "cursor"}},
+	{name = "record.notify", title = i18n.later("Notify"), description = i18n.later("Show a notification when a recording starts and when its file is written."), kind = .Bool, default = {b = true}, tags = {"toast", "message"}},
+	{name = "record.reveal", title = i18n.later("Show the file in its folder"), description = i18n.later("Show a recording's file in its folder, in the file manager, once it is written."), kind = .Bool, default = {b = false}, tags = {"open", "folder", "explorer", "files"}},
+	{name = "record.max_length", title = i18n.later("Longest recording"), description = i18n.later("Stop a recording after this many seconds. 0: only when you stop it."), kind = .Int, default = {i = 0}, min = 0, max = 3600, bounded = true, unit = "s", tags = {"limit", "duration", "timer"}},
 
 	// History
-	{name = "history.size", title = "Captures kept", description = "How many captures the history keeps: the oldest go first. The files stay where they are.", kind = .Int, default = {i = 1000}, min = 10, max = 100000, bounded = true, tags = {"history", "recent", "limit"}},
-	{name = "history.view", title = "View", description = "How the history shows the captures: thumbnails in a grid, or a list with their details.", kind = .String, default = {s = "grid"}, tags = {"grid", "list", "thumbnails"}},
+	{name = "history.size", title = i18n.later("Captures kept"), description = i18n.later("How many captures the history keeps: the oldest go first. The files stay where they are."), kind = .Int, default = {i = 1000}, min = 10, max = 100000, bounded = true, tags = {"history", "recent", "limit"}},
+	{name = "history.view", title = i18n.later("View"), description = i18n.later("How the history shows the captures: thumbnails in a grid, or a list with their details."), kind = .String, default = {s = "grid"}, tags = {"grid", "list", "thumbnails"}},
 	{name = "history.preview_width", title = "Preview width", description = "The width of the preview pane, in ems. Dragging the line beside it changes it.", kind = .Float, default = {f = HISTORY_PREVIEW_EM}, min = HISTORY_PREVIEW_MIN_EM, max = HISTORY_PREVIEW_MAX_EM, bounded = true, hidden = true},
-	{name = "history.thumbnail_size", title = "Thumbnail size", description = "The size of the thumbnails in the grid.", kind = .String, default = {s = "medium"}, tags = {"grid", "preview", "size"}},
+	{name = "history.thumbnail_size", title = i18n.later("Thumbnail size"), description = i18n.later("The size of the thumbnails in the grid."), kind = .String, default = {s = "medium"}, tags = {"grid", "preview", "size"}},
 
 	// Editor: the last choices, as they were when an editor last closed (editor_choices_keep)
 	{name = "editor.tool", title = "Editor tool", description = "The tool the editor opens with: the last one used.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "editor.styles", title = "Editor styles", description = "Each tool's colour, width, shadow, fill and text size, as last used.", kind = .String, default = {s = ""}, hidden = true},
 
 	// Region
-	{name = "region.confirm_on_release", title = "Take the rectangle on release", description = "Take the rectangle as soon as the button is released. Off: adjust it with the arrow keys (Shift: resize), then press Enter or click inside it.", kind = .Bool, default = {b = true}, tags = {"fast", "enter", "adjust"}},
-	{name = "region.frame_windows", title = "Frame the window under the pointer", description = "Frame the window under the pointer: a click takes it. Off: a click does nothing, only a drag chooses.", kind = .Bool, default = {b = true}, tags = {"window", "hover", "click", "snap"}},
-	{name = "region.magnifier", title = "Magnifier", description = "Show a magnifier near the pointer, with the pointer's position and the selection's size.", kind = .Bool, default = {b = true}, tags = {"zoom", "loupe", "pixel"}},
-	{name = "region.dim", title = "Shade around the selection", description = "How dark the screen is outside what is chosen.", kind = .Int, default = {i = 45}, min = 0, max = 90, bounded = true, unit = "%", tags = {"shade", "darken", "overlay", "opacity"}},
+	{name = "region.confirm_on_release", title = i18n.later("Take the rectangle on release"), description = i18n.later("Take the rectangle as soon as the button is released. Off: adjust it with the arrow keys (Shift: resize), then press Enter or click inside it."), kind = .Bool, default = {b = true}, tags = {"fast", "enter", "adjust"}},
+	{name = "region.frame_windows", title = i18n.later("Frame the window under the pointer"), description = i18n.later("Frame the window under the pointer: a click takes it. Off: a click does nothing, only a drag chooses."), kind = .Bool, default = {b = true}, tags = {"window", "hover", "click", "snap"}},
+	{name = "region.magnifier", title = i18n.later("Magnifier"), description = i18n.later("Show a magnifier near the pointer, with the pointer's position and the selection's size."), kind = .Bool, default = {b = true}, tags = {"zoom", "loupe", "pixel"}},
+	{name = "region.dim", title = i18n.later("Shade around the selection"), description = i18n.later("How dark the screen is outside what is chosen."), kind = .Int, default = {i = 45}, min = 0, max = 90, bounded = true, unit = "%", tags = {"shade", "darken", "overlay", "opacity"}},
 
 	// Upload
-	{name = "upload.uploader", title = "Default host", description = "Where a workflow's Upload step sends pictures when it names no host, and where the history uploads again: the built-in host (anonymous, files kept 72 hours), or one of the ShareX uploaders (.sxcu files) in the uploaders' folder.", kind = .String, default = {s = BUILTIN_UPLOADER_NAME}, tags = {"host", "sxcu", "sharex", "server", "share", "link", "url", "imgur"}},
+	{name = "upload.uploader", title = i18n.later("Default host"), description = i18n.later("Where a workflow's Upload step sends pictures when it names no host, and where the history uploads again: the built-in host (anonymous, files kept 72 hours), or one of the ShareX uploaders (.sxcu files) in the uploaders' folder."), kind = .String, default = {s = BUILTIN_UPLOADER_NAME}, tags = {"host", "sxcu", "sharex", "server", "share", "link", "url", "imgur"}},
 
 	// Save
-	{name = "save.folder", title = "Default folder", description = "The folder of a workflow's Save step that names none, of the editor's Save, and of recordings. Empty: Pictures/Screenshots when it exists, else Pictures/cliche.", kind = .String, default = {s = ""}, tags = {"directory", "path", "where"}},
-	{name = "save.name", title = "Default file name", description = "The name of a saved file when its Save step names none: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets \" (2)\".", kind = .String, default = {s = DEFAULT_NAME_PATTERN}, tags = {"file name", "pattern", "format"}},
+	{name = "save.folder", title = i18n.later("Default folder"), description = i18n.later("The folder of a workflow's Save step that names none, of the editor's Save, and of recordings. Empty: Pictures/Screenshots when it exists, else Pictures/cliche."), kind = .String, default = {s = ""}, tags = {"directory", "path", "where"}},
+	{name = "save.name", title = i18n.later("Default file name"), description = i18n.later("The name of a saved file when its Save step names none: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets \" (2)\"."), kind = .String, default = {s = DEFAULT_NAME_PATTERN}, tags = {"file name", "pattern", "format"}},
 
 	// Shortcuts: in the order of the tray's menu (Shortcut_Action's)
-	{name = "shortcut.screen", title = "Capture the screen", description = "Capture the whole screen under the pointer.", kind = .String, default = {s = "Print"}, tags = {"hotkey", "keybinding", "keys", "monitor", "full screen", "print screen"}},
-	{name = "shortcut.region", title = "Capture a region", description = "Capture a region: drag a rectangle, click a window framed, or take a screen, on the frozen screen.", kind = .String, default = {s = "Ctrl+Print"}, tags = {"hotkey", "keybinding", "keys", "selection", "print screen"}},
-	{name = "shortcut.record", title = "Record a video", description = "Choose a region to record as a video, then press Record. The same keys start the recording, then stop it.", kind = .String, default = {s = "Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "video", "mp4", "screencast"}},
-	{name = "shortcut.record_gif", title = "Record a GIF", description = "Choose a region to record as a GIF, then press Record. The same keys start the recording, then stop it.", kind = .String, default = {s = "Ctrl+Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "gif", "animation", "screencast"}},
-	{name = "shortcut.window", title = "Capture the window in front", description = "Capture the window in front.", kind = .String, default = {s = "Alt+Print"}, tags = {"hotkey", "keybinding", "keys", "active window", "print screen"}},
-	{name = "shortcut.ocr", title = "Read the text", description = "Read the text in a region: it goes to the clipboard.", kind = .String, default = {s = "Ctrl+Alt+T"}, tags = {"hotkey", "keybinding", "keys", "ocr", "text"}},
-	{name = "shortcut.qr", title = "Read a QR code", description = "Read a QR code in a region: its text goes to the clipboard.", kind = .String, default = {s = "Ctrl+Alt+Q"}, tags = {"hotkey", "keybinding", "keys", "barcode", "scan"}},
+	{name = "shortcut.screen", title = i18n.later("Capture the screen"), description = i18n.later("Capture the whole screen under the pointer."), kind = .String, default = {s = "Print"}, tags = {"hotkey", "keybinding", "keys", "monitor", "full screen", "print screen"}},
+	{name = "shortcut.region", title = i18n.later("Capture a region"), description = i18n.later("Capture a region: drag a rectangle, click a window framed, or take a screen, on the frozen screen."), kind = .String, default = {s = "Ctrl+Print"}, tags = {"hotkey", "keybinding", "keys", "selection", "print screen"}},
+	{name = "shortcut.record", title = i18n.later("Record a video"), description = i18n.later("Choose a region to record as a video, then press Record. The same keys start the recording, then stop it."), kind = .String, default = {s = "Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "video", "mp4", "screencast"}},
+	{name = "shortcut.record_gif", title = i18n.later("Record a GIF"), description = i18n.later("Choose a region to record as a GIF, then press Record. The same keys start the recording, then stop it."), kind = .String, default = {s = "Ctrl+Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "gif", "animation", "screencast"}},
+	{name = "shortcut.window", title = i18n.later("Capture the window in front"), description = i18n.later("Capture the window in front."), kind = .String, default = {s = "Alt+Print"}, tags = {"hotkey", "keybinding", "keys", "active window", "print screen"}},
+	{name = "shortcut.ocr", title = i18n.later("Read the text"), description = i18n.later("Read the text in a region: it goes to the clipboard."), kind = .String, default = {s = "Ctrl+Alt+T"}, tags = {"hotkey", "keybinding", "keys", "ocr", "text"}},
+	{name = "shortcut.qr", title = i18n.later("Read a QR code"), description = i18n.later("Read a QR code in a region: its text goes to the clipboard."), kind = .String, default = {s = "Ctrl+Alt+Q"}, tags = {"hotkey", "keybinding", "keys", "barcode", "scan"}},
 }
 
 // What a click on the tray icon does (general.tray_click).
@@ -129,6 +130,17 @@ prefs_register :: proc(p: ^config.Prefs) {
 	d.system_title = true   // (cliche's windows have the system's title bar)
 	prefs_page.standard_register(p, STANDARD_SETS, d)
 	config.register(p, PREF_DEFS[:])
+}
+
+// cliche's own preferences' titles and descriptions in the language in use, once, after prefs_page.language_start: the
+// settings' page and its search show the registry's words as they are. The toolkit's standard ones are its own.
+prefs_translate :: proc(p: ^config.Prefs) {
+	for d in PREF_DEFS {
+		r := config.ref_of(p, d.name)
+		if r == config.NO_REF { continue }
+		e := config.entry(p, r)
+		e.def.title, e.def.description = i18n.tr(e.def.title), i18n.tr(e.def.description)
+	}
 }
 
 prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Settings) {

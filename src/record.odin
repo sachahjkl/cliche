@@ -28,6 +28,7 @@ import capture "gt:capture"
 import gif "gt:gif"
 import h264 "gt:h264"
 import mux "gt:mux"
+import i18n "gt:i18n"
 
 Record_Format :: enum u8 { Mp4, Gif }
 
@@ -48,14 +49,14 @@ Record_Error :: enum u8 {
 
 RECORD_ERROR_TEXT := [Record_Error]string{
 	.None        = "",
-	.Unsupported = "this desktop offers no way to record this",
-	.Denied      = "the recording was refused",
-	.Gone        = "the screen or the window is gone",
-	.Failed      = "the system stopped the recording",
-	.No_Encoder  = "this system has no H.264 encoder (a GPU's, or openh264)",
-	.Encoder     = "the video encoder failed",
-	.Empty       = "the recording was stopped before it began",
-	.Not_Saved   = "the recording could not be saved",
+	.Unsupported = i18n.later("this desktop offers no way to record this"),
+	.Denied      = i18n.later("the recording was refused"),
+	.Gone        = i18n.later("the screen or the window is gone"),
+	.Failed      = i18n.later("the system stopped the recording"),
+	.No_Encoder  = i18n.later("this system has no H.264 encoder (a GPU's, or openh264)"),
+	.Encoder     = i18n.later("the video encoder failed"),
+	.Empty       = i18n.later("the recording was stopped before it began"),
+	.Not_Saved   = i18n.later("the recording could not be saved"),
 }
 
 ////////////////////////////////
@@ -283,10 +284,10 @@ record_elapsed_text :: proc(ms: i64, allocator := context.temp_allocator) -> str
 // "340 KB", "12.5 MB".
 size_text :: proc(bytes: i64, allocator := context.temp_allocator) -> string {
 	switch {
-	case bytes < 1000 * 1000:        return fmt.aprintf("%d KB", (bytes + 999) / 1000, allocator = allocator)
-	case bytes < 1000 * 1000 * 1000: return fmt.aprintf("%.1f MB", f64(bytes) / 1e6, allocator = allocator)
+	case bytes < 1000 * 1000:        return fmt.aprintf(i18n.tr("%d KB"), (bytes + 999) / 1000, allocator = allocator)
+	case bytes < 1000 * 1000 * 1000: return fmt.aprintf(i18n.tr("%.1f MB"), f64(bytes) / 1e6, allocator = allocator)
 	}
-	return fmt.aprintf("%.2f GB", f64(bytes) / 1e9, allocator = allocator)
+	return fmt.aprintf(i18n.tr("%.2f GB"), f64(bytes) / 1e9, allocator = allocator)
 }
 
 // The notification's body at the end of a recording: where it is, its size and its length.

@@ -22,6 +22,7 @@ import "gt:platform"
 import prefs_page "gt:prefs_page"
 import "gt:render"
 import "gt:ui"
+import i18n "gt:i18n"
 
 RECORD_FRAME_PX :: 2   // the frame's width, logical pixels
 
@@ -200,22 +201,22 @@ record_bar_ready :: proc(app: ^App, em, side: f32) {
 				ui.dot("###record_dot", math.round(em * 0.7))   // (the button's words' colour)
 				ui.spacer(ui.px(math.round(em * 0.45)))
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
-				ui.label("Record###record_label")
+				ui.label(fmt.tprintf("%s###record_label", i18n.tr("record button", "Record")))
 			}
 		}
 	}
 	if sig.clicked { ro.decision = .Start }
 	if ui.hovered_for(sig) {
-		if ui.tooltip() { ui.tooltip_text(keys != "" ? fmt.tprintf("Start recording (%s)", keys) : "Start recording") }
+		if ui.tooltip() { ui.tooltip_text(keys != "" ? fmt.tprintf(i18n.tr("Start recording (%s)"), keys) : i18n.tr("Start recording")) }
 	}
 	ui.spacer(ui.px(math.round(em * 0.6)))
 	@(static, rodata) labels := [2]string{"MP4", "GIF"}
-	@(static, rodata) tips := [2]string{"A video (H.264)", "An animated GIF"}
+	tips := [2]string{i18n.tr("A video (H.264)"), i18n.tr("An animated GIF")}
 	at := int(format)
 	ui.next({width = ui.px(math.round(em * 7)), height = ui.px(math.round(side * 0.85))})
 	if ui.segmented("###format", labels[:], &at, tips[:]) { app_record_step(app, Record_Format_Set{Record_Format(at)}) }
 	ui.spacer(ui.fill())
-	if record_icon("cancel", lucide.X, "Cancel (Escape)", side) { ro.decision = .Cancel }
+	if record_icon("cancel", lucide.X, i18n.tr("Cancel (Escape)"), side) { ro.decision = .Cancel }
 }
 
 // While recording: a red dot, the time, Stop, Cancel (the file deleted).
@@ -223,20 +224,20 @@ record_bar_ready :: proc(app: ^App, em, side: f32) {
 record_bar_running :: proc(app: ^App, em, side: f32) {
 	ro := &app.record_overlay
 	keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
-	text := "Starting…"
+	text := i18n.tr("Starting…")
 	can := true
 	#partial switch v in app.record {
 	case Record_Recording:  text = record_clock_text(v.elapsed_ms)
-	case Record_Stopping:   text, can = "Saving…", false
-	case Record_Discarding: text, can = "Deleting…", false
+	case Record_Stopping:   text, can = i18n.tr("Saving…"), false
+	case Record_Discarding: text, can = i18n.tr("Deleting…"), false
 	}
 	ui.dot("###live_dot", math.round(em * 0.75), .Danger)
 	ui.spacer(ui.px(math.round(em * 0.5)))
 	ui.next({width = ui.px(math.round(em * 5.5)), height = ui.pct(1), text_pad = 0, font = ui.mono_font()})
 	ui.label(fmt.tprintf("%s###clock", text))
 	ui.spacer(ui.fill())
-	if record_icon("stop", lucide.SQUARE, keys != "" ? fmt.tprintf("Stop and save (%s)", keys) : "Stop and save", side, can) { ro.decision = .Stop }
-	if record_icon("discard", lucide.X, "Cancel: the recording is deleted", side, can) { ro.decision = .Cancel }
+	if record_icon("stop", lucide.SQUARE, keys != "" ? fmt.tprintf(i18n.tr("Stop and save (%s)"), keys) : i18n.tr("Stop and save"), side, can) { ro.decision = .Stop }
+	if record_icon("discard", lucide.X, i18n.tr("Cancel: the recording is deleted"), side, can) { ro.decision = .Cancel }
 }
 
 // An icon button of the bar, as the editor's bar draws them.

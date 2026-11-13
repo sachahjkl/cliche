@@ -13,6 +13,7 @@ package cliche
 import "core:slice"
 import "core:strings"
 import flowgraph "gt:flowgraph"
+import i18n "gt:i18n"
 
 // What starts a workflow: the captures of the shortcuts, the tray and the commands (cliche --region...). A trigger is a
 // capture source and the workflow it runs; Edit, Qr and Ocr take a region.
@@ -20,12 +21,16 @@ Trigger :: enum u8 { Region, Screen, Window, Edit, Qr, Ocr }
 
 Trigger_Set :: bit_set[Trigger; u8]
 
-// A trigger's word: in the file (a workflow's labels), on the Capture node, in `cliche --<word>`.
+// A trigger's word: in the file (a workflow's labels), in `cliche --<word>`.
 TRIGGER_NAMES := [Trigger]string{.Region = "region", .Screen = "screen", .Window = "window", .Edit = "edit", .Qr = "qr", .Ocr = "ocr"}
 
+// A trigger's word where a list of them is shown (the Capture node, the workflows' list): TRIGGER_NAMES' words, in the
+// language in use (i18n.tr where shown).
+TRIGGER_WORDS := [Trigger]string{.Region = i18n.later("region"), .Screen = i18n.later("screen"), .Window = i18n.later("window"), .Edit = i18n.later("edit"), .Qr = i18n.later("qr"), .Ocr = i18n.later("ocr")}
+
 TRIGGER_TEXT := [Trigger]string{
-	.Region = "Capture a region", .Screen = "Capture the screen", .Window = "Capture the window",
-	.Edit = "Capture a region and edit", .Qr = "Read a QR code", .Ocr = "Read the text",
+	.Region = i18n.later("Capture a region"), .Screen = i18n.later("Capture the screen"), .Window = i18n.later("Capture the window"),
+	.Edit = i18n.later("Capture a region and edit"), .Qr = i18n.later("Read a QR code"), .Ocr = i18n.later("Read the text"),
 }
 
 TRIGGER_SOURCE := [Trigger]Source{.Region = .Region, .Screen = .Screen, .Window = .Window, .Edit = .Region, .Qr = .Region, .Ocr = .Region}
@@ -149,7 +154,7 @@ workflows_default :: proc() -> (ws: Workflows) {
 	}
 
 	{
-		wf := flowgraph.Graph_Entry{name = strings.clone("Screenshot")}
+		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("Screenshot"))}
 		g := &wf.graph
 		capture := add(g, .Capture, {0, 70})
 		copy_image := add(g, .Copy_Image, {230, 0})
@@ -166,7 +171,7 @@ workflows_default :: proc() -> (ws: Workflows) {
 		workflows_bind(&ws, id, .Window, true)
 	}
 	{
-		wf := flowgraph.Graph_Entry{name = strings.clone("Edit then share")}
+		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("Edit then share"))}
 		g := &wf.graph
 		capture := add(g, .Capture, {0, 70})
 		annotate := add(g, .Annotate, {230, 70})
@@ -183,11 +188,11 @@ workflows_default :: proc() -> (ws: Workflows) {
 		workflows_bind(&ws, id, .Edit, true)
 	}
 	reads := [2]struct { name: string, read: Node_Kind, trigger: Trigger }{
-		{"Read a QR code", .Read_Qr, .Qr},
-		{"Read the text", .Read_Text, .Ocr},
+		{i18n.later("Read a QR code"), .Read_Qr, .Qr},
+		{i18n.later("Read the text"), .Read_Text, .Ocr},
 	}
 	for r in reads {
-		wf := flowgraph.Graph_Entry{name = strings.clone(r.name)}
+		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr(r.name))}
 		g := &wf.graph
 		capture := add(g, .Capture, {0, 70})
 		read := add(g, r.read, {230, 70})

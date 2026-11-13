@@ -16,6 +16,7 @@ import "gt:ascii"
 import "gt:fsx"
 import http "gt:http"
 import "gt:platform"
+import i18n "gt:i18n"
 
 // What a request's body is (ShareX's CustomUploaderBody). cliche sends a file only with Multipart_Form_Data and Binary,
 // as ShareX does; the others are read, and refused at upload.
@@ -110,17 +111,17 @@ UPLOAD_TIMEOUT    :: 2 * time.Minute
 // the temp allocator ("": none).
 uploader_parse :: proc(text: []u8, file: string, allocator := context.allocator) -> (u: Uploader, problem: string) {
 	value, err := json.parse(text, .JSON5, parse_integers = true, allocator = context.temp_allocator)
-	if err != .None { return {}, "the file is not JSON" }
+	if err != .None { return {}, i18n.tr("the file is not JSON") }
 	root, is_object := value.(json.Object)
-	if !is_object { return {}, "the file is not a JSON object" }
+	if !is_object { return {}, i18n.tr("the file is not a JSON object") }
 
 	t: Uploader   // (temp allocator until it is whole; cloned at the end)
 	t.version = json_text(root, "Version")
 	if t.version == "" || version_compare(t.version, UNSUPPORTED_UP_TO) <= 0 {
-		return {}, "the file is for a ShareX older than 12.4: export it again from a recent ShareX"
+		return {}, i18n.tr("the file is for a ShareX older than 12.4: export it again from a recent ShareX")
 	}
 	t.request_url = json_text(root, "RequestURL")
-	if strings.trim_space(t.request_url) == "" { return {}, "the file has no RequestURL" }
+	if strings.trim_space(t.request_url) == "" { return {}, i18n.tr("the file has no RequestURL") }
 	t.name = strings.trim_space(json_text(root, "Name"))
 	t.file = file
 
@@ -128,9 +129,9 @@ uploader_parse :: proc(text: []u8, file: string, allocator := context.allocator)
 	#partial switch m in root["RequestMethod"] {
 	case json.String:
 		t.method = ascii.upper(string(m), context.temp_allocator)
-		if !slice.contains(UPLOADER_METHODS[:], t.method) { return {}, fmt.tprintf("the RequestMethod %q is not one of ShareX's", string(m)) }
+		if !slice.contains(UPLOADER_METHODS[:], t.method) { return {}, fmt.tprintf(i18n.tr("the RequestMethod %q is not one of ShareX's"), string(m)) }
 	case json.Integer:
-		if m < 0 || int(m) >= len(UPLOADER_METHODS) { return {}, "the RequestMethod is not one of ShareX's" }
+		if m < 0 || int(m) >= len(UPLOADER_METHODS) { return {}, i18n.tr("the RequestMethod is not one of ShareX's") }
 		t.method = UPLOADER_METHODS[m]
 	}
 
@@ -140,9 +141,9 @@ uploader_parse :: proc(text: []u8, file: string, allocator := context.allocator)
 		for name, kind in UPLOADER_BODY_NAMES {
 			if ascii.equal_fold(name, string(b)) { t.body, found = kind, true }
 		}
-		if !found { return {}, fmt.tprintf("the Body %q is not one of ShareX's", string(b)) }
+		if !found { return {}, fmt.tprintf(i18n.tr("the Body %q is not one of ShareX's"), string(b)) }
 	case json.Integer:
-		if b < 0 || int(b) > int(max(Uploader_Body)) { return {}, "the Body is not one of ShareX's" }
+		if b < 0 || int(b) > int(max(Uploader_Body)) { return {}, i18n.tr("the Body is not one of ShareX's") }
 		t.body = Uploader_Body(b)
 	}
 
@@ -317,7 +318,7 @@ uploader_request :: proc(u: Uploader, file: []u8, file_name: string) -> (r: Uplo
 	content_type := ""
 	#partial switch u.body {
 	case .Multipart_Form_Data:
-		if u.file_form_name == "" { return {}, "the uploader has no FileFormName: the form field of the file" }
+		if u.file_form_name == "" { return {}, i18n.tr("the uploader has no FileFormName: the form field of the file") }
 		fields := make([dynamic]http.Form_Field, context.temp_allocator)
 		for a in u.arguments {
 			value, bad := syntax_expand(a.value, in_text)
@@ -329,7 +330,7 @@ uploader_request :: proc(u: Uploader, file: []u8, file_name: string) -> (r: Uplo
 	case .Binary:
 		r.body, content_type = file, mime_type(file_name)
 	case:
-		return {}, fmt.tprintf("the uploader's body is %s: cliche sends a file as MultipartFormData or Binary", UPLOADER_BODY_NAMES[u.body])
+		return {}, fmt.tprintf(i18n.tr("the uploader's body is %s: cliche sends a file as MultipartFormData or Binary"), UPLOADER_BODY_NAMES[u.body])
 	}
 	if !has_type { append(&headers, http.Header{"Content-Type", content_type}) }
 	r.headers = headers[:]
@@ -360,14 +361,14 @@ uploader_answer :: proc(u: Uploader, a: Answer, file_name: string) -> (url: stri
 	if a.status < 200 || a.status > 299 {
 		if u.error_message != "" {
 			if message, _ := syntax_expand(u.error_message, s); strings.trim_space(message) != "" {
-				return "", fmt.tprintf("%s answered: %s", u.name, strings.trim_space(message))
+				return "", fmt.tprintf(i18n.tr("%s answered: %s"), u.name, strings.trim_space(message))
 			}
 		}
 		first := strings.trim_space(a.text)
 		if i := strings.index_any(first, "\r\n"); i >= 0 { first = first[:i] }
 		if len(first) > 120 { first = first[:120] }
-		if first == "" { return "", fmt.tprintf("%s answered with the status %d", u.name, a.status) }
-		return "", fmt.tprintf("%s answered with the status %d: %s", u.name, a.status, first)
+		if first == "" { return "", fmt.tprintf(i18n.tr("%s answered with the status %d"), u.name, a.status) }
+		return "", fmt.tprintf(i18n.tr("%s answered with the status %d: %s"), u.name, a.status, first)
 	}
 	if u.url == "" {
 		url = strings.trim_space(a.text)
@@ -376,7 +377,7 @@ uploader_answer :: proc(u: Uploader, a: Answer, file_name: string) -> (url: stri
 		if why != "" { return "", why }
 		url = strings.trim_space(expanded)
 	}
-	if url == "" { return "", fmt.tprintf("%s gave no URL in its answer", u.name) }
+	if url == "" { return "", fmt.tprintf(i18n.tr("%s gave no URL in its answer"), u.name) }
 	return url, ""
 }
 
@@ -421,7 +422,7 @@ uploaders_load :: proc(allocator := context.allocator) -> (list: []Uploader, pro
 			if e.type == .Directory || !strings.has_suffix(ascii.lower(e.name, context.temp_allocator), UPLOADER_EXTENSION) { continue }
 			path := strings.concatenate({folder, "/", e.name}, context.temp_allocator)
 			data, read_err := os.read_entire_file(path, context.temp_allocator)
-			if read_err != nil { append(&bad, fmt.aprintf("%s: cannot be read", e.name, allocator = allocator)); continue }
+			if read_err != nil { append(&bad, fmt.aprintf(i18n.tr("%s: cannot be read"), e.name, allocator = allocator)); continue }
 			u, problem := uploader_parse(data, path, allocator)
 			if problem != "" { append(&bad, fmt.aprintf("%s: %s", e.name, problem, allocator = allocator)); continue }
 			append(&out, u)
@@ -442,20 +443,20 @@ uploader_find :: proc(list: []Uploader, name: string) -> (u: ^Uploader, found: b
 // the worker calls it.
 uploader_import :: proc(path: string, allocator := context.allocator) -> (name: string, problem: string) {
 	data, err := os.read_entire_file(path, context.temp_allocator)
-	if err != nil { return "", strings.clone("the file cannot be read", allocator) }
+	if err != nil { return "", strings.clone(i18n.tr("the file cannot be read"), allocator) }
 	u, why := uploader_parse(data, path, context.temp_allocator)
 	if why != "" { return "", strings.clone(why, allocator) }
 	folder := uploaders_folder()
-	if os.make_directory_all(folder) != nil && !folder_exists(folder) { return "", strings.clone("the uploaders' folder cannot be made", allocator) }
+	if os.make_directory_all(folder) != nil && !folder_exists(folder) { return "", strings.clone(i18n.tr("the uploaders' folder cannot be made"), allocator) }
 	stem := file_name_safe(u.name)
 	for n in 1 ..= NAME_TRIES {
 		file := n == 1 ? strings.concatenate({stem, UPLOADER_EXTENSION}, context.temp_allocator) : fmt.tprintf("%s (%d)%s", stem, n, UPLOADER_EXTENSION)
 		target := strings.concatenate({folder, "/", file}, context.temp_allocator)
 		if os.exists(target) { continue }
-		if !fsx.write_atomic(target, data) { return "", strings.clone("the file cannot be written in the uploaders' folder", allocator) }
+		if !fsx.write_atomic(target, data) { return "", strings.clone(i18n.tr("the file cannot be written in the uploaders' folder"), allocator) }
 		return strings.clone(u.name, allocator), ""
 	}
-	return "", strings.clone("the uploaders' folder has too many files of that name", allocator)
+	return "", strings.clone(i18n.tr("the uploaders' folder has too many files of that name"), allocator)
 }
 
 // A name as a file's: the characters that a system refuses in a file name become "_".

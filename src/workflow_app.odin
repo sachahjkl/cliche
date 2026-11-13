@@ -10,6 +10,7 @@ import "core:log"
 import "core:strings"
 import flowgraph "gt:flowgraph"
 import "gt:platform"
+import i18n "gt:i18n"
 
 // The Annotate node of a run an editor's picture is for (Editor.ask; run 0: none, as for a picture of the history).
 Annotate_Ask :: struct {
@@ -168,7 +169,7 @@ workflow_interface_task :: proc(app: ^App, run: ^Run, task: flowgraph.Task) -> (
 	case .Copy_Text:
 		v, _ := flowgraph.task_input(task, 0)
 		d := run_data(v)
-		if d == nil || !platform.clipboard_set(app.anchor, {text = d.text}) { return {outcome = .Failed, message = "the text cannot go to the clipboard"} }
+		if d == nil || !platform.clipboard_set(app.anchor, {text = d.text}) { return {outcome = .Failed, message = i18n.tr("the text cannot go to the clipboard")} }
 		// (the same text goes on, as a text: an address or a path copied reads as one)
 		r.outputs[0] = flowgraph.value_hold(v)
 		r.outputs[0].kind = PORT_TEXT
@@ -176,7 +177,7 @@ workflow_interface_task :: proc(app: ^App, run: ^Run, task: flowgraph.Task) -> (
 	case .Add_To_History:
 		workflow_history_note(app, run, task.inputs)
 	case:
-		r = {outcome = .Failed, message = "this step cannot run here"}
+		r = {outcome = .Failed, message = i18n.tr("this step cannot run here")}
 	}
 	return
 }
@@ -231,7 +232,7 @@ workflow_node_result :: proc(app: ^App, r: Result_Node) {
 		if d != nil && platform.clipboard_set_image(app.anchor, {rgba = d.shot.rgba, size = d.shot.size, png = r.clipboard_png}) {
 			r.result.outputs[0] = flowgraph.value_hold(r.input)
 		} else {
-			r.result = {outcome = .Failed, message = strings.clone("the picture cannot go to the clipboard")}
+			r.result = {outcome = .Failed, message = strings.clone(i18n.tr("the picture cannot go to the clipboard"))}
 		}
 		delete(r.clipboard_png)
 		r.clipboard_png = nil
@@ -280,7 +281,7 @@ workflow_preview_picture :: proc(app: ^App, r: Result_Picture) {
 	wf := workflows_find(&app.workflows, r.workflow)
 	if !r.ok || wf == nil {
 		shot_free(&r.shot)
-		workflow_view_status(app, r.ok ? "" : "The newest capture of the history cannot be read.")
+		workflow_view_status(app, r.ok ? "" : i18n.tr("The newest capture of the history cannot be read."))
 		return
 	}
 	workflow_run_start(app, wf, r.shot, {source = r.shot.source, preview = true})
@@ -297,7 +298,7 @@ workflow_annotate_open :: proc(app: ^App, run: ^Run, task: flowgraph.Task) {
 	v, _ := flowgraph.task_input(task, 0)
 	d := run_data(v)
 	if d == nil {
-		flowgraph.run_finish(&run.flow, task.node, {outcome = .Failed, message = "no picture came in"})
+		flowgraph.run_finish(&run.flow, task.node, {outcome = .Failed, message = i18n.tr("no picture came in")})
 		return
 	}
 	// (the editor owns a copy: the run's picture may feed other branches meanwhile)
@@ -306,11 +307,11 @@ workflow_annotate_open :: proc(app: ^App, run: ^Run, task: flowgraph.Task) {
 	ed := editor_take(app)
 	if ed == nil {
 		shot_free(&shot)
-		flowgraph.run_finish(&run.flow, task.node, {outcome = .Failed, message = "the editor cannot open"})
+		flowgraph.run_finish(&run.flow, task.node, {outcome = .Failed, message = i18n.tr("the editor cannot open")})
 		return
 	}
 	if !editor_open_shot(ed, shot, shot.scale > 0 ? shot.scale : 1) {
-		flowgraph.run_finish(&run.flow, task.node, {outcome = .Failed, message = "the editor cannot open"})
+		flowgraph.run_finish(&run.flow, task.node, {outcome = .Failed, message = i18n.tr("the editor cannot open")})
 		return
 	}
 	ed.ask = {run.flow.id, task.node}
@@ -344,14 +345,14 @@ workflow_editor_done :: proc(app: ^App, ask: Annotate_Ask, shot: Shot) {
 // needs its picture or its "done" is skipped; what hangs on its "cancelled" runs.
 workflow_editor_closed :: proc(app: ^App, ask: Annotate_Ask) {
 	if ask.run == 0 { return }
-	if run := workflow_run_find(app, ask.run); run != nil && flowgraph.run_cancel(&run.flow, ask.node, "cancelled in the editor") { workflow_pump(app, run) }
+	if run := workflow_run_find(app, ask.run); run != nil && flowgraph.run_cancel(&run.flow, ask.node, i18n.tr("cancelled in the editor")) { workflow_pump(app, run) }
 }
 
 // No workflow runs for this capture: said, so the user knows where to choose one.
 workflow_no_workflow :: proc(app: ^App) {
 	body := FLOW_ERROR_TEXT[.No_Workflow]
 	log.warn(body)
-	app_announce(app, .Warn, "Nothing ran", body)
+	app_announce(app, .Warn, i18n.tr("Nothing ran"), i18n.tr(body))
 }
 
 @(private = "file")

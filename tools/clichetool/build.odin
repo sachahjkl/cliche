@@ -46,6 +46,8 @@ run_check :: proc(args: []string) -> int {
 	for e in errors { fmt.eprintfln("changelog: %s", e) }
 	if len(errors) > 0 { return toolbox.EXIT_FAILED }
 	fmt.printfln("changelog: %d fragments, well formed", n)
+	// (the French catalogue has every text of the code, translated: `clichetool i18n fr` writes it)
+	if e := toolbox.i18n_catalogue({"src"}, "i18n/fr.txt", "fr", check = true); e != "" { fmt.eprintln(e); return toolbox.EXIT_FAILED }
 	if run_test(nil) != toolbox.EXIT_DONE { return toolbox.EXIT_FAILED }
 	return run_build({"release"})
 }
