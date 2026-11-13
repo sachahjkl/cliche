@@ -41,8 +41,11 @@ app_record_step :: proc(app: ^App, e: Record_Event) -> bool {
 // The rectangle chosen: the capture flow is done with the frozen desktop. The recording is Ready: the overlay frames
 // the region on the live screen and waits for Record.
 app_record_chosen :: proc(app: ^App, r: Rect) {
+	r := r
 	app_step(app, Flow_Cancelled{})
-	app.record_output = app.overlay.out   // (the region's overlay covered the output the rectangle is on)
+	// (a recording is of one output: the one that holds most of the rectangle, which keeps its part on it)
+	app.record_output = record_output_of(app.desktop.outputs, r)
+	if !rect_empty(app.record_output) { r = rect_clamp(r, app.record_output) }
 	app_desktop_drop(app)
 	if !app_record_step(app, Record_Chosen{}) { return }
 	app.record_region = r
@@ -165,4 +168,13 @@ clone_string :: proc(s: string) -> string {
 	out := make([]u8, len(s))
 	copy(out, s)
 	return string(out)
+}
+
+// The output that holds most of `r` (else the nearest); empty when none is known.
+record_output_of :: proc(outs: []capture.Output, r: Rect) -> Rect {
+	if len(outs) == 0 { return {} }
+	rects := make([]Rect, len(outs), context.temp_allocator)
+	for o, i in outs { rects[i] = o.rect }
+	i := capture.output_of(r, rects)
+	return i >= 0 ? rects[i] : {}
 }

@@ -5,7 +5,7 @@ package cliche
 
 import capture "gt:capture"
 
-// The desktop, the outputs and the windows, for a region. The frame's pixels are RGBA when it returns.
+// The desktop (each output's own picture), the outputs and the windows, for a region. The pixels are RGBA when it returns.
 grab_desktop :: proc(s: ^capture.Session) -> Result_Desktop {
 	r: Result_Desktop
 	// (the lists first: what the picture shows is then at least as recent as where the windows were said to be)
@@ -14,7 +14,7 @@ grab_desktop :: proc(s: ^capture.Session) -> Result_Desktop {
 	r.have_rects = capture.windows_have_rects(s)
 	// (where the pointer is: the region's overlay opens on that screen)
 	if _, output, ok := capture.pointer(s); ok { r.pointer_output, r.has_pointer_output = output, true }
-	r.frame, r.error = capture.desktop(s)
+	r.parts, r.error = capture.desktop_parts(s)
 	return r
 }
 
@@ -47,10 +47,10 @@ grab_window :: proc(s: ^capture.Session) -> Result_Shot {
 	f, err := capture.window(s, target.id)
 	if err == .None { return {shot = shot_of_frame(&f, .Window)} }
 	if err != .Unsupported || !target.has_rect { return {error = flow_error_of(err)} }
-	d, derr := capture.desktop(s)
+	parts, derr := capture.desktop_parts(s)
 	if derr != .None { return {error = flow_error_of(derr)} }
-	defer capture.frame_free(&d)
-	cut, ok := capture.crop(d, target.rect)
+	defer capture.frames_free(parts)
+	cut, ok := capture.crop_parts(parts, target.rect)   // (on one output: at its own scale)
 	if !ok { return {error = .Empty} }
 	return {shot = shot_of_frame(&cut, .Window)}
 }

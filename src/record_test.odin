@@ -2,6 +2,7 @@ package cliche
 
 import "core:testing"
 import "core:time"
+import capture "gt:capture"
 
 @(private = "file")
 step :: proc(t: ^testing.T, r: Record_Flow, e: Record_Event, want: Record_Flow, loc := #caller_location) -> Record_Flow {
@@ -193,4 +194,13 @@ record_texts :: proc(t: ^testing.T) {
 	testing.expect_value(t, size_text(340_000), "340 KB")
 	testing.expect_value(t, size_text(12_500_000), "12.5 MB")
 	testing.expect_value(t, record_notice_body("/p/a.mp4", 2_000_000, 65_000), "/p/a.mp4\n2.0 MB, 1:05")
+}
+
+// A region chosen across two screens is recorded on the one that holds most of it (a recording is of one output).
+@(test)
+a_recording_is_on_the_screen_with_most_of_the_region :: proc(t: ^testing.T) {
+	outs := []capture.Output{{id = 1, rect = {0, 0, 1920, 1080}, scale = 4.0 / 3.0}, {id = 2, rect = {1920, 0, 1920, 1080}, scale = 1}}
+	testing.expect_value(t, record_output_of(outs, {1800, 100, 400, 300}), Rect{1920, 0, 1920, 1080})
+	testing.expect_value(t, record_output_of(outs, {1700, 100, 400, 300}), Rect{0, 0, 1920, 1080})
+	testing.expect_value(t, record_output_of(nil, {0, 0, 10, 10}), Rect{})
 }
