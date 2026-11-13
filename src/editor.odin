@@ -281,7 +281,7 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 	ed := new(Editor)
 	app.editor_next_id += 1
 	ed.app, ed.id = app, app.editor_next_id
-	if !host.host_open(&ed.host, &app.shared, {title = "cliche editor", size = EDITOR_SIZE, headless = headless}, editor_build, ed) {
+	if !host.host_open(&ed.host, &app.shared, {title = i18n.tr("cliche editor"), size = EDITOR_SIZE, headless = headless}, editor_build, ed) {
 		log.error("the editor's window cannot open")
 		free(ed)
 		return nil

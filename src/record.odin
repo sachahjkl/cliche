@@ -285,9 +285,10 @@ record_elapsed_text :: proc(ms: i64, allocator := context.temp_allocator) -> str
 size_text :: proc(bytes: i64, allocator := context.temp_allocator) -> string {
 	switch {
 	case bytes < 1000 * 1000:        return fmt.aprintf(i18n.tr("%d KB"), (bytes + 999) / 1000, allocator = allocator)
-	case bytes < 1000 * 1000 * 1000: return fmt.aprintf(i18n.tr("%.1f MB"), f64(bytes) / 1e6, allocator = allocator)
+	// (the language's decimal mark: "12,5 Mo" in French)
+	case bytes < 1000 * 1000 * 1000: return fmt.aprintf(i18n.tr("%s MB"), i18n.decimal(f64(bytes) / 1e6, 1), allocator = allocator)
 	}
-	return fmt.aprintf(i18n.tr("%.2f GB"), f64(bytes) / 1e9, allocator = allocator)
+	return fmt.aprintf(i18n.tr("%s GB"), i18n.decimal(f64(bytes) / 1e9, 2), allocator = allocator)
 }
 
 // The notification's body at the end of a recording: where it is, its size and its length.

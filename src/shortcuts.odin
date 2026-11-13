@@ -13,6 +13,7 @@ import i18n "gt:i18n"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
 import shortcuts "gt:shortcuts"
+import "gt:ui"
 
 // In the order of the settings' page and of the tray's menu: the screen, the region, the two recordings, then the rest.
 Shortcut_Action :: enum u8 { Screen, Region, Record, Record_Gif, Window, Ocr, Qr }
@@ -112,10 +113,29 @@ shortcut_keys :: proc(app: ^App, a: Shortcut_Action) -> string {
 		st := shortcuts.status(app.shortcuts, SHORTCUT_IDS[a])
 		if st.state == .Bound && st.trigger != "" {
 			// (the portal words them its own way, "CTRL+SHIFT+a": the same words as the settings' everywhere)
-			if hk, ok := platform.hotkey_parse(st.trigger); ok { return platform.hotkey_text(hk) }
+			if hk, ok := platform.hotkey_parse(st.trigger); ok { return hotkey_shown(hk) }
 			return st.trigger
 		}
 	}
-	if hk, ok := platform.hotkey_parse(app.settings.shortcuts[a]); ok { return platform.hotkey_text(hk) }
+	if hk, ok := platform.hotkey_parse(app.settings.shortcuts[a]); ok { return hotkey_shown(hk) }
 	return ""
+}
+
+// A hotkey as the keyboards of the language print it ("Maj+Impr. écran" in French), for a text that is read, not typed:
+// the settings' fields keep hotkey_text's English words, which hotkey_parse reads back. (The toolkit's ui.key_name names
+// no Print key, nor a hotkey: this belongs in the toolkit's platform.hotkey_text once it has the language's words.)
+hotkey_shown :: proc(hk: platform.Hotkey, allocator := context.temp_allocator) -> string {
+	b := strings.builder_make(allocator)
+	if .Ctrl in hk.mods  { strings.write_string(&b, i18n.tr("key", "Ctrl")); strings.write_byte(&b, '+') }
+	if .Shift in hk.mods { strings.write_string(&b, i18n.tr("key", "Shift")); strings.write_byte(&b, '+') }
+	if .Alt in hk.mods   { strings.write_string(&b, i18n.tr("key", "Alt")); strings.write_byte(&b, '+') }
+	if hk.super          { strings.write_string(&b, "Win+") }
+	switch {
+	case hk.key == .None && hk.char != 0: strings.write_rune(&b, hk.char)
+	case hk.key == .Print:                strings.write_string(&b, i18n.tr("key", "Print"))
+	case ui.key_name(hk.key) != "":       strings.write_string(&b, ui.key_name(hk.key))
+	// (a key the toolkit does not name: the hotkey's own word for it)
+	case:                                 strings.write_string(&b, platform.hotkey_text({key = hk.key}))
+	}
+	return strings.to_string(b)
 }

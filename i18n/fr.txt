@@ -50,7 +50,7 @@ en History
 fr Historique
 
 en Workflows
-fr Workflows
+fr Scénarios
 
 en Settings
 fr Réglages
@@ -146,7 +146,7 @@ en Save the picture
 fr Enregistrer l'image
 
 en Done: the workflow goes on
-fr Terminé : le workflow continue
+fr Terminé : le scénario continue
 
 en Close the editor
 fr Fermer l'éditeur
@@ -189,6 +189,9 @@ fr Blanc
 
 en The picture cannot be read.
 fr L'image ne peut pas être lue.
+
+en cliche editor
+fr éditeur de cliche
 
 en The picture cannot be read: it is not a PNG file, or it is gone.
 fr L'image ne peut pas être lue : ce n'est pas un fichier PNG, ou il n'existe plus.
@@ -294,7 +297,7 @@ en this system reads no text: install Tesseract and its languages (Linux), or a 
 fr ce système ne lit pas de texte : installez Tesseract et ses langues (Linux), ou une langue de Windows avec la reconnaissance de texte
 
 en no workflow runs for this capture: choose one in the Workflows of the main window
-fr aucun workflow ne s'exécute pour cette capture : choisissez-en un dans les Workflows de la fenêtre principale
+fr aucun scénario ne s'exécute pour cette capture : choisissez-en un dans les Scénarios de la fenêtre principale
 
 en Region
 fr Zone
@@ -398,9 +401,6 @@ fr Non mise en ligne
 en The picture cannot be read
 fr L'image ne peut pas être lue
 
-en Search names, texts, URLs
-fr Rechercher des noms, des textes, des URL
-
 ctx thumbnail size, short
 en S
 fr P
@@ -413,6 +413,15 @@ ctx thumbnail size, short
 en L
 fr G
 
+en Grid
+fr Grille
+
+en List
+fr Liste
+
+en Search names, texts, URLs
+fr Rechercher des noms, des textes, des URL
+
 en Small thumbnails
 fr Petites miniatures
 
@@ -422,26 +431,11 @@ fr Miniatures moyennes
 en Large thumbnails
 fr Grandes miniatures
 
-en Grid
-fr Grille
+en Hide the preview
+fr Masquer l'aperçu
 
-en List
-fr Liste
-
-en Hide the preview (Space)
-fr Masquer l'aperçu (Espace)
-
-en Preview (Space)
-fr Aperçu (Espace)
-
-en Workflows: what happens after a capture (Ctrl+Shift+W)
-fr Workflows : ce qui se passe après une capture (Ctrl+Maj+W)
-
-en Command palette (Ctrl+K)
-fr Palette de commandes (Ctrl+K)
-
-en Settings (Ctrl+,)
-fr Réglages (Ctrl+,)
+en Workflows: what happens after a capture
+fr Scénarios : ce qui se passe après une capture
 
 en Press %s, or click cliche's icon in the notification area: each capture comes here.
 fr Appuyez sur %s, ou cliquez sur l'icône de cliche dans la zone de notification : chaque capture arrive ici.
@@ -549,63 +543,6 @@ fr Le fichier reste.
 en The files stay.
 fr Les fichiers restent.
 
-en Licence registered: thank you
-fr Licence enregistrée : merci
-
-en Licence removed
-fr Licence retirée
-
-en This licence is not cliche's.
-fr Cette licence n'est pas celle de cliche.
-
-en This key is not a valid licence of cliche: check that it was copied whole.
-fr Cette clé n'est pas une licence valide de cliche : vérifiez qu'elle a été copiée en entier.
-
-en This build of cliche accepts no licence yet.
-fr Cette version de cliche n'accepte pas encore de licence.
-
-en The licence file cannot be read.
-fr Le fichier de licence ne peut pas être lu.
-
-en The licence cannot be saved.
-fr La licence ne peut pas être enregistrée.
-
-en Licence
-fr Licence
-
-en Reading the licence…
-fr Lecture de la licence…
-
-en Registered to %s (%s). Thank you for supporting cliche.
-fr Enregistrée au nom de %s (%s). Merci de soutenir cliche.
-
-en Remove the licence
-fr Retirer la licence
-
-en Unregistered. cliche is free; a licence supports its work.
-fr Non enregistrée. cliche est gratuit ; une licence soutient son développement.
-
-en The licence stored here is not valid: %s
-fr La licence enregistrée ici n'est pas valide : %s
-
-en Support cliche: buy a licence
-fr Soutenir cliche : acheter une licence
-
-en Paste a licence key
-fr Collez une clé de licence
-
-en Register
-fr Enregistrer
-
-en Choose a file…
-fr Choisir un fichier…
-
-en Choose a licence file
-fr Choisir un fichier de licence
-
-en cliche licence
-fr Licence de cliche
-
 en this desktop offers no way to record this
 fr ce bureau ne permet pas d'enregistrer ceci
 
@@ -630,11 +567,11 @@ fr l'enregistrement n'a pas pu être sauvegardé
 en %d KB
 fr %d Ko
 
-en %.1f MB
-fr %.1f Mo
+en %s MB
+fr %s Mo
 
-en %.2f GB
-fr %.2f Go
+en %s GB
+fr %s Go
 
 en Press %s again, or click cliche's icon, to stop it.
 fr Appuyez de nouveau sur %s, ou cliquez sur l'icône de cliche, pour l'arrêter.
@@ -794,19 +731,19 @@ en Default host
 fr Hébergeur par défaut
 
 en Where a workflow's Upload step sends pictures when it names no host, and where the history uploads again: the built-in host (anonymous, files kept 72 hours), or one of the ShareX uploaders (.sxcu files) in the uploaders' folder.
-fr Où l'étape Mettre en ligne d'un workflow envoie les images quand elle ne nomme aucun hébergeur, et où l'historique les remet en ligne : l'hébergeur intégré (anonyme, fichiers gardés 72 heures), ou l'un des hébergeurs ShareX (fichiers .sxcu) du dossier des hébergeurs.
+fr Où l'étape Mettre en ligne d'un scénario envoie les images quand elle ne nomme aucun hébergeur, et où l'historique les remet en ligne : l'hébergeur intégré (anonyme, fichiers gardés 72 heures), ou l'un des hébergeurs ShareX (fichiers .sxcu) du dossier des hébergeurs.
 
 en Default folder
 fr Dossier par défaut
 
 en The folder of a workflow's Save step that names none, of the editor's Save, and of recordings. Empty: Pictures/Screenshots when it exists, else Pictures/cliche.
-fr Le dossier de l'étape Enregistrer le fichier d'un workflow qui n'en nomme aucun, de l'enregistrement de l'éditeur, et des enregistrements vidéo. Vide : Pictures/Screenshots s'il existe, sinon Pictures/cliche.
+fr Le dossier de l'étape Enregistrer le fichier d'un scénario qui n'en nomme aucun, de l'enregistrement de l'éditeur, et des enregistrements vidéo. Vide : Pictures/Screenshots s'il existe, sinon Pictures/cliche.
 
 en Default file name
 fr Nom de fichier par défaut
 
 en The name of a saved file when its Save step names none: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets " (2)".
-fr Le nom d'un fichier enregistré quand son étape Enregistrer le fichier n'en nomme aucun : %Y année, %m mois, %d jour, %H heure, %M minute, %S seconde, %f millisecondes, %s la source (region, screen, window), %% un %. Un nom déjà pris reçoit « (2) ».
+fr Le nom d'un fichier enregistré quand son étape Enregistrer le fichier n'en nomme aucun : %Y année, %m mois, %d jour, %H heure, %M minute, %S seconde, %f millisecondes, %s la source, écrite en anglais dans le nom (region : une zone, screen : l'écran, window : une fenêtre), %% un %. Un nom déjà pris reçoit « (2) ».
 
 en Capture the whole screen under the pointer.
 fr Capturer tout l'écran sous le pointeur.
@@ -945,6 +882,22 @@ fr Lire le texte d'une zone
 
 en Read a QR code in a region
 fr Lire un code QR dans une zone
+
+ctx key
+en Ctrl
+fr Ctrl
+
+ctx key
+en Shift
+fr Maj
+
+ctx key
+en Alt
+fr Alt
+
+ctx key
+en Print
+fr Impr. écran
 
 en the file is not JSON
 fr le fichier n'est pas du JSON
@@ -1094,7 +1047,7 @@ en WORKFLOWS
 fr WORKFLOWS
 
 en New workflow
-fr Nouveau workflow
+fr Nouveau scénario
 
 en Rename (or double-click its name)
 fr Renommer (ou double-cliquer sur son nom)
@@ -1106,7 +1059,7 @@ en Delete…
 fr Supprimer…
 
 en No workflow runs for: %s. Choose one in a workflow's triggers.
-fr Aucun workflow ne s'exécute pour : %s. Choisissez-en un dans les déclencheurs d'un workflow.
+fr Aucun scénario ne s'exécute pour : %s. Choisissez-en un dans les déclencheurs d'un scénario.
 
 en Double-click to rename
 fr Double-cliquer pour renommer
@@ -1124,7 +1077,7 @@ en Reset
 fr Réinitialiser
 
 en Where the workflow starts: the picture of the capture.
-fr Le début du workflow : l'image de la capture.
+fr Le début du scénario : l'image de la capture.
 
 en Opens the picture in the editor. Done sends its picture on and fires "done"; Cancel stops this branch and fires "cancelled".
 fr Ouvre l'image dans l'éditeur. Terminé transmet son image et déclenche « terminé » ; Annuler arrête cette branche et déclenche « annulé ».
@@ -1145,7 +1098,7 @@ en %s: makes a new picture; the others that read this one keep it as it is.
 fr %s : crée une nouvelle image ; les autres étapes qui lisent celle-ci la gardent telle quelle.
 
 en The captures that run this workflow. Each capture runs one workflow: one chosen here leaves the workflow that had it.
-fr Les captures qui exécutent ce workflow. Chaque capture exécute un seul workflow : une capture choisie ici quitte le workflow qui l'avait.
+fr Les captures qui exécutent ce scénario. Chaque capture exécute un seul scénario : une capture choisie ici quitte le scénario qui l'avait.
 
 en %s; runs "%s" now
 fr %s ; exécute « %s » actuellement
@@ -1625,10 +1578,10 @@ en A picture
 fr Une image
 
 en %s cannot be read: the default workflows are in its place.
-fr %s ne peut pas être lu : les workflows par défaut sont à sa place.
+fr %s ne peut pas être lu : les scénarios par défaut sont à sa place.
 
 en %s cannot be read (%s): it is kept as %s, and the default workflows are in its place.
-fr %s ne peut pas être lu (%s) : il est gardé sous le nom %s, et les workflows par défaut sont à sa place.
+fr %s ne peut pas être lu (%s) : il est gardé sous le nom %s, et les scénarios par défaut sont à sa place.
 
 en Back to the history
 fr Retour à l'historique
@@ -1637,7 +1590,7 @@ en Add a step…
 fr Ajouter une étape…
 
 en Show the whole workflow
-fr Afficher tout le workflow
+fr Afficher tout le scénario
 
 en Run on the last capture
 fr Exécuter sur la dernière capture
@@ -1646,7 +1599,7 @@ en The preview ran on the newest capture of the history: nothing was copied, sav
 fr L'aperçu s'est exécuté sur la capture la plus récente de l'historique : rien n'a été copié, enregistré ni envoyé.
 
 en The history holds no picture to run the workflow on.
-fr L'historique ne contient aucune image sur laquelle exécuter le workflow.
+fr L'historique ne contient aucune image sur laquelle exécuter le scénario.
 
 en Running on the newest capture…
 fr Exécution sur la capture la plus récente…
@@ -1661,16 +1614,16 @@ en Redo (Ctrl+Shift+Z)
 fr Rétablir (Ctrl+Maj+Z)
 
 en Show the whole workflow (F)
-fr Afficher tout le workflow (F)
+fr Afficher tout le scénario (F)
 
 en No workflow
-fr Aucun workflow
+fr Aucun scénario
 
 en A workflow says what happens after a capture: the steps the picture goes through, and where it goes.
-fr Un workflow dit ce qui se passe après une capture : les étapes que l'image traverse, et où elle va.
+fr Un scénario dit ce qui se passe après une capture : les étapes que l'image traverse, et où elle va.
 
 en The default workflows
-fr Les workflows par défaut
+fr Les scénarios par défaut
 
 en Right click the graph, or drag from the Capture's picture, to add a step.
 fr Faites un clic droit sur le graphe, ou glissez depuis l'image de la Capture, pour ajouter une étape.
@@ -1682,13 +1635,13 @@ en Reset its settings
 fr Réinitialiser ses réglages
 
 en Delete the workflow %q?
-fr Supprimer le workflow %q ?
+fr Supprimer le scénario « %s » ?
 
 en Delete the workflow?
-fr Supprimer le workflow ?
+fr Supprimer le scénario ?
 
 en Its steps go with it. Undo cannot bring it back.
 fr Ses étapes partent avec lui. Annuler ne peut pas le rétablir.
 
 en Its steps go with it, and the captures it runs will run nothing until another workflow takes them.
-fr Ses étapes partent avec lui, et les captures qu'il exécute n'exécuteront rien tant qu'un autre workflow ne les prend pas.
+fr Ses étapes partent avec lui, et les captures qu'il exécute n'exécuteront rien tant qu'un autre scénario ne les prend pas.

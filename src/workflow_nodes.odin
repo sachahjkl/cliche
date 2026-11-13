@@ -199,7 +199,7 @@ node_summary :: proc(n: ^flowgraph.Node) -> string {
 	case .Capture, .Grayscale, .Invert, .Sepia, .Annotate, .Copy_Image, .Copy_Text, .Read_Qr, .Show_In_Folder, .Add_To_History:
 		return ""
 	case .Resize:
-		if Resize_Mode(flowgraph.param_int(&CATALOG, n, "mode")) == .Percent { return fmt.tprintf("%s %%", number_text(flowgraph.param_float(&CATALOG, n, "percent"))) }
+		if Resize_Mode(flowgraph.param_int(&CATALOG, n, "mode")) == .Percent { return percent_text(flowgraph.param_float(&CATALOG, n, "percent")) }
 		w, h := flowgraph.param_int(&CATALOG, n, "width"), flowgraph.param_int(&CATALOG, n, "height")
 		switch {
 		case w > 0 && h > 0: return fmt.tprintf(i18n.tr("at most %d × %d px"), w, h)
@@ -233,7 +233,7 @@ node_summary :: proc(n: ^flowgraph.Node) -> string {
 	case .Brightness_Contrast:
 		return fmt.tprintf(i18n.tr("%+d %%, contrast %+d %%"), int(flowgraph.param_float(&CATALOG, n, "brightness")), int(flowgraph.param_float(&CATALOG, n, "contrast")))
 	case .Saturation:
-		return fmt.tprintf("%s %%", number_text(flowgraph.param_float(&CATALOG, n, "amount")))
+		return percent_text(flowgraph.param_float(&CATALOG, n, "amount"))
 	case .Hue:
 		return fmt.tprintf("%+d°", int(flowgraph.param_float(&CATALOG, n, "degrees")))
 	case .Threshold:
@@ -241,7 +241,7 @@ node_summary :: proc(n: ^flowgraph.Node) -> string {
 	case .Blur:
 		return fmt.tprintf("%s px", number_text(flowgraph.param_float(&CATALOG, n, "radius")))
 	case .Sharpen:
-		return fmt.tprintf("%s %%", number_text(flowgraph.param_float(&CATALOG, n, "amount")))
+		return percent_text(flowgraph.param_float(&CATALOG, n, "amount"))
 	case .Pixelate:
 		return fmt.tprintf(i18n.tr("cells of %d px"), flowgraph.param_int(&CATALOG, n, "cell"))
 	case .Condition:
@@ -253,7 +253,7 @@ node_summary :: proc(n: ^flowgraph.Node) -> string {
 	case .Save_File:
 		f := Save_Format(clamp(flowgraph.param_int(&CATALOG, n, "format"), 0, len(Save_Format) - 1))
 		format := i18n.tr(SAVE_FORMAT_TEXT[f])
-		if f == .Jpeg || f == .Webp { format = fmt.tprintf("%s %d %%", format, flowgraph.param_int(&CATALOG, n, "quality")) }
+		if f == .Jpeg || f == .Webp { format = fmt.tprintf("%s %s", format, i18n.percent(f64(flowgraph.param_int(&CATALOG, n, "quality")) / 100)) }
 		folder := flowgraph.param_text(&CATALOG, n, "folder")
 		if folder == "" { return fmt.tprintf(i18n.tr("%s to the default folder"), format) }
 		return fmt.tprintf(i18n.tr("%s to %s"), format, path_short(folder))
@@ -271,11 +271,17 @@ node_summary :: proc(n: ^flowgraph.Node) -> string {
 	return ""
 }
 
-// A number with no ".0" when it is whole.
+// A number with no ".0" when it is whole, with the language's decimal mark ("1,5" in French).
 @(private = "file")
 number_text :: proc(v: f64) -> string {
 	if v == f64(i64(v)) { return fmt.tprintf("%d", i64(v)) }
-	return fmt.tprintf("%.1f", v)
+	return i18n.decimal(v, 1)
+}
+
+// A percent (50 for 50 %) as the language writes it ("50 %" in French, "50%" in English), no ".0" when whole.
+@(private = "file")
+percent_text :: proc(v: f64) -> string {
+	return i18n.percent(v / 100, v == f64(i64(v)) ? 0 : 1)
 }
 
 // "#rrggbb", with its alpha when not opaque.

@@ -88,7 +88,7 @@ App :: struct {
 	announcer:  ui.Announcer,                              // where cliche says what it did (general.messages): app_announce
 	standards:  [dynamic]^prefs_page.Standard_Watch,       // the toolkit's standard settings on each open window (app_standard_follow)
 	themes_file: prefs_page.Themes_File,                   // cliche's themes, then the user's own (themes.txt beside the preferences)
-	licence:    Licence_View,                              // licence.odin
+	licence:    prefs_page.Licence,                        // licence.odin: the settings' Licence page
 	shortcuts:  ^shortcuts.Service,                        // shortcuts.odin
 	shortcuts_bound: [Shortcut_Action]string,              // the keys the service was given last (owned)
 	tray_keys:  [Shortcut_Action]string,                   // the keys the tray's menu shows (owned): built again when they change

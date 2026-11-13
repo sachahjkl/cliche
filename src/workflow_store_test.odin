@@ -189,7 +189,7 @@ a_node_says_what_it_does :: proc(t: ^testing.T) {
 		if set != nil { set(n) }
 		testing.expect_value(t, node_summary(n), want, loc = loc)
 	}
-	check(t, &g, .Resize, "50 %")
+	check(t, &g, .Resize, "50%")   // (i18n.percent: English writes no space before its sign)
 	check(t, &g, .Resize, "at most 1920 × 1080 px", proc(n: ^flowgraph.Node) { param(n, "mode").number = 1 })
 	check(t, &g, .Crop, "0 px each side")
 	check(t, &g, .Rotate, "90° right")

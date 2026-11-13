@@ -103,7 +103,8 @@ a mode of the main window (`src/history_view.odin`), as the workflows are: `src/
 ## Licence
 
 `src/licence/product.odin` describes cliche's licence for `gt:licence` (gui_toolkit docs/licence.md); `src/licence.odin`
-keeps its store, read and changed only in tasks, and draws the Licence section under the General page. `clichetool
+gives it to the toolkit's Licence page of the settings (`prefs_page.Licence`: its store, read and changed only in
+tasks, and its page, worded the same in every program). `clichetool
 licence` and `clichetool paddle` are the toolkit's commands; `clichetool site build` adds the shop's pages (pricing,
 thanks, terms, refunds, privacy, imprint), whose buttons say "Coming soon" until the shop is set up. `secrets/` and
 `.sops.yaml` hold the maintainer's encrypted keys once made.
