@@ -3,6 +3,26 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-13
+
+### Added
+- **A Diagnostics page in the settings, with a Copy button.** It shows the versions, the system, the graphics adapter (and whether a software rasterizer draws), the window's size and scale, the last frames' times and how much partial redraw drew. If cliche is slow, copy it and send it.
+- **cliche installs itself: an Installation page in the settings.** It says where the installed copy is, its version, and whether this copy is the installed one. It shows the menu entry, Settings > Apps, the start with the session and the PATH, with Install, Repair, Upgrade and Uninstall. The palette finds the page ("install"). On Windows, a copy that is not installed offers the install when its window first shows.
+The command line has `--install`, `--uninstall`, `--status` (what is installed, and whether cliche runs) and `--setup`, as in the other programs.
+- **cliche updates itself, as the other programs of Froment Software.** The installed copy looks for a new version a while after the start and then every day. It checks the signature and puts the new version in place. Then cliche starts again in the notification area, when no window shows and nothing is under way. The settings have an Updates page: Update by itself, the state, Check now, Install and Restart now. The palette has "Check for updates". If cliche runs from the Nix store, Nix updates it.
+
+### Changed
+- **The licence has its own page in the settings, worded as in the other programs.** It says whether cliche is registered. It offers Buy a licence, a field to paste a key, Choose a licence file… and Remove the licence.
+- **A crash of the last session shows in a bar at the top of the main window**, in place of a notification with the report's path. The bar says what happened and offers Open the report, Copy and Report on GitHub (a new issue with the report in it). Its cross dismisses it.
+- **A change of language shows at once**: the windows, the settings and the tray menu take the new language without a restart.
+- **cliche has the same settings as the other programs of Froment Software.** Only its theme is its own, and its defaults stay the same. The settings' reset button has the same arrow as in the other programs. The "system's title bar" switch is gone: cliche's windows always have the system's title bar, and the switch changed nothing.
+
+### Fixed
+- **Windows: cliche shows its icon and its publisher.** The editor, the settings and every other window show cliche's icon in the title bar and the taskbar, and they group under cliche's shortcut. Explorer and Task Manager show cliche's name, version and publisher, Froment Software, as for the other programs; the next start writes the menu entry again under this name. The archive has `cliche.com` beside `cliche.exe`: `cliche --help` in cmd or PowerShell prints there.
+- **French done right.** Keys have the names that a French keyboard prints ("Maj+Impr. écran") in the tooltips and the tray menu. Numbers use the French decimal mark and spacing, and frame rates read "i/s". Workflows are called "scénarios" everywhere. The file name's source words are explained, and the editor's window has a French title.
+- **The history's tool bar never cuts its text.** The filter, the thumbnail size and Grid or List are as wide as their longest word in every language. If the window is too narrow for them beside the search, they move to their own line.
+- **The editor fits its window.** In a narrow window, the properties, then undo, redo, copy and save, then the tools go into a "…" menu at the end of the tool bar; Cancel and Done always show. The editor takes the size that the desktop gives it: on a tiling desktop (sway), it fills its tile and follows its resizes, and its tool bar is no longer cut. The question before the changes are dropped is as wide as its title and its buttons, and its Cancel is no longer red.
+
 ## [0.2.2] - 2026-11-13
 
 ### Changed
@@ -91,6 +111,7 @@ and the versions follow [semantic versioning](https://semver.org/).
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.3.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.3.0
 [0.2.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.2.2
 [0.2.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.2.1
 [0.2.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.2.0
