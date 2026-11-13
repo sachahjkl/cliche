@@ -544,11 +544,9 @@ history_toolbar :: proc(app: ^App, em: f32) {
 	for text, f in HISTORY_FILTER_TEXT { filters[f] = i18n.tr(text) }
 	sizes := [3]string{i18n.tr("thumbnail size, short", "S"), i18n.tr("thumbnail size, short", "M"), i18n.tr("thumbnail size, short", "L")}
 	views := [2]string{i18n.tr("Grid"), i18n.tr("List")}
-	// (each segmented control as wide as its words need: a language's longer words widen it instead of being cut)
-	filter_w := segmented_fit(slice.enumerated_array(&filters), em, 31)
-	sizes_w := segmented_fit(sizes[:], em, 6.5)
-	views_w := segmented_fit(views[:], em, 8)
-	tools_w := filter_w + sizes_w + views_w + em * (0.8 + 0.8 + 0.6 + 0.6 + 5 * 2.1 + 0.6)
+	// (each segmented control is as wide as its words need, ui.segmented's own width: the layout reads it first)
+	segments_w := ui.segmented_width(slice.enumerated_array(&filters)) + ui.segmented_width(sizes[:]) + ui.segmented_width(views[:])
+	tools_w := segments_w + em * (0.8 + 0.8 + 0.6 + 0.6 + 5 * 2.1 + 0.6)
 	placeholder := i18n.tr("Search names, texts, URLs")
 	search_min := max(em * HISTORY_SEARCH_MIN_EM, ui.text_width(ui.top_style().font, em, placeholder) + em * 2.5)
 	// (the search beside the tools while its placeholder fits, as the last layout measured the window; else the tools go
@@ -567,13 +565,13 @@ history_toolbar :: proc(app: ^App, em: f32) {
 			hw.search_focused = s.focused
 			if s.changed { hw.shown_due = true }
 			if s.committed { hw.grid_reveal = true }
-			if stacked { ui.spacer(ui.px(em * 0.6)) } else { history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], filter_w, sizes_w, views_w, em) }
+			if stacked { ui.spacer(ui.px(em * 0.6)) } else { history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], em) }
 		}
 		if stacked {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.6)), axis = .X, cross = .Center})
 			if ui.row(id = "###toolbar_tools") {
 				ui.spacer(ui.fill())
-				history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], filter_w, sizes_w, views_w, em)
+				history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], em)
 			}
 		}
 	}
@@ -584,12 +582,12 @@ HISTORY_SEARCH_MIN_EM :: 16
 
 // The toolbar's choices and buttons, after the search (in its row, or in a row of their own when the window is narrow).
 @(private = "file")
-history_tools :: proc(app: ^App, filters, sizes, views: []string, filter_w, sizes_w, views_w: f32, em: f32) {
+history_tools :: proc(app: ^App, filters, sizes, views: []string, em: f32) {
 	hw := &app.history_window
 	field_h := ui.px(math.round(em * 1.9))
 	ui.spacer(ui.px(em * 0.8))
 	chosen := int(hw.filter)
-	ui.next({width = ui.px(math.round(filter_w)), height = field_h})
+	ui.next({height = field_h})
 	if ui.segmented("filter", filters, &chosen) {
 		hw.filter = History_Filter(chosen)
 		hw.shown_due = true
@@ -597,35 +595,22 @@ history_tools :: proc(app: ^App, filters, sizes, views: []string, filter_w, size
 	ui.spacer(ui.px(em * 0.8))
 	tips := [3]string{i18n.tr("Small thumbnails"), i18n.tr("Medium thumbnails"), i18n.tr("Large thumbnails")}
 	step := app.settings.history_thumbnail
-	ui.next({width = ui.px(math.round(sizes_w)), height = field_h})
+	ui.next({height = field_h})
 	if ui.segmented("thumb_size", sizes, &step, tips[:]) { history_pref(app, "history.thumbnail_size", HISTORY_THUMBNAIL_NAMES[clamp(step, 0, 2)]) }
 	ui.spacer(ui.px(em * 0.6))
 	view := int(app.settings.history_view)
-	ui.next({width = ui.px(math.round(views_w)), height = field_h})
+	ui.next({height = field_h})
 	if ui.segmented("view", views, &view) {
 		if view == 0 { history_action(app, .Grid) } else { history_action(app, .List) }
 	}
 	ui.spacer(ui.px(em * 0.6))
 	// (the keys in the tooltips as the keyboards of the language name them)
-	if history_icon_button("preview", lucide.EYE, key_tip(hw.preview_open ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}}), em) { history_action(app, .Preview) }
+	if history_icon_button("preview", lucide.EYE, ui.key_tip(hw.preview_open ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}}), em) { history_action(app, .Preview) }
 	if history_icon_button("folder", lucide.FOLDER_OPEN, i18n.tr("Open the save folder"), em) { history_action(app, .Open_Folder) }
-	if history_icon_button("workflows", lucide.GIT_FORK, key_tip(i18n.tr("Workflows: what happens after a capture"), {.W, {.Ctrl, .Shift}}), em) { history_action(app, .Workflows) }
-	if history_icon_button("palette", lucide.COMMAND, key_tip(i18n.tr("Command palette"), {.K, {.Ctrl}}), em) { history_action(app, .Palette) }
-	if history_icon_button("settings", lucide.SETTINGS, key_tip(i18n.tr("Settings"), {.Comma, {.Ctrl}}), em) { history_action(app, .Settings) }
+	if history_icon_button("workflows", lucide.GIT_FORK, ui.key_tip(i18n.tr("Workflows: what happens after a capture"), {.W, {.Ctrl, .Shift}}), em) { history_action(app, .Workflows) }
+	if history_icon_button("palette", lucide.COMMAND, ui.key_tip(i18n.tr("Command palette"), {.K, {.Ctrl}}), em) { history_action(app, .Palette) }
+	if history_icon_button("settings", lucide.SETTINGS, ui.key_tip(i18n.tr("Settings"), {.Comma, {.Ctrl}}), em) { history_action(app, .Settings) }
 	ui.spacer(ui.px(em * 0.6))
-}
-
-// A tooltip's text: what a button does and its key, the key named as the keyboards of the language print it.
-key_tip :: proc(label: string, key: ui.Chord) -> string {
-	return fmt.tprintf("%s (%s)", label, ui.chord_text(key))
-}
-
-// A segmented control's width: each segment as wide as the widest label, so that a longer word widens the control
-// instead of being cut; `least_em` at least.
-segmented_fit :: proc(labels: []string, em: f32, least_em: f32) -> f32 {
-	widest: f32
-	for l in labels { widest = max(widest, ui.text_width(ui.top_style().font, em, l)) }
-	return max(em * least_em, f32(len(labels)) * (widest + em * 1.6) + em * 0.5)
 }
 
 @(private = "file")

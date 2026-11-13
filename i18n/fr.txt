@@ -883,22 +883,6 @@ fr Lire le texte d'une zone
 en Read a QR code in a region
 fr Lire un code QR dans une zone
 
-ctx key
-en Ctrl
-fr Ctrl
-
-ctx key
-en Shift
-fr Maj
-
-ctx key
-en Alt
-fr Alt
-
-ctx key
-en Print
-fr Impr. écran
-
 en the file is not JSON
 fr le fichier n'est pas du JSON
 
