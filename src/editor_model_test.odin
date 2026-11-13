@@ -277,3 +277,27 @@ editor_pans_with_the_middle_button :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(m.doc.shapes), 0)
 	testing.expect(t, !m.view.fit)
 }
+
+// The editor's last choices, as the preferences keep them, come back whole; a part not read leaves the default.
+@(test)
+the_choices_come_back :: proc(t: ^testing.T) {
+	a: Edit_Model
+	edit_model_init(&a, {100, 100}, 1, measure_fixed, nil)
+	defer edit_model_destroy(&a)
+	a.tool = .Rectangle
+	a.styles[.Rectangle] = {color = 0x1E88E5, width = 7.5, shadow = false, fill = true, text_size = 24}
+	tool, styles := edit_choices_text(&a)
+	b: Edit_Model
+	edit_model_init(&b, {100, 100}, 1, measure_fixed, nil)
+	defer edit_model_destroy(&b)
+	edit_choices_read(&b, tool, styles)
+	testing.expect_value(t, b.tool, Edit_Tool.Rectangle)
+	testing.expect_value(t, b.styles, a.styles)
+	c: Edit_Model
+	edit_model_init(&c, {100, 100}, 1, measure_fixed, nil)
+	defer edit_model_destroy(&c)
+	edit_choices_read(&c, "Nothing", "Arrow zz 4 1 0 18;Pen 00ff00 3")
+	testing.expect_value(t, c.tool, Edit_Tool.Arrow)
+	testing.expect_value(t, c.styles[.Arrow], EDIT_STYLE_DEFAULT)
+	testing.expect_value(t, c.styles[.Pen], EDIT_STYLE_DEFAULT)
+}

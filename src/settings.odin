@@ -41,6 +41,10 @@ PREF_DEFS := [?]config.Def{
 	{name = "history.preview_width", title = "Preview width", category = "history", description = "The width of the preview pane, in ems. Dragging the line beside it changes it.", kind = .Float, default = {f = HISTORY_PREVIEW_EM}, min = HISTORY_PREVIEW_MIN_EM, max = HISTORY_PREVIEW_MAX_EM, bounded = true, hidden = true},
 	{name = "history.thumbnail_size", title = "Thumbnail size", category = "history", description = "The size of the thumbnails in the grid.", kind = .String, default = {s = "medium"}, tags = {"grid", "preview", "size"}},
 
+	// Editor: the last choices, as they were when an editor last closed (editor_choices_keep)
+	{name = "editor.tool", title = "Editor tool", category = "editor", description = "The tool the editor opens with: the last one used.", kind = .String, default = {s = ""}, hidden = true},
+	{name = "editor.styles", title = "Editor styles", category = "editor", description = "Each tool's colour, width, shadow, fill and text size, as last used.", kind = .String, default = {s = ""}, hidden = true},
+
 	// Region
 	{name = "region.confirm_on_release", title = "Take the rectangle on release", category = "region", description = "Take the rectangle as soon as the button is released. Off: adjust it with the arrow keys (Shift: resize), then press Enter or click inside it.", kind = .Bool, default = {b = true}, tags = {"fast", "enter", "adjust"}},
 	{name = "region.frame_windows", title = "Frame the window under the pointer", category = "region", description = "Frame the window under the pointer: a click takes it. Off: a click does nothing, only a drag chooses.", kind = .Bool, default = {b = true}, tags = {"window", "hover", "click", "snap"}},

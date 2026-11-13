@@ -33,7 +33,9 @@ import "core:slice"
 import "core:sync"
 import "core:thread"
 import "core:time"
+import "core:strconv"
 import "core:strings"
+import config "gt:config"
 import "gt:draw"
 import "gt:font"
 import "gt:host"
@@ -204,6 +206,7 @@ editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
 	timing_mark("picture uploaded")
 	ed.shot, ed.has_picture = shot, true
 	edit_model_init(&ed.model, shot.size, scale, editor_measure, app)
+	editor_choices_load(app, &ed.model)
 	ed.field_typing = 0
 	ed.asking, ed.close_due, ed.done_due, ed.exporting = false, false, false, false
 	editor_mosaic_start(ed, int(math.round(EDIT_PIXELATE_CELL * ed.model.doc.scale)))
@@ -310,6 +313,7 @@ editor_after_frame :: proc(ed: ^Editor) {
 		ed.done_due = false
 		shot := ed.shot
 		ed.shot, ed.has_picture = {}, false
+		editor_choices_keep(ed.app, &ed.model)
 		edit_model_destroy(&ed.model)
 		editor_done(ed, shot)
 		return
@@ -436,6 +440,7 @@ editor_close :: proc(ed: ^Editor) {
 
 @(private = "file")
 editor_picture_drop :: proc(ed: ^Editor) {
+	if ed.has_picture { editor_choices_keep(ed.app, &ed.model) }
 	editor_mosaic_stop(ed)
 	edit_mosaic_free(&ed.mosaic)
 	edit_export_free(&ed.export)
@@ -1053,4 +1058,57 @@ editor_copied :: proc(app: ^App, r: Result_Copy_Encoded) {
 	ok := len(r.png) > 0 && platform.clipboard_set_image(app.anchor, {rgba = r.shot.rgba, size = r.shot.size, png = r.png})
 	window := editor_window(app, r.editor)
 	if ok { app_announce(app, .Good, "Copied to the clipboard", "", window) } else { app_announce(app, .Bad, "The picture cannot go to the clipboard", "", window) }
+}
+
+////////////////////////////////
+// The last choices: the tool and each tool's style, kept in the preferences (editor.tool, editor.styles) when an editor's
+// picture goes, and given to the next editor. A style reads "<tool> <rrggbb> <width> <shadow> <fill> <text size>", one per
+// tool, separated by ";".
+
+// The model given the choices kept; what is not there, or not read, stays the default.
+editor_choices_load :: proc(app: ^App, m: ^Edit_Model) {
+	edit_choices_read(m, config.string_of(&app.prefs, "editor.tool"), config.string_of(&app.prefs, "editor.styles"))
+}
+
+// The model's tool and styles in the preferences, when they changed (written by the worker: app_prefs_changed).
+editor_choices_keep :: proc(app: ^App, m: ^Edit_Model) {
+	if app.worker.thread == nil { return }   // (an editor of clichetool shots: the user's preferences are not its)
+	tool, styles := edit_choices_text(m)
+	if tool == config.string_of(&app.prefs, "editor.tool") && styles == config.string_of(&app.prefs, "editor.styles") { return }
+	config.set_from_string(&app.prefs, "editor.tool", tool, .User)
+	config.set_from_string(&app.prefs, "editor.styles", styles, .User)
+	app_prefs_changed(app)
+}
+
+// The tool and the styles of `m` as editor.tool and editor.styles say them. Temp allocator.
+edit_choices_text :: proc(m: ^Edit_Model) -> (tool, styles: string) {
+	b := strings.builder_make(context.temp_allocator)
+	for t in Edit_Tool {
+		s := m.styles[t]
+		if t != .Select { strings.write_string(&b, ";") }
+		fmt.sbprintf(&b, "%v %06x %g %d %d %g", t, s.color, s.width, s.shadow ? 1 : 0, s.fill ? 1 : 0, s.text_size)
+	}
+	return fmt.tprintf("%v", m.tool), strings.to_string(b)
+}
+
+// `m` given the tool and the styles that editor.tool and editor.styles say; a part not read is left as it is.
+edit_choices_read :: proc(m: ^Edit_Model, tool, styles: string) {
+	if t, ok := edit_tool_named(tool); ok { m.tool = t }
+	rest := styles
+	for part in strings.split_iterator(&rest, ";") {
+		f := strings.fields(part, context.temp_allocator)
+		if len(f) != 6 { continue }
+		t, known := edit_tool_named(f[0])
+		color, c_ok := strconv.parse_u64_of_base(f[1], 16)
+		width, w_ok := strconv.parse_f32(f[2])
+		size, s_ok := strconv.parse_f32(f[5])
+		if !known || !c_ok || !w_ok || !s_ok || color > 0xFFFFFF || size <= 0 { continue }
+		m.styles[t] = {color = u32(color), width = clamp(width, EDIT_WIDTH_MIN, EDIT_WIDTH_MAX), shadow = f[3] == "1", fill = f[4] == "1", text_size = size}
+	}
+}
+
+@(private = "file")
+edit_tool_named :: proc(name: string) -> (Edit_Tool, bool) {
+	for t in Edit_Tool { if fmt.tprintf("%v", t) == name { return t, true } }
+	return {}, false
 }
