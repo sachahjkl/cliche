@@ -4,7 +4,7 @@ package cliche
 // its input into the events below and draws what the model holds; nothing here knows a window, a renderer or a font.
 //
 //   the document   the picture's size, the shapes (points in the picture's pixels), the selection, the crop, the undo
-//                  and redo stacks (each entry a copy of the shapes' list and of the crop)
+//                  and redo steps (a gt:undo stack, each step a copy of the shapes' list and of the crop)
 //   the view       where the picture is in the canvas and how large: fitted, or zoomed and panned
 //   the tool       what a press on the canvas does; each tool keeps its own style (colour, width...)
 //   the mode       the interaction: one state machine, one transition procedure (edit_step), as flow.odin's
@@ -19,6 +19,7 @@ package cliche
 import "core:math"
 import "core:slice"
 import "core:strings"
+import undo "gt:undo"
 
 Edit_Vec :: [2]f32
 
@@ -115,7 +116,7 @@ Edit_Doc :: struct {
 	selected:     int,        // -1: none
 	crop:         Edit_Box,   // what the picture keeps when it is done (has_crop), in its pixels
 	has_crop:     bool,
-	undo, redo:   [dynamic]Edit_Snapshot,
+	history:      undo.Stack(Edit_Snapshot),
 	pending:      Edit_Snapshot,   // the document when the gesture began (has_pending)
 	has_pending:  bool,
 	measure:      Edit_Measure,
@@ -186,10 +187,7 @@ edit_model_destroy :: proc(m: ^Edit_Model) {
 	m.mode = Edit_Idle{}
 	shapes_free(m.doc.shapes[:])
 	delete(m.doc.shapes)
-	for &s in m.doc.undo { snapshot_free(&s) }
-	delete(m.doc.undo)
-	for &s in m.doc.redo { snapshot_free(&s) }
-	delete(m.doc.redo)
+	undo.destroy(&m.doc.history, snapshot_free)
 	if m.doc.has_pending { snapshot_free(&m.doc.pending) }
 	m.doc = {}
 }
@@ -488,28 +486,26 @@ change_end :: proc(doc: ^Edit_Doc) {
 		snapshot_free(&p)
 		return
 	}
-	append(&doc.undo, p)
-	for &r in doc.redo { snapshot_free(&r) }
-	clear(&doc.redo)
+	undo.push(&doc.history, p, 0, snapshot_free)
 }
 
 // Whether anything was changed since the picture came (the window asks before it closes).
-edit_changed :: proc(m: ^Edit_Model) -> bool { return len(m.doc.undo) > 0 }
+edit_changed :: proc(m: ^Edit_Model) -> bool { return undo.can_undo(&m.doc.history) }
 
-edit_can_undo :: proc(m: ^Edit_Model) -> bool { return len(m.doc.undo) > 0 && edit_idle(m) }
-edit_can_redo :: proc(m: ^Edit_Model) -> bool { return len(m.doc.redo) > 0 && edit_idle(m) }
+edit_can_undo :: proc(m: ^Edit_Model) -> bool { return undo.can_undo(&m.doc.history) && edit_idle(m) }
+edit_can_redo :: proc(m: ^Edit_Model) -> bool { return undo.can_redo(&m.doc.history) && edit_idle(m) }
 
 edit_undo :: proc(m: ^Edit_Model) -> bool {
 	if !edit_can_undo(m) { return false }
-	append(&m.doc.redo, snapshot_take(&m.doc))
-	snapshot_restore(&m.doc, pop(&m.doc.undo))
+	back, _ := undo.undo(&m.doc.history, snapshot_take(&m.doc))
+	snapshot_restore(&m.doc, back)
 	return true
 }
 
 edit_redo :: proc(m: ^Edit_Model) -> bool {
 	if !edit_can_redo(m) { return false }
-	append(&m.doc.undo, snapshot_take(&m.doc))
-	snapshot_restore(&m.doc, pop(&m.doc.redo))
+	again, _ := undo.redo(&m.doc.history, snapshot_take(&m.doc))
+	snapshot_restore(&m.doc, again)
 	return true
 }
 
@@ -624,12 +620,12 @@ edit_style_set :: proc(m: ^Edit_Model, style: Edit_Style) -> bool {
 	if s := edit_selected_shape(m); s != nil {
 		if s.style == style { return false }
 		width_only := style.width != s.style.width && edit_style_but_width(style, s.style)
-		run := width_only && m.width_run == m.doc.selected + 1 && m.width_run_undo == len(m.doc.undo) && len(m.doc.redo) == 0
+		run := width_only && m.width_run == m.doc.selected + 1 && m.width_run_undo == len(m.doc.history.undo) && !undo.can_redo(&m.doc.history)
 		if !run { change_begin(&m.doc) }
 		s.style = style
 		if s.kind == .Text { text_measure(&m.doc, s) }
 		if !run { change_end(&m.doc) }
-		m.width_run, m.width_run_undo = width_only ? m.doc.selected + 1 : 0, len(m.doc.undo)
+		m.width_run, m.width_run_undo = width_only ? m.doc.selected + 1 : 0, len(m.doc.history.undo)
 		m.styles[edit_kind_tool(s.kind)] = style
 		return true
 	}

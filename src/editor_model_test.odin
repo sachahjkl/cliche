@@ -104,7 +104,7 @@ editor_select_moves_and_resizes :: proc(t: ^testing.T) {
 	edit_step(&m, Edit_Press{at = {600, 600}, button = .Left})   // (nothing there: no selection)
 	edit_step(&m, Edit_Release{at = {600, 600}, button = .Left})
 	testing.expect_value(t, m.doc.selected, -1)
-	testing.expect_value(t, len(m.doc.undo), 3)   // (drawn, moved, resized)
+	testing.expect_value(t, len(m.doc.history.undo), 3)   // (drawn, moved, resized)
 }
 
 @(test)
@@ -181,17 +181,17 @@ editor_text_is_typed_and_given_up :: proc(t: ^testing.T) {
 	testing.expect_value(t, m.doc.shapes[0].text, "abcd")
 	b := m.doc.shapes[0].b   // (4 characters of 12 at 24 px)
 	testing.expect(t, abs(b.x - 148) < 0.01 && abs(b.y - 128.8) < 0.01)
-	testing.expect_value(t, len(m.doc.undo), 1)
+	testing.expect_value(t, len(m.doc.history.undo), 1)
 	// (Escape gives back the text as it was; an empty new text is no text)
 	edit_step(&m, Edit_Press{at = {110, 110}, button = .Left})
 	edit_step(&m, Edit_Typed{text = "changed"})
 	edit_step(&m, Edit_Type_End{keep = false})
 	testing.expect_value(t, m.doc.shapes[0].text, "abcd")
-	testing.expect_value(t, len(m.doc.undo), 1)
+	testing.expect_value(t, len(m.doc.history.undo), 1)
 	edit_step(&m, Edit_Press{at = {500, 500}, button = .Left})
 	edit_step(&m, Edit_Type_End{keep = true})
 	testing.expect_value(t, len(m.doc.shapes), 1)
-	testing.expect_value(t, len(m.doc.undo), 1)
+	testing.expect_value(t, len(m.doc.history.undo), 1)
 }
 
 @(test)
@@ -223,12 +223,12 @@ editor_widths_in_a_row_are_one_step :: proc(t: ^testing.T) {
 		style.width = w
 		testing.expect(t, edit_style_set(&m, style))
 	}
-	testing.expect_value(t, len(m.doc.undo), 2)   // the arrow drawn, then its widths
+	testing.expect_value(t, len(m.doc.history.undo), 2)   // the arrow drawn, then its widths
 	style.color = EDIT_COLORS[4]
 	testing.expect(t, edit_style_set(&m, style))
 	style.width = 3
 	testing.expect(t, edit_style_set(&m, style))
-	testing.expect_value(t, len(m.doc.undo), 4)   // (a width after a colour: a step again)
+	testing.expect_value(t, len(m.doc.history.undo), 4)   // (a width after a colour: a step again)
 	testing.expect(t, edit_undo(&m))
 	testing.expect(t, edit_undo(&m))
 	testing.expect_value(t, m.doc.shapes[0].style.width, 17)

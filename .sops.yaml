@@ -1,0 +1,6 @@
+# cliche's sops rules (gui_toolkit docs/licence.md, "Secrets"). Everything under secrets/ is encrypted with sops for this age
+# recipient: the maintainer's public key (the private one is in ~/.config/sops/age/keys.txt, outside every repository).
+# A public key, safe in a repository.
+creation_rules:
+  - path_regex: ^secrets/[^/]+\.(yaml|yml|json|env)$
+    age: age1t6n6jyy0uwh6px3tl65pjrd5m0f79dv5xja2dcpq2gpvq0jcsyjs6j40fe

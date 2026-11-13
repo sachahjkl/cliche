@@ -23,7 +23,8 @@ shows around it and a bar under it: nothing is recorded until you press Record. 
 Cancel, which deletes the recording. The same command again starts, then stops it; the icon turns red meanwhile.
 
 `cliche --edit` opens a region in the editor (the Annotate step of its workflow): arrows, boxes, text, step numbers, a
-pixelated part, red with a shadow by default; each one stays movable until Done, and the workflow goes on.
+pixelated part, red with a shadow by default; each one stays movable until Done, and the workflow goes on. Cancel stops
+that branch of the workflow; a step linked to the editor's "cancelled" runs then instead.
 `cliche --history` shows the captures kept, as a grid or a list.
 
 ## Use

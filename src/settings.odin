@@ -16,8 +16,9 @@ DEFAULT_NAME_PATTERN :: "cliche-%Y%m%d-%H%M%S.png"
 
 // The pages of the settings, in this order (settings_view.odin gives their titles and icons). What happens after a
 // capture is not here: it is the workflows (workflow.odin). The choices of general.tray_click are settings_view.odin's,
-// with their words. The appearance, general.menu and
-// general.autostart are the toolkit's standard preferences (prefs_register).
+// with their words. The look, the text, scrolling, input, the delays, rendering and the session (general.menu,
+// general.autostart, general.messages) are the toolkit's standard preferences (prefs_register, gui_toolkit
+// docs/settings.md).
 PREF_DEFS := [?]config.Def{
 	// General
 	{name = "general.tray_click", title = "A click on the icon", description = "What a click on cliche's icon in the notification area does.", kind = .String, default = {s = "region"}, tags = {"tray", "icon", "notification area", "panel"}},
@@ -103,6 +104,11 @@ prefs_file :: proc(allocator := context.temp_allocator) -> string {
 	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/prefs"}, allocator)
 }
 
+// The user's own themes, beside the preferences (prefs_page.Themes_File).
+themes_file :: proc(allocator := context.temp_allocator) -> string {
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/themes.txt"}, allocator)
+}
+
 // The registry with the user's file and `args`' --pref read in. Returns the arguments that are not preferences.
 prefs_open :: proc(p: ^config.Prefs, args: []string) -> (rest: [dynamic]string, problems: [dynamic]string) {
 	p^ = config.prefs_make()
@@ -113,11 +119,15 @@ prefs_open :: proc(p: ^config.Prefs, args: []string) -> (rest: [dynamic]string, 
 	return
 }
 
-// The toolkit's standard preferences (the appearance, the launcher, the start with the session), then cliche's own.
+// The toolkit's standard sets cliche takes: all but the updates (a package manager or a release's archive updates it).
+STANDARD_SETS :: prefs_page.Standard{.Appearance, .Text, .Scrolling, .Input, .Timing, .Rendering, .Session}
+
+// The toolkit's standard preferences, then cliche's own.
 prefs_register :: proc(p: ^config.Prefs) {
 	d := prefs_page.STANDARD_DEFAULTS   // (the toolkit's defaults for the rest: system mode, machined, 14 px)
 	d.theme, d.app_name = "cliche", APP_NAME
-	prefs_page.standard_register(p, {.Appearance, .Session}, d)
+	d.system_title = true   // (cliche's windows have the system's title bar)
+	prefs_page.standard_register(p, STANDARD_SETS, d)
 	config.register(p, PREF_DEFS[:])
 }
 

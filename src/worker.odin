@@ -11,6 +11,7 @@ import "core:strings"
 import "core:sync"
 import "core:time"
 import capture "gt:capture"
+import flowgraph "gt:flowgraph"
 import png "gt:png"
 import "gt:platform"
 import tasks "gt:tasks"
@@ -238,8 +239,7 @@ job_free :: proc(j: ^Job) {
 	case Job_Copy_Encode:
 		shot_free(&v.shot)
 	case Job_Thumbnail:
-		// (the worker has stopped: this is the interface's thread, where a picture may be let go)
-		value_free(&v.input)
+		flowgraph.value_release(&v.input)
 	case Job_Save:
 		shot_free(&v.shot)
 		delete(v.folder)
@@ -248,7 +248,6 @@ job_free :: proc(j: ^Job) {
 		delete(v.path)
 		delete(v.text)
 	case Job_Node:
-		// (the worker has stopped: this is the interface's thread, where a picture may be let go)
 		job_node_free(&v)
 	case Job_Picture_Load:
 		delete(v.path)
@@ -267,7 +266,7 @@ result_free :: proc(r: ^Result) {
 	case Result_Shot:    shot_free(&v.shot)
 	case Result_Saved:   delete(v.path)
 	case Result_Copy_Encoded: shot_free(&v.shot); delete(v.png)
-	case Result_Thumbnail: delete(v.thumbnail); picture_release(v.input)
+	case Result_Thumbnail: delete(v.thumbnail)
 	case Result_Node:    result_node_free(&v)
 	case Result_Workflows: workflows_free(&v.workflows); delete(v.problem)
 	case Result_Picture: shot_free(&v.shot)

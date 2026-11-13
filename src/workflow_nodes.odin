@@ -1,13 +1,16 @@
 package cliche
 
-// The catalog of node kinds: for each, its icon, its title, its group, its ports and its parameters. The parameters have
-// a generic schema (Param_Def): the inspector and the node's subtitle are drawn from it, with no code per node.
-// node_summary gives the subtitle; workflow_ops.odin does each kind's work, workflow_app.odin the interface's part.
+// The catalog of node kinds, as gt:flowgraph's data (docs/flowgraph.md of the toolkit): for each, its icon, its title,
+// its group, its ports and its parameters. The edits, the file, the run, the inspector (ui.node_inspector) and the add
+// palette (ui.flow_palette) read it, with no code per kind. node_summary gives a node's subtitle; workflow_ops.odin does
+// each kind's work, workflow_app.odin the interface's part.
 
 import "core:fmt"
 import "core:strings"
+import flowgraph "gt:flowgraph"
 import lucide "gt:lucide"
 
+// The node kinds, in the order of CATALOG.nodes: flowgraph.Node.kind is `int(Node_Kind)`.
 Node_Kind :: enum u8 {
 	Capture,
 	// geometry
@@ -24,49 +27,22 @@ Node_Kind :: enum u8 {
 	Copy_Image, Save_File, Upload, Copy_Text, Read_Qr, Read_Text, Notify, Show_In_Folder, Add_To_History,
 }
 
-Node_Group :: enum u8 { Source, Geometry, Look, Colour, Filters, Interactive, Flow, Outputs }
+// What flows on a link (flowgraph.Port_Kind: CATALOG.kinds[k]; 0 is the engine's ACTION). A text takes an address or a
+// file's path; Any takes every kind but an action (Notify, Add to history).
+PORT_IMAGE :: flowgraph.Port_Kind(1)
+PORT_TEXT  :: flowgraph.Port_Kind(2)
+PORT_URL   :: flowgraph.Port_Kind(3)
+PORT_FILE  :: flowgraph.Port_Kind(4)
+PORT_ANY   :: flowgraph.Port_Kind(5)
 
-NODE_GROUP_TEXT := [Node_Group]string{
-	.Source = "Source", .Geometry = "Geometry", .Look = "Look", .Colour = "Colour", .Filters = "Filters",
-	.Interactive = "Interactive", .Flow = "Flow control", .Outputs = "Outputs",
-}
-
-// Where a node's work runs: the worker (pixels, disk, network), the interface's thread (the clipboard, a notification,
-// the history), the editor (a person), or nowhere (the run itself decides: Capture, Condition).
+// Where a node's work runs (flowgraph.Node_Def.place): the worker (pixels, disk, network), the interface's thread (the
+// clipboard, a notification, the history), the editor (a person), or the run itself, at once (Capture, Condition).
 Node_Place :: enum u8 { Worker, Interface, Editor, Run }
 
-Param_Type :: enum u8 { Int, Float, Bool, Color, Choice, Text, Folder, Uploader }
-
-Param_Def :: struct {
-	name:           string,     // the file's key
-	title:          string,
-	type:           Param_Type,
-	lo, hi, step:   f64,        // Int, Float: the range and the step of the slider
-	unit:           string,     // "px", "%", "°"
-	choices:        []string,   // Choice: the words of each value (the value is the index)
-	default_number: f64,
-	default_text:   string,
-	default_color:  [4]u8,
-	placeholder:    string,     // Text, Folder: what an empty field means
-}
-
-Port_Def :: struct {
-	name:     string,
-	kind:     Port_Kind,
-	multiple: bool,   // an input that takes several links
-}
-
-Node_Def :: struct {
-	title:   string,
-	group:   Node_Group,
-	icon:    string,     // a glyph of gt:lucide
-	tags:    []string,   // other words the add menu finds it by
-	inputs:  []Port_Def,
-	outputs: []Port_Def,
-	params:  []Param_Def,
-	place:   Node_Place,
-	effect:  bool,       // it acts outside the picture (the clipboard, a file, the network): off in a preview run
-}
+@(private = "file") PLACE_WORKER    :: u8(Node_Place.Worker)
+@(private = "file") PLACE_INTERFACE :: u8(Node_Place.Interface)
+@(private = "file") PLACE_EDITOR    :: u8(Node_Place.Editor)
+@(private = "file") PLACE_RUN       :: u8(Node_Place.Run)
 
 @(private = "file") BLACK :: [4]u8{0, 0, 0, 255}
 @(private = "file") WHITE :: [4]u8{255, 255, 255, 255}
@@ -81,192 +57,149 @@ SAVE_FORMAT_TEXT := [Save_Format]string{.Png_Small = "PNG", .Png_Fast = "PNG (fa
 // The extension a file of each format gets, in place of the one its name pattern ends with (".png" by default).
 SAVE_FORMAT_EXTENSION := [Save_Format]string{.Png_Small = ".png", .Png_Fast = ".png", .Jpeg = ".jpg", .Webp = ".webp", .Webp_Lossless = ".webp"}
 
-NODE_DEFS := [Node_Kind]Node_Def{
-	.Capture = {title = "Capture", group = .Source, icon = lucide.MONITOR, tags = {"start", "trigger", "screenshot"}, outputs = {{name = "picture", kind = .Image}}, place = .Run},
+// The effects (the clipboard, a file, the network, a notification, the history) have an action input, "when": linked to
+// an Annotate's "done", the effect waits for the person's Done; linked to its "cancelled", it runs only when they gave
+// up. Left unlinked, it asks for nothing.
+CATALOG := flowgraph.Catalog{
+	kinds = {
+		{name = "action"},
+		{name = "picture", transient = true},   // (let go as soon as no node waits for it: pictures are large)
+		{name = "text", accepts = {PORT_URL, PORT_FILE}},
+		{name = "address"},
+		{name = "file"},
+		{name = "anything", any = true},
+	},
+	nodes = {
+		{name = "capture", title = "Capture", group = "Source", icon = lucide.MONITOR, tags = {"start", "trigger", "screenshot"}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_RUN, max_count = 1, min_count = 1},
 
-	.Resize = {title = "Resize", group = .Geometry, icon = lucide.ZOOM_OUT, tags = {"scale", "smaller", "size", "shrink"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "mode", title = "By", type = .Choice, choices = {"Percent", "Largest size"}},
-		{name = "percent", title = "Scale", type = .Float, lo = 1, hi = 400, step = 1, unit = "%", default_number = 50},
-		{name = "width", title = "Largest width", type = .Int, lo = 0, hi = 16384, step = 1, unit = "px", default_number = 1920},
-		{name = "height", title = "Largest height", type = .Int, lo = 0, hi = 16384, step = 1, unit = "px", default_number = 1080},
-		{name = "filter", title = "Filter", type = .Choice, choices = {"Sharp", "Smooth", "Fast"}},
-	}},
-	.Crop = {title = "Crop", group = .Geometry, icon = lucide.SCISSORS, tags = {"cut", "trim", "margins"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "left", title = "Left", type = .Int, lo = 0, hi = 4096, step = 1, unit = "px"},
-		{name = "top", title = "Top", type = .Int, lo = 0, hi = 4096, step = 1, unit = "px"},
-		{name = "right", title = "Right", type = .Int, lo = 0, hi = 4096, step = 1, unit = "px"},
-		{name = "bottom", title = "Bottom", type = .Int, lo = 0, hi = 4096, step = 1, unit = "px"},
-	}},
-	.Rotate = {title = "Rotate", group = .Geometry, icon = lucide.ROTATE_CCW, tags = {"turn", "quarter", "orientation"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "turn", title = "Turn", type = .Choice, choices = {"90° right", "180°", "90° left"}},
-	}},
-	.Flip = {title = "Flip", group = .Geometry, icon = lucide.ARROW_UP_DOWN, tags = {"mirror", "reverse"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "direction", title = "Direction", type = .Choice, choices = {"Left to right", "Top to bottom"}},
-	}},
-	.Pad = {title = "Pad", group = .Geometry, icon = lucide.SQUARE, tags = {"margin", "space", "frame", "padding"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "margin", title = "Margin", type = .Int, lo = 0, hi = 1024, step = 1, unit = "px", default_number = 32},
-		{name = "color", title = "Colour", type = .Color, default_color = {0, 0, 0, 0}},
-	}},
+		{name = "resize", title = "Resize", group = "Geometry", icon = lucide.ZOOM_OUT, tags = {"scale", "smaller", "size", "shrink"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "mode", title = "By", type = .Choice, choices = {"Percent", "Largest size"}},
+			{name = "percent", title = "Scale", type = .Float, lo = 1, hi = 400, step = 1, unit = "%", default_number = 50},
+			{name = "width", title = "Largest width", type = .Int, lo = 0, hi = 16384, step = 1, unit = "px", default_number = 1920},
+			{name = "height", title = "Largest height", type = .Int, lo = 0, hi = 16384, step = 1, unit = "px", default_number = 1080},
+			{name = "filter", title = "Filter", type = .Choice, choices = {"Sharp", "Smooth", "Fast"}},
+		}},
+		{name = "crop", title = "Crop", group = "Geometry", icon = lucide.SCISSORS, tags = {"cut", "trim", "margins"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "left", title = "Left", type = .Int, lo = 0, hi = 4096, step = 1, unit = "px"},
+			{name = "top", title = "Top", type = .Int, lo = 0, hi = 4096, step = 1, unit = "px"},
+			{name = "right", title = "Right", type = .Int, lo = 0, hi = 4096, step = 1, unit = "px"},
+			{name = "bottom", title = "Bottom", type = .Int, lo = 0, hi = 4096, step = 1, unit = "px"},
+		}},
+		{name = "rotate", title = "Rotate", group = "Geometry", icon = lucide.ROTATE_CCW, tags = {"turn", "quarter", "orientation"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "turn", title = "Turn", type = .Choice, choices = {"90° right", "180°", "90° left"}},
+		}},
+		{name = "flip", title = "Flip", group = "Geometry", icon = lucide.ARROW_UP_DOWN, tags = {"mirror", "reverse"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "direction", title = "Direction", type = .Choice, choices = {"Left to right", "Top to bottom"}},
+		}},
+		{name = "pad", title = "Pad", group = "Geometry", icon = lucide.SQUARE, tags = {"margin", "space", "frame", "padding"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "margin", title = "Margin", type = .Int, lo = 0, hi = 1024, step = 1, unit = "px", default_number = 32},
+			{name = "color", title = "Colour", type = .Color, default_color = {0, 0, 0, 0}},
+		}},
 
-	.Border = {title = "Border", group = .Look, icon = lucide.SQUARE, tags = {"outline", "frame", "stroke"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "width", title = "Width", type = .Int, lo = 1, hi = 256, step = 1, unit = "px", default_number = 4},
-		{name = "color", title = "Colour", type = .Color, default_color = BLACK},
-		{name = "inside", title = "Inside the picture", type = .Bool},
-	}},
-	.Round_Corners = {title = "Rounded corners", group = .Look, icon = lucide.APP_WINDOW, tags = {"radius", "round", "corner"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "radius", title = "Radius", type = .Int, lo = 1, hi = 512, step = 1, unit = "px", default_number = 12},
-	}},
-	.Shadow = {title = "Drop shadow", group = .Look, icon = lucide.LAYERS_2, tags = {"shadow", "depth", "glow"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "blur", title = "Blur", type = .Int, lo = 0, hi = 256, step = 1, unit = "px", default_number = 24},
-		{name = "x", title = "Offset right", type = .Int, lo = -256, hi = 256, step = 1, unit = "px", default_number = 0},
-		{name = "y", title = "Offset down", type = .Int, lo = -256, hi = 256, step = 1, unit = "px", default_number = 8},
-		{name = "color", title = "Colour", type = .Color, default_color = {0, 0, 0, 140}},
-	}},
-	.Background = {title = "Background", group = .Look, icon = lucide.PALETTE, tags = {"beautify", "gradient", "backdrop", "wallpaper", "pretty"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "margin", title = "Margin", type = .Int, lo = 0, hi = 1024, step = 1, unit = "px", default_number = 64},
-		{name = "fill", title = "Fill", type = .Choice, choices = {"Colour", "Gradient"}, default_number = 1},
-		{name = "color", title = "Colour", type = .Color, default_color = {99, 102, 241, 255}},
-		{name = "color2", title = "Second colour", type = .Color, default_color = {236, 72, 153, 255}},
-		{name = "angle", title = "Angle", type = .Float, lo = 0, hi = 360, step = 1, unit = "°", default_number = 135},
-		{name = "radius", title = "Picture's corners", type = .Int, lo = 0, hi = 256, step = 1, unit = "px", default_number = 12},
-		{name = "shadow", title = "Shadow under the picture", type = .Bool, default_number = 1},
-	}},
-	.Watermark = {title = "Watermark", group = .Look, icon = lucide.TYPE, tags = {"text", "signature", "copyright", "label"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "text", title = "Text", type = .Text, default_text = "cliche"},
-		{name = "position", title = "Position", type = .Choice, choices = {"Top left", "Top right", "Bottom left", "Bottom right", "Centre"}, default_number = 3},
-		{name = "size", title = "Size", type = .Int, lo = 6, hi = 256, step = 1, unit = "px", default_number = 24},
-		{name = "color", title = "Colour", type = .Color, default_color = WHITE},
-		{name = "opacity", title = "Opacity", type = .Float, lo = 0, hi = 100, step = 1, unit = "%", default_number = 60},
-		{name = "margin", title = "Margin", type = .Int, lo = 0, hi = 512, step = 1, unit = "px", default_number = 16},
-	}},
+		{name = "border", title = "Border", group = "Look", icon = lucide.SQUARE, tags = {"outline", "frame", "stroke"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "width", title = "Width", type = .Int, lo = 1, hi = 256, step = 1, unit = "px", default_number = 4},
+			{name = "color", title = "Colour", type = .Color, default_color = BLACK},
+			{name = "inside", title = "Inside the picture", type = .Bool},
+		}},
+		{name = "round_corners", title = "Rounded corners", group = "Look", icon = lucide.APP_WINDOW, tags = {"radius", "round", "corner"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "radius", title = "Radius", type = .Int, lo = 1, hi = 512, step = 1, unit = "px", default_number = 12},
+		}},
+		{name = "shadow", title = "Drop shadow", group = "Look", icon = lucide.LAYERS_2, tags = {"shadow", "depth", "glow"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "blur", title = "Blur", type = .Int, lo = 0, hi = 256, step = 1, unit = "px", default_number = 24},
+			{name = "x", title = "Offset right", type = .Int, lo = -256, hi = 256, step = 1, unit = "px", default_number = 0},
+			{name = "y", title = "Offset down", type = .Int, lo = -256, hi = 256, step = 1, unit = "px", default_number = 8},
+			{name = "color", title = "Colour", type = .Color, default_color = {0, 0, 0, 140}},
+		}},
+		{name = "background", title = "Background", group = "Look", icon = lucide.PALETTE, tags = {"beautify", "gradient", "backdrop", "wallpaper", "pretty"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "margin", title = "Margin", type = .Int, lo = 0, hi = 1024, step = 1, unit = "px", default_number = 64},
+			{name = "fill", title = "Fill", type = .Choice, choices = {"Colour", "Gradient"}, default_number = 1},
+			{name = "color", title = "Colour", type = .Color, default_color = {99, 102, 241, 255}},
+			{name = "color2", title = "Second colour", type = .Color, default_color = {236, 72, 153, 255}},
+			{name = "angle", title = "Angle", type = .Float, lo = 0, hi = 360, step = 1, unit = "°", default_number = 135},
+			{name = "radius", title = "Picture's corners", type = .Int, lo = 0, hi = 256, step = 1, unit = "px", default_number = 12},
+			{name = "shadow", title = "Shadow under the picture", type = .Bool, default_number = 1},
+		}},
+		{name = "watermark", title = "Watermark", group = "Look", icon = lucide.TYPE, tags = {"text", "signature", "copyright", "label"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "text", title = "Text", type = .Text, default_text = "cliche"},
+			{name = "position", title = "Position", type = .Choice, choices = {"Top left", "Top right", "Bottom left", "Bottom right", "Centre"}, default_number = 3},
+			{name = "size", title = "Size", type = .Int, lo = 6, hi = 256, step = 1, unit = "px", default_number = 24},
+			{name = "color", title = "Colour", type = .Color, default_color = WHITE},
+			{name = "opacity", title = "Opacity", type = .Float, lo = 0, hi = 100, step = 1, unit = "%", default_number = 60},
+			{name = "margin", title = "Margin", type = .Int, lo = 0, hi = 512, step = 1, unit = "px", default_number = 16},
+		}},
 
-	.Grayscale = {title = "Grayscale", group = .Colour, icon = lucide.SUN_MOON, tags = {"black and white", "grey", "gray", "monochrome"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker},
-	.Invert = {title = "Invert", group = .Colour, icon = lucide.SUN_MOON, tags = {"negative", "reverse"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker},
-	.Brightness_Contrast = {title = "Brightness and contrast", group = .Colour, icon = lucide.LIGHTBULB, tags = {"light", "dark", "exposure"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "brightness", title = "Brightness", type = .Float, lo = -100, hi = 100, step = 1, unit = "%"},
-		{name = "contrast", title = "Contrast", type = .Float, lo = -100, hi = 100, step = 1, unit = "%"},
-	}},
-	.Saturation = {title = "Saturation", group = .Colour, icon = lucide.PALETTE, tags = {"vivid", "colourful", "desaturate"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "amount", title = "Amount", type = .Float, lo = 0, hi = 300, step = 1, unit = "%", default_number = 130},
-	}},
-	.Hue = {title = "Hue", group = .Colour, icon = lucide.PALETTE, tags = {"tint", "shift", "rotate"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "degrees", title = "Turn", type = .Float, lo = -180, hi = 180, step = 1, unit = "°", default_number = 30},
-	}},
-	.Sepia = {title = "Sepia", group = .Colour, icon = lucide.FILM, tags = {"old", "vintage", "brown"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker},
-	.Threshold = {title = "Threshold", group = .Colour, icon = lucide.GAUGE, tags = {"black", "white", "binary", "scan"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "level", title = "Level", type = .Int, lo = 0, hi = 255, step = 1, default_number = 128},
-	}},
+		{name = "grayscale", title = "Grayscale", group = "Colour", icon = lucide.SUN_MOON, tags = {"black and white", "grey", "gray", "monochrome"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER},
+		{name = "invert", title = "Invert", group = "Colour", icon = lucide.SUN_MOON, tags = {"negative", "reverse"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER},
+		{name = "brightness_contrast", title = "Brightness and contrast", group = "Colour", icon = lucide.LIGHTBULB, tags = {"light", "dark", "exposure"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "brightness", title = "Brightness", type = .Float, lo = -100, hi = 100, step = 1, unit = "%"},
+			{name = "contrast", title = "Contrast", type = .Float, lo = -100, hi = 100, step = 1, unit = "%"},
+		}},
+		{name = "saturation", title = "Saturation", group = "Colour", icon = lucide.PALETTE, tags = {"vivid", "colourful", "desaturate"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "amount", title = "Amount", type = .Float, lo = 0, hi = 300, step = 1, unit = "%", default_number = 130},
+		}},
+		{name = "hue", title = "Hue", group = "Colour", icon = lucide.PALETTE, tags = {"tint", "shift", "rotate"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "degrees", title = "Turn", type = .Float, lo = -180, hi = 180, step = 1, unit = "°", default_number = 30},
+		}},
+		{name = "sepia", title = "Sepia", group = "Colour", icon = lucide.FILM, tags = {"old", "vintage", "brown"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER},
+		{name = "threshold", title = "Threshold", group = "Colour", icon = lucide.GAUGE, tags = {"black", "white", "binary", "scan"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "level", title = "Level", type = .Int, lo = 0, hi = 255, step = 1, default_number = 128},
+		}},
 
-	.Blur = {title = "Blur", group = .Filters, icon = lucide.EYE_OFF, tags = {"soft", "gaussian", "hide"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "radius", title = "Radius", type = .Float, lo = 0.5, hi = 64, step = 0.5, unit = "px", default_number = 4},
-	}},
-	.Sharpen = {title = "Sharpen", group = .Filters, icon = lucide.ZAP, tags = {"crisp", "detail", "unsharp"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "amount", title = "Amount", type = .Float, lo = 0, hi = 300, step = 1, unit = "%", default_number = 50},
-	}},
-	.Pixelate = {title = "Pixelate", group = .Filters, icon = lucide.LAYOUT_GRID, tags = {"mosaic", "censor", "redact", "blocks"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, params = {
-		{name = "cell", title = "Cell", type = .Int, lo = 2, hi = 256, step = 1, unit = "px", default_number = 12},
-	}},
+		{name = "blur", title = "Blur", group = "Filters", icon = lucide.EYE_OFF, tags = {"soft", "gaussian", "hide"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "radius", title = "Radius", type = .Float, lo = 0.5, hi = 64, step = 0.5, unit = "px", default_number = 4},
+		}},
+		{name = "sharpen", title = "Sharpen", group = "Filters", icon = lucide.ZAP, tags = {"crisp", "detail", "unsharp"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "amount", title = "Amount", type = .Float, lo = 0, hi = 300, step = 1, unit = "%", default_number = 50},
+		}},
+		{name = "pixelate", title = "Pixelate", group = "Filters", icon = lucide.LAYOUT_GRID, tags = {"mosaic", "censor", "redact", "blocks"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "cell", title = "Cell", type = .Int, lo = 2, hi = 256, step = 1, unit = "px", default_number = 12},
+		}},
 
-	.Annotate = {title = "Annotate", group = .Interactive, icon = lucide.PENCIL, tags = {"editor", "draw", "arrow", "markup", "edit"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Editor},
-	.Condition = {title = "Condition", group = .Flow, icon = lucide.GIT_FORK, tags = {"if", "branch", "test", "when"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "yes", kind = .Image}, {name = "no", kind = .Image}}, place = .Run, params = {
-		{name = "test", title = "When", type = .Choice, choices = {"Width", "Height", "Width / height", "Source"}},
-		{name = "compare", title = "Is", type = .Choice, choices = {"More than", "Less than", "Equal to"}},
-		{name = "value", title = "Value", type = .Float, lo = 0, hi = 16384, step = 1, default_number = 1920},
-		{name = "source", title = "Source", type = .Choice, choices = {"Region", "Screen", "Window"}},
-	}},
+		{name = "annotate", title = "Annotate", group = "Interactive", icon = lucide.PENCIL, tags = {"editor", "draw", "arrow", "markup", "edit", "done", "cancel"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {
+			{name = "picture", kind = PORT_IMAGE},
+			{name = "done", kind = flowgraph.ACTION, on = .Done},
+			{name = "cancelled", kind = flowgraph.ACTION, on = .Cancelled},
+		}, place = PLACE_EDITOR},
+		{name = "condition", title = "Condition", group = "Flow control", icon = lucide.GIT_FORK, tags = {"if", "branch", "test", "when"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "yes", kind = PORT_IMAGE}, {name = "no", kind = PORT_IMAGE}}, place = PLACE_RUN, params = {
+			{name = "test", title = "When", type = .Choice, choices = {"Width", "Height", "Width / height", "Source"}},
+			{name = "compare", title = "Is", type = .Choice, choices = {"More than", "Less than", "Equal to"}},
+			{name = "value", title = "Value", type = .Float, lo = 0, hi = 16384, step = 1, default_number = 1920},
+			{name = "source", title = "Source", type = .Choice, choices = {"Region", "Screen", "Window"}},
+		}},
 
-	.Copy_Image = {title = "Copy image", group = .Outputs, icon = lucide.COPY, tags = {"clipboard", "paste"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "picture", kind = .Image}}, place = .Worker, effect = true},   // (the worker encodes its PNG; the interface sets the clipboard: workflow_node_result)
-	.Save_File = {title = "Save file", group = .Outputs, icon = lucide.SAVE, tags = {"disk", "png", "write", "folder"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "file", kind = .File}}, place = .Worker, effect = true, params = {
-		{name = "folder", title = "Folder", type = .Folder, placeholder = "The default folder (Settings, Save)"},
-		{name = "name", title = "File name", type = .Text, placeholder = "The default name (Settings, Save)"},
-		{name = "format", title = "Format", type = .Choice, choices = {"PNG, small", "PNG, fast", "JPEG", "WebP", "WebP, lossless"}},
-		{name = "quality", title = "Quality", type = .Int, lo = 1, hi = 100, step = 1, unit = "%", default_number = 90},   // (JPEG and WebP)
-	}},
-	.Upload = {title = "Upload", group = .Outputs, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link", "sxcu", "imgur"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "address", kind = .Url}}, place = .Worker, effect = true, params = {
-		{name = "uploader", title = "Host", type = .Uploader, placeholder = "The default host (Settings, Upload)"},
-	}},
-	.Copy_Text = {title = "Copy text", group = .Outputs, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "url", "address", "link"}, inputs = {{name = "text", kind = .Text}}, outputs = {{name = "text", kind = .Text}}, place = .Interface, effect = true},
-	.Read_Qr = {title = "Read QR code", group = .Outputs, icon = lucide.QR_CODE, tags = {"scan", "barcode", "decode"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "text", kind = .Text}}, place = .Worker},
-	.Read_Text = {title = "Read text", group = .Outputs, icon = lucide.TEXT_CURSOR_INPUT, tags = {"ocr", "recognition", "tesseract"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "text", kind = .Text}}, place = .Worker, params = {
-		{name = "languages", title = "Languages", type = .Text, placeholder = "The default languages (Settings, Capture)"},
-	}},
-	.Notify = {title = "Notify", group = .Outputs, icon = lucide.BELL, tags = {"notification", "toast", "message", "tell"}, inputs = {{name = "what", kind = .Any, multiple = true}}, place = .Interface, effect = true, params = {
-		{name = "title", title = "Title", type = .Text, placeholder = "Said for you: \"Screenshot saved\""},
-		{name = "show", title = "Show", type = .Choice, choices = {"What comes in", "A summary of the run"}},
-	}},
-	.Show_In_Folder = {title = "Show in folder", group = .Outputs, icon = lucide.FOLDER_OPEN, tags = {"reveal", "explorer", "file manager"}, inputs = {{name = "file", kind = .File}}, place = .Worker, effect = true},
-	.Add_To_History = {title = "Add to history", group = .Outputs, icon = lucide.HISTORY, tags = {"remember", "keep", "list"}, inputs = {{name = "what", kind = .Any, multiple = true}}, place = .Interface, effect = true},
-}
-
-// The snake-case name of each kind, for the file.
-NODE_NAMES := [Node_Kind]string{
-	.Capture = "capture", .Resize = "resize", .Crop = "crop", .Rotate = "rotate", .Flip = "flip", .Pad = "pad",
-	.Border = "border", .Round_Corners = "round_corners", .Shadow = "shadow", .Background = "background", .Watermark = "watermark",
-	.Grayscale = "grayscale", .Invert = "invert", .Brightness_Contrast = "brightness_contrast", .Saturation = "saturation",
-	.Hue = "hue", .Sepia = "sepia", .Threshold = "threshold", .Blur = "blur", .Sharpen = "sharpen", .Pixelate = "pixelate",
-	.Annotate = "annotate", .Condition = "condition", .Copy_Image = "copy_image", .Save_File = "save_file", .Upload = "upload",
-	.Copy_Text = "copy_text", .Read_Qr = "read_qr", .Read_Text = "read_text", .Notify = "notify",
-	.Show_In_Folder = "show_in_folder", .Add_To_History = "add_to_history",
-}
-
-// The parameter called `name` of `n` (nil: its kind has none of that name).
-node_param :: proc(n: ^Workflow_Node, name: string) -> ^Param {
-	for d, i in NODE_DEFS[n.kind].params { if d.name == name { return &n.params[i] } }
-	return nil
-}
-
-// A parameter's number as an int, clamped to its range (a hand-edited file may hold anything).
-node_int :: proc(n: ^Workflow_Node, name: string) -> int {
-	for d, i in NODE_DEFS[n.kind].params {
-		if d.name != name { continue }
-		v := n.params[i].number
-		if d.type == .Int || d.type == .Float { v = clamp(v, d.lo, d.hi) }
-		if d.type == .Choice { v = clamp(v, 0, f64(max(len(d.choices) - 1, 0))) }
-		return int(v)
-	}
-	return 0
-}
-
-node_float :: proc(n: ^Workflow_Node, name: string) -> f64 {
-	for d, i in NODE_DEFS[n.kind].params {
-		if d.name != name { continue }
-		return d.type == .Float || d.type == .Int ? clamp(n.params[i].number, d.lo, d.hi) : n.params[i].number
-	}
-	return 0
-}
-
-node_bool :: proc(n: ^Workflow_Node, name: string) -> bool {
-	p := node_param(n, name)
-	return p != nil && p.number != 0
-}
-
-node_text :: proc(n: ^Workflow_Node, name: string) -> string {
-	p := node_param(n, name)
-	return p != nil ? p.text : ""
-}
-
-node_color :: proc(n: ^Workflow_Node, name: string) -> [4]u8 {
-	p := node_param(n, name)
-	return p != nil ? p.color : {}
-}
-
-// The words of a Choice parameter's value.
-node_choice_text :: proc(n: ^Workflow_Node, name: string) -> string {
-	for d in NODE_DEFS[n.kind].params {
-		if d.name == name && d.type == .Choice && len(d.choices) > 0 { return d.choices[node_int(n, name)] }
-	}
-	return ""
+		{name = "copy_image", title = "Copy image", group = "Outputs", icon = lucide.COPY, tags = {"clipboard", "paste"}, inputs = {{name = "picture", kind = PORT_IMAGE}, {name = "when", kind = flowgraph.ACTION}}, outputs = {{name = "picture", kind = PORT_IMAGE}}, place = PLACE_WORKER, effect = true},   // (the worker encodes its PNG; the interface sets the clipboard: workflow_node_result)
+		{name = "save_file", title = "Save file", group = "Outputs", icon = lucide.SAVE, tags = {"disk", "png", "write", "folder"}, inputs = {{name = "picture", kind = PORT_IMAGE}, {name = "when", kind = flowgraph.ACTION}}, outputs = {{name = "file", kind = PORT_FILE}}, place = PLACE_WORKER, effect = true, params = {
+			{name = "folder", title = "Folder", type = .Folder, placeholder = "The default folder (Settings, Save)"},
+			{name = "name", title = "File name", type = .Text, placeholder = "The default name (Settings, Save)"},
+			{name = "format", title = "Format", type = .Choice, choices = {"PNG, small", "PNG, fast", "JPEG", "WebP", "WebP, lossless"}},
+			{name = "quality", title = "Quality", type = .Int, lo = 1, hi = 100, step = 1, unit = "%", default_number = 90},   // (JPEG and WebP)
+		}},
+		{name = "upload", title = "Upload", group = "Outputs", icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link", "sxcu", "imgur"}, inputs = {{name = "picture", kind = PORT_IMAGE}, {name = "when", kind = flowgraph.ACTION}}, outputs = {{name = "address", kind = PORT_URL}}, place = PLACE_WORKER, effect = true, params = {
+			{name = "uploader", title = "Host", type = .List},
+		}},
+		{name = "copy_text", title = "Copy text", group = "Outputs", icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "url", "address", "link"}, inputs = {{name = "text", kind = PORT_TEXT}, {name = "when", kind = flowgraph.ACTION}}, outputs = {{name = "text", kind = PORT_TEXT}}, place = PLACE_INTERFACE, effect = true},
+		{name = "read_qr", title = "Read QR code", group = "Outputs", icon = lucide.QR_CODE, tags = {"scan", "barcode", "decode"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "text", kind = PORT_TEXT}}, place = PLACE_WORKER},
+		{name = "read_text", title = "Read text", group = "Outputs", icon = lucide.TEXT_CURSOR_INPUT, tags = {"ocr", "recognition", "tesseract"}, inputs = {{name = "picture", kind = PORT_IMAGE}}, outputs = {{name = "text", kind = PORT_TEXT}}, place = PLACE_WORKER, params = {
+			{name = "languages", title = "Languages", type = .Text, placeholder = "The default languages (Settings, Capture)"},
+		}},
+		{name = "notify", title = "Notify", group = "Outputs", icon = lucide.BELL, tags = {"notification", "toast", "message", "tell"}, inputs = {{name = "what", kind = PORT_ANY, multiple = true}, {name = "when", kind = flowgraph.ACTION}}, place = PLACE_INTERFACE, effect = true, params = {
+			{name = "title", title = "Title", type = .Text, placeholder = "Said for you: \"Screenshot saved\""},
+			{name = "show", title = "Show", type = .Choice, choices = {"What comes in", "A summary of the run"}},
+		}},
+		{name = "show_in_folder", title = "Show in folder", group = "Outputs", icon = lucide.FOLDER_OPEN, tags = {"reveal", "explorer", "file manager"}, inputs = {{name = "file", kind = PORT_FILE}, {name = "when", kind = flowgraph.ACTION}}, place = PLACE_WORKER, effect = true},
+		{name = "add_to_history", title = "Add to history", group = "Outputs", icon = lucide.HISTORY, tags = {"remember", "keep", "list"}, inputs = {{name = "what", kind = PORT_ANY, multiple = true}, {name = "when", kind = flowgraph.ACTION}}, place = PLACE_INTERFACE, effect = true},
+	},
 }
 
 // A line under the node's title that says what it does with its parameters ("50 %", "PNG to ~/Pictures"). Temp
 // allocator; "" when there is nothing to say.
-node_summary :: proc(n: ^Workflow_Node) -> string {
-	switch n.kind {
+node_summary :: proc(n: ^flowgraph.Node) -> string {
+	switch Node_Kind(n.kind) {
 	case .Capture, .Grayscale, .Invert, .Sepia, .Annotate, .Copy_Image, .Copy_Text, .Read_Qr, .Show_In_Folder, .Add_To_History:
 		return ""
 	case .Resize:
-		if Resize_Mode(node_int(n, "mode")) == .Percent { return fmt.tprintf("%s %%", number_text(node_float(n, "percent"))) }
-		w, h := node_int(n, "width"), node_int(n, "height")
+		if Resize_Mode(flowgraph.param_int(&CATALOG, n, "mode")) == .Percent { return fmt.tprintf("%s %%", number_text(flowgraph.param_float(&CATALOG, n, "percent"))) }
+		w, h := flowgraph.param_int(&CATALOG, n, "width"), flowgraph.param_int(&CATALOG, n, "height")
 		switch {
 		case w > 0 && h > 0: return fmt.tprintf("at most %d × %d px", w, h)
 		case w > 0:          return fmt.tprintf("at most %d px wide", w)
@@ -274,64 +207,64 @@ node_summary :: proc(n: ^Workflow_Node) -> string {
 		}
 		return "no change"
 	case .Crop:
-		l, t, r, b := node_int(n, "left"), node_int(n, "top"), node_int(n, "right"), node_int(n, "bottom")
+		l, t, r, b := flowgraph.param_int(&CATALOG, n, "left"), flowgraph.param_int(&CATALOG, n, "top"), flowgraph.param_int(&CATALOG, n, "right"), flowgraph.param_int(&CATALOG, n, "bottom")
 		if l == t && t == r && r == b { return fmt.tprintf("%d px each side", l) }
 		return fmt.tprintf("%d, %d, %d, %d px", l, t, r, b)
 	case .Rotate, .Flip:
-		return node_choice_text(n, n.kind == .Rotate ? "turn" : "direction")
+		return flowgraph.param_choice_text(&CATALOG, n, Node_Kind(n.kind) == .Rotate ? "turn" : "direction")
 	case .Pad:
-		return fmt.tprintf("%d px, %s", node_int(n, "margin"), color_text(node_color(n, "color")))
+		return fmt.tprintf("%d px, %s", flowgraph.param_int(&CATALOG, n, "margin"), color_text(flowgraph.param_color(&CATALOG, n, "color")))
 	case .Border:
-		return fmt.tprintf("%d px %s%s", node_int(n, "width"), color_text(node_color(n, "color")), node_bool(n, "inside") ? ", inside" : "")
+		return fmt.tprintf("%d px %s%s", flowgraph.param_int(&CATALOG, n, "width"), color_text(flowgraph.param_color(&CATALOG, n, "color")), flowgraph.param_bool(&CATALOG, n, "inside") ? ", inside" : "")
 	case .Round_Corners:
-		return fmt.tprintf("%d px", node_int(n, "radius"))
+		return fmt.tprintf("%d px", flowgraph.param_int(&CATALOG, n, "radius"))
 	case .Shadow:
-		return fmt.tprintf("blur %d px, %+d %+d", node_int(n, "blur"), node_int(n, "x"), node_int(n, "y"))
+		return fmt.tprintf("blur %d px, %+d %+d", flowgraph.param_int(&CATALOG, n, "blur"), flowgraph.param_int(&CATALOG, n, "x"), flowgraph.param_int(&CATALOG, n, "y"))
 	case .Background:
-		if node_int(n, "fill") == 1 {
-			return fmt.tprintf("%d px, %s to %s", node_int(n, "margin"), color_text(node_color(n, "color")), color_text(node_color(n, "color2")))
+		if flowgraph.param_int(&CATALOG, n, "fill") == 1 {
+			return fmt.tprintf("%d px, %s to %s", flowgraph.param_int(&CATALOG, n, "margin"), color_text(flowgraph.param_color(&CATALOG, n, "color")), color_text(flowgraph.param_color(&CATALOG, n, "color2")))
 		}
-		return fmt.tprintf("%d px, %s", node_int(n, "margin"), color_text(node_color(n, "color")))
+		return fmt.tprintf("%d px, %s", flowgraph.param_int(&CATALOG, n, "margin"), color_text(flowgraph.param_color(&CATALOG, n, "color")))
 	case .Watermark:
-		text := node_text(n, "text")
+		text := flowgraph.param_text(&CATALOG, n, "text")
 		if text == "" { return "no text" }
-		return fmt.tprintf("\"%s\", %s", text_cut(text, 18), strings.to_lower(node_choice_text(n, "position"), context.temp_allocator))
+		return fmt.tprintf("\"%s\", %s", text_cut(text, 18), strings.to_lower(flowgraph.param_choice_text(&CATALOG, n, "position"), context.temp_allocator))
 	case .Brightness_Contrast:
-		return fmt.tprintf("%+d %%, contrast %+d %%", int(node_float(n, "brightness")), int(node_float(n, "contrast")))
+		return fmt.tprintf("%+d %%, contrast %+d %%", int(flowgraph.param_float(&CATALOG, n, "brightness")), int(flowgraph.param_float(&CATALOG, n, "contrast")))
 	case .Saturation:
-		return fmt.tprintf("%s %%", number_text(node_float(n, "amount")))
+		return fmt.tprintf("%s %%", number_text(flowgraph.param_float(&CATALOG, n, "amount")))
 	case .Hue:
-		return fmt.tprintf("%+d°", int(node_float(n, "degrees")))
+		return fmt.tprintf("%+d°", int(flowgraph.param_float(&CATALOG, n, "degrees")))
 	case .Threshold:
-		return fmt.tprintf("level %d", node_int(n, "level"))
+		return fmt.tprintf("level %d", flowgraph.param_int(&CATALOG, n, "level"))
 	case .Blur:
-		return fmt.tprintf("%s px", number_text(node_float(n, "radius")))
+		return fmt.tprintf("%s px", number_text(flowgraph.param_float(&CATALOG, n, "radius")))
 	case .Sharpen:
-		return fmt.tprintf("%s %%", number_text(node_float(n, "amount")))
+		return fmt.tprintf("%s %%", number_text(flowgraph.param_float(&CATALOG, n, "amount")))
 	case .Pixelate:
-		return fmt.tprintf("cells of %d px", node_int(n, "cell"))
+		return fmt.tprintf("cells of %d px", flowgraph.param_int(&CATALOG, n, "cell"))
 	case .Condition:
-		test := Condition_Test(node_int(n, "test"))
-		if test == .Source { return fmt.tprintf("the source is a %s", strings.to_lower(node_choice_text(n, "source"), context.temp_allocator)) }
+		test := Condition_Test(flowgraph.param_int(&CATALOG, n, "test"))
+		if test == .Source { return fmt.tprintf("the source is a %s", strings.to_lower(flowgraph.param_choice_text(&CATALOG, n, "source"), context.temp_allocator)) }
 		what := [Condition_Test]string{.Width = "width", .Height = "height", .Aspect = "width / height", .Source = ""}
 		op := [Condition_Compare]string{.More = ">", .Less = "<", .Equal = "="}
-		return fmt.tprintf("%s %s %s", what[test], op[Condition_Compare(node_int(n, "compare"))], number_text(node_float(n, "value")))
+		return fmt.tprintf("%s %s %s", what[test], op[Condition_Compare(flowgraph.param_int(&CATALOG, n, "compare"))], number_text(flowgraph.param_float(&CATALOG, n, "value")))
 	case .Save_File:
-		f := Save_Format(clamp(node_int(n, "format"), 0, len(Save_Format) - 1))
+		f := Save_Format(clamp(flowgraph.param_int(&CATALOG, n, "format"), 0, len(Save_Format) - 1))
 		format := SAVE_FORMAT_TEXT[f]
-		if f == .Jpeg || f == .Webp { format = fmt.tprintf("%s %d %%", format, node_int(n, "quality")) }
-		folder := node_text(n, "folder")
+		if f == .Jpeg || f == .Webp { format = fmt.tprintf("%s %d %%", format, flowgraph.param_int(&CATALOG, n, "quality")) }
+		folder := flowgraph.param_text(&CATALOG, n, "folder")
 		if folder == "" { return fmt.tprintf("%s to the default folder", format) }
 		return fmt.tprintf("%s to %s", format, path_short(folder))
 	case .Upload:
-		u := node_text(n, "uploader")
+		u := flowgraph.param_text(&CATALOG, n, "uploader")
 		return u != "" ? fmt.tprintf("to %s", u) : "to the default host"
 	case .Read_Text:
-		langs := node_text(n, "languages")
+		langs := flowgraph.param_text(&CATALOG, n, "languages")
 		return langs != "" ? langs : ""
 	case .Notify:
-		t := node_text(n, "title")
-		show := Notify_Show(node_int(n, "show")) == .Summary ? "a summary" : "what comes in"
+		t := flowgraph.param_text(&CATALOG, n, "title")
+		show := Notify_Show(flowgraph.param_int(&CATALOG, n, "show")) == .Summary ? "a summary" : "what comes in"
 		return t != "" ? fmt.tprintf("\"%s\": %s", text_cut(t, 16), show) : show
 	}
 	return ""

@@ -6,9 +6,11 @@ package cliche
 // Each change is applied at once and written by the worker (app_prefs_changed). What is slow (a folder chosen, a folder
 // opened) goes to the worker too.
 //
-// What is the toolkit's: the appearance and the session's preferences, the theme cards, the lines of the shortcuts
-// (the keys recorded, what the system said). What is cliche's: the pages, the words of its choices, the lines under the
-// save folder's name and the file name, and the buttons under the pages (the folder, the uploaders, the commands).
+// What is the toolkit's: the standard preferences (the look, the text, scrolling, input, the delays, rendering, the
+// session: gui_toolkit docs/settings.md), the theme cards and the user's own themes file, the lines of the shortcuts (the
+// keys recorded, what the system said), the settings file, export and import. What is cliche's: the pages, the words of
+// its choices, the lines under the save folder's name and the file name, and what is under the pages (the licence, the
+// folder, the uploaders, the commands).
 
 import "core:fmt"
 import "core:math"
@@ -38,6 +40,12 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "save",       title = "Save",          icon = lucide.SAVE},
 	{category = "upload",     title = "Upload",        icon = lucide.EXTERNAL_LINK},
 	{category = "history",    title = "History",       icon = lucide.HISTORY},
+	// (the toolkit's standard groups: the same pages in every program, after cliche's own)
+	{category = "window",     title = "Window",        icon = lucide.APP_WINDOW},
+	{category = "scrolling",  title = "Scrolling",     icon = lucide.ARROW_DOWN_UP},
+	{category = "input",      title = "Input",         icon = lucide.MOUSE},
+	{category = "timing",     title = "Delays and menus", icon = lucide.TIMER},
+	{category = "rendering",  title = "Rendering",     icon = lucide.CPU},
 }
 
 // The actions of the palette and of the sheet of keys that the history's (History_Action) do not hold already.
@@ -150,7 +158,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Options {
 		user = app,
 		changed = proc(user: rawptr, name: string) { app_prefs_changed((^App)(user)) },
 		choices = settings_choices,
-		themes = themes(),
+		themes = app.themes_file.all[:], themes_file = &app.themes_file,
 		shortcuts = app.shortcuts,
 		themes_light = app.history_window.theme_shown.light,
 		shortcut_prefs = slice.enumerated_array(&SHORTCUT_PAGE_PREFS),
@@ -206,11 +214,13 @@ settings_status :: proc(user: rawptr, name: string) -> string {
 	return ""
 }
 
-// Under a page: the save folder's buttons; the shortcuts' system settings and commands; the uploaders.
+// Under a page: the licence; the save folder's buttons; the shortcuts' system settings and commands; the uploaders.
 @(private = "file")
 settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	app := (^App)(user)
 	switch category {
+	case "general":
+		licence_section(app, em)
 	case "save":
 		ui.spacer(ui.px(em * 0.8))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})

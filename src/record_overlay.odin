@@ -55,6 +55,7 @@ record_overlay_show :: proc(app: ^App, headless := false) -> bool {
 		o := host.Open{title = "cliche recording", size = {max(area[2], 1), max(area[3], 1)}, overlay = !headless, overlay_area = area, headless = headless}
 		if !host.host_open(&ro.host, &app.shared, o, record_overlay_build, app) { return false }
 		ro.opened = true
+		app_standard_follow(app, &ro.host)
 		ro.area = out
 		ro.host.params = record_overlay_params
 		ro.host.after_input = 2
@@ -87,7 +88,7 @@ record_overlay_close :: proc(app: ^App) {
 	}
 	// (no other thread wakes a window about to go)
 	app_wake_remove(app, ro.host.win)
-	host.host_close(&ro.host)
+	app_host_close(app, &ro.host)
 	ro.opened, ro.visible = false, false
 }
 
@@ -139,7 +140,7 @@ record_overlay_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	a := app.settings.appearance
 	choice := prefs_page.appearance_choice(a)
 	choice.glow = 1
-	ui.theme_show(&app.shared.theme, themes(), choice, &ro.theme_shown, render.blend_space(&app.shared.r))
+	ui.theme_show(&app.shared.theme, app.themes_file.all[:], choice, &ro.theme_shown, render.blend_space(&app.shared.r))
 	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = a.font_size, text_pad = 6, cursor = .Arrow}
 }
 

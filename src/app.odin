@@ -81,6 +81,9 @@ App :: struct {
 	token:      string,                                    // the activation token of the next window shown (owned)
 	backend:    capture.Backend,                           // the session's, once open
 	announcer:  ui.Announcer,                              // where cliche says what it did (general.messages): app_announce
+	standards:  [dynamic]^prefs_page.Standard_Watch,       // the toolkit's standard settings on each open window (app_standard_follow)
+	themes_file: prefs_page.Themes_File,                   // cliche's themes, then the user's own (themes.txt beside the preferences)
+	licence:    Licence_View,                              // licence.odin
 	shortcuts:  ^shortcuts.Service,                        // shortcuts.odin
 	shortcuts_bound: [Shortcut_Action]string,              // the keys the service was given last (owned)
 	tray_keys:  [Shortcut_Action]string,                   // the keys the tray's menu shows (owned): built again when they change
@@ -123,6 +126,8 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	// (opened now, on the worker: the first capture does not wait for the compositor's protocols)
 	worker_send(&app.worker, Job_Open{})
 	config.user_writer_start(&app.prefs_writer, &app.prefs, prefs_file())
+	prefs_page.themes_file_init(&app.themes_file, themes_file(), themes())
+	licence_init(app)
 	history_start(app)
 	workflows_start(app)
 	app.server = instance.serve_start(owner, app_message, app)
@@ -159,6 +164,9 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app_windows_close(app)
 	// (after every window: a task's result has no window to go to now; the editors' reads end before app is freed)
 	ui.chores_stop()
+	// (no task holds them any more)
+	prefs_page.themes_file_destroy(&app.themes_file)
+	licence_destroy(app)
 	platform.destroy_window(app.anchor)   // (its tray icon with it)
 	app_free(app)
 	crash.end_session()
@@ -269,13 +277,34 @@ app_windows_close :: proc(app: ^App) {
 	if app.history_window.opened { append(&hosts, &app.history_window.host) }
 	for ed in app.editors { append(&hosts, &ed.host) }
 	if app.record_overlay.opened { append(&hosts, &app.record_overlay.host) }
-	for h in hosts { if app.shared.main != h { host.host_close(h) } }
-	for h in hosts { if app.shared.main == h { host.host_close(h) } }
+	for h in hosts { if app.shared.main != h { app_host_close(app, h) } }
+	for h in hosts { if app.shared.main == h { app_host_close(app, h) } }
 	for ed in app.editors {
 		editor_free(ed)
 		free(ed)
 	}
 	delete(app.editors)
+	delete(app.standards)
+}
+
+// A window opened: the toolkit's standard settings apply to its interface now, then each one again as it changes
+// (prefs_page.standard_watch). The renderer and the fonts are every window's: each watch gives them the same values.
+app_standard_follow :: proc(app: ^App, h: ^host.Host) {
+	w := new(prefs_page.Standard_Watch)
+	prefs_page.standard_watch(w, &app.prefs, &h.state, {renderer = &app.shared.r, fonts = &app.shared.fonts, partial_redraw = &h.partial_redraw})
+	append(&app.standards, w)
+}
+
+// A window about to close: its watch ends first (a change would reach a state that is gone), then the window.
+app_host_close :: proc(app: ^App, h: ^host.Host) {
+	for w, i in app.standards {
+		if w.s != &h.state { continue }
+		prefs_page.standard_unwatch(w)
+		free(w)
+		unordered_remove(&app.standards, i)
+		break
+	}
+	host.host_close(h)
 }
 
 // Wakes the interface's loop, from any thread. Every open window is woken: on Linux the loop hears the wake of the one
@@ -534,9 +563,10 @@ app_announce :: proc(app: ^App, kind: ui.Toast_Kind, title: string, body := "", 
 		}
 		return
 	}
-	ui.use(&h.state)
-	defer if app.shared.main != nil { ui.use(&app.shared.main.state) }
+	// (the toasts of the window chosen, whichever interface is in use; not kept: that window may close)
+	app.announcer.state = &h.state
 	ui.announce(&app.announcer, kind, title, body)
+	app.announcer.state = nil
 	h.settle = max(h.settle, 3)
 }
 

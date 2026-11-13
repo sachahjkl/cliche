@@ -14,7 +14,7 @@ package cliche
 // command palette (Ctrl+K) and the sheet of its keys (F1).
 //
 //   the bar      the tools (each an icon, a tooltip and a key), the properties of the tool or of the selection, then
-//                undo, redo, copy, save and Done
+//                undo, redo, copy, save, Cancel and Done
 //   the canvas   the picture and its shapes (editor_export.odin paints them), the selection's handles, the crop
 //
 // The canvas takes the pointer itself (editor_input: its presses, releases and wheel never reach the widgets) and turns
@@ -22,8 +22,8 @@ package cliche
 // field of the toolkit's over the canvas.
 //
 // Done hands the flattened picture back to the run that asked for it (workflow_editor_done); a picture of the history
-// runs the workflow of "Capture a region and edit". A close without Done stops that branch of the run
-// (workflow_editor_closed). Flattening runs on the GPU (an offscreen target read back a frame later); Ctrl+S encodes and
+// runs the workflow of "Capture a region and edit". Cancel, or a close without Done, cancels the run's Annotate step
+// (workflow_editor_closed): what needs its picture or its "done" is skipped, what hangs on its "cancelled" runs. Flattening runs on the GPU (an offscreen target read back a frame later); Ctrl+S encodes and
 // writes the PNG on the worker (Job_Save). A file of the history is read and decoded by a task of the chores.
 
 import "core:fmt"
@@ -286,6 +286,7 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 		free(ed)
 		return nil
 	}
+	app_standard_follow(app, &ed.host)
 	ed.host.input = editor_input
 	ed.host.params = editor_params
 	ed.host.after_input = 3
@@ -354,7 +355,7 @@ editor_dispose :: proc(ed: ^Editor) {
 	// (no other thread wakes a window about to go)
 	app_wake_remove(app, ed.host.win)
 	editor_destroy(ed)
-	host.host_close(&ed.host)
+	app_host_close(app, &ed.host)
 	editor_free(ed)
 	free(ed)
 }
@@ -508,7 +509,7 @@ editor_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	a := app.settings.appearance
 	choice := prefs_page.appearance_choice(a)
 	choice.glow = 1
-	if ui.theme_show(&app.shared.theme, themes(), choice, &ed.theme_shown, render.blend_space(&app.shared.r)) {
+	if ui.theme_show(&app.shared.theme, app.themes_file.all[:], choice, &ed.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !ed.theme_shown.light)
 	}
 	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = a.font_size, text_pad = 6, cursor = .Arrow}
@@ -861,6 +862,10 @@ editor_bar :: proc(ed: ^Editor, em: f32) {
 			if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(ed, a)) { editor_action(ed, a) }
 		}
 		ui.spacer(ui.px(em * 0.5))
+		// (Cancel ends the workflow's step as given up: what hangs on its "cancelled" runs, what needs its picture does not)
+		ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
+		if ui.button("Cancel###cancel", tip = ui.command_tip(EDITOR_ACTIONS[.Close])).clicked { editor_action(ed, .Close) }
+		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
 		if ui.button("Done###done", intent = .Primary, tip = ui.command_tip(EDITOR_ACTIONS[.Done])).clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
 		ui.spacer(ui.px(em * 0.5))

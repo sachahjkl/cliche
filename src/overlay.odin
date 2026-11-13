@@ -65,7 +65,7 @@ overlay_show :: proc(app: ^App) -> bool {
 	// stays, on its output)
 	if o.opened && o.layer && o.out != out && app.shared.main != &o.host {
 		app_wake_remove(app, o.host.win)
-		host.host_close(&o.host)
+		app_host_close(app, &o.host)
 		o.opened, o.visible = false, false
 	}
 	if !o.opened {
@@ -78,6 +78,7 @@ overlay_show :: proc(app: ^App) -> bool {
 		}
 		if o.layer { o.out = out }
 		o.opened = true
+		app_standard_follow(app, &o.host)
 		o.host.input = overlay_input
 		o.host.after_input = 2
 		app_wake_add(app, o.host.win)

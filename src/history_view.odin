@@ -267,6 +267,7 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 		return false
 	}
 	hw.opened = true
+	app_standard_follow(app, &hw.host)
 	hw.host.input = history_input
 	hw.host.params = history_params
 	hw.host.after_input = 3
@@ -409,7 +410,7 @@ history_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	a := app.settings.appearance
 	choice := prefs_page.appearance_choice(a)
 	choice.glow = 1
-	if ui.theme_show(&app.shared.theme, themes(), choice, &hw.theme_shown, render.blend_space(&app.shared.r)) {
+	if ui.theme_show(&app.shared.theme, app.themes_file.all[:], choice, &hw.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !hw.theme_shown.light)
 	}
 	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = a.font_size, text_pad = 6, cursor = .Arrow}
@@ -439,6 +440,8 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	hw.today = timefmt.local_day(now_ms, hw.offset_minutes)
 	em := ui.font_size()
 	history_refresh(app)
+	// (the user's own themes: read again when their file changed; every window shows the new list at its next frame)
+	if prefs_page.themes_file_poll(&app.themes_file, &hw.host.state) { hw.host.settle = max(hw.host.settle, 2) }
 	if hw.mode_built != app.settings.history_view {
 		// (the selection goes to the view shown now)
 		if app.settings.history_view == .List { hw.table_give = true } else { hw.grid_reveal = true }

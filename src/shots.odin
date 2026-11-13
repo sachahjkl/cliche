@@ -11,6 +11,7 @@ import "core:os"
 import "core:strings"
 import "core:time"
 import config "gt:config"
+import prefs_page "gt:prefs_page"
 import "gt:host"
 import png "gt:png"
 import "gt:render"
@@ -30,7 +31,19 @@ shots_run :: proc(folder: string, which: string) -> int {
 	app.settings = prefs_read(&app.prefs)
 	app.flow = Flow_Idle{}
 	app.record = Record_Idle{}
-	defer { settings_free(&app.settings); config.prefs_destroy(&app.prefs); delete(app.editors); delete(app.wakes) }
+	// (no file of the user's: the pictures show cliche's themes, and a licence kept in memory only)
+	prefs_page.themes_file_init(&app.themes_file, "", themes())
+	licence_init(app, memory = true)
+	defer {
+		settings_free(&app.settings)
+		config.prefs_destroy(&app.prefs)
+		delete(app.editors)
+		delete(app.wakes)
+		delete(app.standards)
+		ui.chores_stop()   // (a task may still hold the licence's store)
+		prefs_page.themes_file_destroy(&app.themes_file)
+		licence_destroy(app)
+	}
 	_ = os.make_directory_all(folder)
 	switch which {
 	case "settings", "": return shots_settings(app, folder)
@@ -53,7 +66,7 @@ shots_record :: proc(app: ^App, folder: string) -> int {
 	app.record = Record_Ready{.Mp4}
 	if !record_overlay_show(app, headless = true) { return 1 }
 	ro := &app.record_overlay
-	defer { host.host_close(&ro.host) }
+	defer { app_host_close(app, &ro.host) }
 	failed := !shots_write(app, &ro.host, folder, "record-ready")
 	app.record = Record_Recording{.Mp4, 83_000}
 	failed |= !shots_write(app, &ro.host, folder, "record-running")
@@ -64,7 +77,7 @@ shots_record :: proc(app: ^App, folder: string) -> int {
 shots_settings :: proc(app: ^App, folder: string) -> int {
 	if !history_window_open(app, headless = true) { return 1 }
 	hw := &app.history_window
-	defer { history_window_free(app); host.host_close(&hw.host) }
+	defer { history_window_free(app); app_host_close(app, &hw.host) }
 	settings_enter(app)
 	page := &hw.settings_mode.page
 	failed := false
@@ -124,7 +137,7 @@ shots_editor :: proc(app: ^App, folder: string) -> int {
 shots_history :: proc(app: ^App, folder: string) -> int {
 	if !history_window_open(app, headless = true) { return 1 }
 	hw := &app.history_window
-	defer { history_window_free(app); host.host_close(&hw.host) }
+	defer { history_window_free(app); app_host_close(app, &hw.host) }
 	now := time.to_unix_nanoseconds(time.now()) / 1_000_000
 	Made :: struct { kind: History_Kind, name, url, text: string, size: [2]int, bytes, length_ms: i64 }
 	made := [?]Made{
@@ -153,14 +166,14 @@ shots_workflows :: proc(app: ^App, folder: string) -> int {
 	if !history_window_open(app, headless = true) { return 1 }
 	hw := &app.history_window
 	app.workflows = workflows_default()
-	defer { history_window_free(app); host.host_close(&hw.host); workflows_free(&app.workflows) }
+	defer { history_window_free(app); app_host_close(app, &hw.host); workflows_free(&app.workflows) }
 	workflow_mode_enter(app)
 	m := &hw.workflow_mode
 	wf := workflows_find(&app.workflows, m.shown)
 	if wf == nil { return 1 }
-	for n in wf.nodes {
+	for n in wf.graph.nodes {
 		m.last[n.id] = Node_Last{state = .Done}
-		if n.kind == .Save_File { append(&m.selection, n.id) }
+		if Node_Kind(n.kind) == .Save_File { append(&m.selection, n.id) }
 	}
 	m.last_version += 1
 	ok := shots_write(app, &hw.host, folder, "workflows", frames = 10)   // (the graph is fitted once laid out)
@@ -174,7 +187,7 @@ shots_motion :: proc(app: ^App, folder: string) -> int {
 	if !history_window_open(app, headless = true) { return 1 }
 	hw := &app.history_window
 	app.workflows = workflows_default()
-	defer { history_window_free(app); host.host_close(&hw.host); workflows_free(&app.workflows) }
+	defer { history_window_free(app); app_host_close(app, &hw.host); workflows_free(&app.workflows) }
 	workflow_mode_enter(app)
 	for _ in 0 ..< 10 { hw.host.settle = 1; host.host_frame(&hw.host); time.sleep(16 * time.Millisecond) }
 	frames :: proc(app: ^App, folder, step: string, n: int) -> bool {
@@ -185,11 +198,11 @@ shots_motion :: proc(app: ^App, folder: string) -> int {
 		}
 		return true
 	}
-	first := app.workflows.list[0].id
+	first := app.workflows.set.list[0].id
 	workflow_rename_start(app, first)
 	if !frames(app, folder, "rename", 12) { return 1 }
 	hw.workflow_mode.renaming = 0
-	workflow_show(app, app.workflows.list[1].id)
+	workflow_show(app, app.workflows.set.list[1].id)
 	if !frames(app, folder, "switch", 16) { return 1 }
 	return 0
 }

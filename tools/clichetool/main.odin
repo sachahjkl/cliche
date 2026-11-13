@@ -7,10 +7,14 @@
 // GT=<folder>: another checkout of gui_toolkit (its root, not its src).
 package clichetool
 
+import "core:fmt"
+import "core:os"
+import "core:strings"
 import tk_changelog "gt:changelog"
 import release "gt:release"
 import tk_site "gt:site"
 import toolbox "gt:toolbox"
+import cliche_licence "../../src/licence"
 
 when ODIN_OS == .Windows {
 	PROGRAM :: "build/cliche.exe"
@@ -34,12 +38,24 @@ project :: proc() -> toolbox.Project {
 		name = "cliche", repository = "https://github.com/sachahjkl/cliche", changelog = "CHANGELOG.md",
 		version_file = "src/main.odin", version_line = "APP_VERSION :: ", program = PROGRAM,
 		linux_defines = LINUX_DEFINES[:],
+		// (a release has only the icons cliche names: lucide.<NAME> constants everywhere)
+		features = {.Lucide_Subset},
 	}
+}
+
+// The `licence` and `paddle` commands: cliche's licence (src/licence.odin), its development pair, its Paddle catalogue.
+LICENCE_TOOL :: toolbox.Licence_Tool{
+	product  = cliche_licence.PRODUCT,
+	// (the development pair's private key, public on purpose: "cliche-dev-licence-test-seed-01!")
+	dev_seed = "Y2xpY2hlLWRldi1saWNlbmNlLXRlc3Qtc2VlZC0wMSE",
+	hint     = "Open cliche's settings, the General page, Licence: choose this file, or paste the key there.",
+	paddle   = {name = "cliche User Licence", description = "A personal, perpetual licence of cliche, the screenshot and screen-recording tool.", amounts = "supporter=1500,patron=4500", currency = "EUR"},
 }
 
 main :: proc() {
 	p := project()
 	r := release.commands({project = p, dist = "build/dist", files = DIST_FILES[:], check = proc() -> int { return run_check(nil) }})
+	l := toolbox.licence_commands(LICENCE_TOOL)
 	toolbox.tool_main("clichetool", {
 		{name = "build", usage = "[release]: the toolkit's text library when its sources changed, then build/cliche", run = run_build},
 		{name = "test", usage = ": the tests of the program", run = run_test},
@@ -47,9 +63,10 @@ main :: proc() {
 		{name = "shots", usage = "[folder [window...]]: (window: settings, editor, history, workflows, record, or motion: the Workflows mode frame by frame) the windows drawn offscreen, as PNG files (default build/shots)", run = run_shots},
 		toolbox.logo_command(logo()),
 		tk_changelog.command(p),
-		tk_site.command({meta = site_meta(), pages = {version_mark = "{{version}}", downloads = SITE_DOWNLOADS[:]}}),
+		site_command(),
 		toolbox.notices_command(p),
 		r[0], r[1], r[2],
+		l[0], l[1],
 	}, toolbox.ROOT_MARK_DEFAULT)
 }
 
@@ -94,4 +111,56 @@ site_meta :: proc() -> tk_site.Meta {
 	m := SITE_META
 	m.ld_fields = SITE_LD[:]
 	return m
+}
+
+////////////////////////////////
+// The shop: cliche's licence (src/licence), sold through Paddle by the toolkit's licence Worker. Its pages (pricing,
+// thanks, terms, refunds, privacy, imprint) are the toolkit's templates, filled at each `site build`. What is empty is
+// the maintainer's to give once the shop is set up (gui_toolkit docs/licence.md, "What the maintainer does at the end"):
+// until the client token, the price ids and the Worker are there, the buttons say "Coming soon".
+
+@(rodata)
+SHOP_PRICES := [?]tk_site.Shop_Price{
+	{edition = "supporter", label = "Buy the Supporter licence"},
+	{edition = "patron", label = "Buy the Patron licence"},
+}
+
+SHOP :: tk_site.Shop{
+	name           = "cliche",
+	product_title  = "cliche User Licence",
+	price          = "15&nbsp;&euro;",
+	price_note     = "Once. Taxes included. Patron: 45&nbsp;&euro;.",
+	environment    = "sandbox",
+	thanks         = "https://cliche.froment.software/thanks/",
+	help           = "https://github.com/sachahjkl/cliche/issues",
+	register       = "Open cliche's settings (Ctrl+,), the <b>General</b> page, <b>Licence</b>: paste the key, or choose the file.",
+	extension      = ".clichelicence",
+	seller         = "Froment Software",
+	seller_url     = "https://froment.software",
+	code_licence   = "MIT",
+	stylesheet     = "../style.css",
+	home           = "../",
+	updated        = "2026-11-13",
+}
+
+// The site's own command: the toolkit's, with the shop's pages written after its build.
+@(private = "file")
+site_command :: proc() -> toolbox.Command {
+	inner := tk_site.command({meta = site_meta(), pages = {version_mark = "{{version}}", downloads = SITE_DOWNLOADS[:]}})
+	return {name = inner.name, usage = inner.usage, run_with = site_run, user = new_clone(inner)}
+}
+
+@(private = "file")
+site_run :: proc(args: []string, user: rawptr) -> int {
+	inner := (^toolbox.Command)(user)
+	code := inner.run_with(args, inner.user)
+	if code != toolbox.EXIT_DONE || len(args) != 3 || args[0] != "build" { return code }
+	shop := SHOP
+	shop.prices = SHOP_PRICES[:]
+	for page in tk_site.licence_pages(shop) {
+		path := fmt.tprintf("%s/%s", args[2], page.path)
+		_ = os.make_directory_all(path[:strings.last_index_byte(path, '/')])
+		if os.write_entire_file(path, transmute([]u8)page.text) != nil { fmt.eprintfln("clichetool site: %s cannot be written", path); return toolbox.EXIT_FAILED }
+	}
+	return toolbox.EXIT_DONE
 }

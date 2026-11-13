@@ -42,40 +42,45 @@ the selection. This works the same on every compositor: no layer surface, no tra
 ## Workflows: after a capture
 
 What happens to a picture is a workflow: a graph of nodes linked port to port, each port of a kind (a picture, a text, an
-address, a file). Each trigger (region, screen, window, edit, qr, ocr: the shortcuts, the tray, the commands) runs exactly
-one workflow. Recording is not a workflow.
+address, a file, an action). Each trigger (region, screen, window, edit, qr, ocr: the shortcuts, the tray, the commands)
+runs exactly one workflow. Recording is not a workflow. The graph, its edits, its file and its run are the toolkit's
+`gt:flowgraph`; cliche gives its catalog and does each node's work.
 
-- **The model** (`src/workflow.odin`): `Workflows`, `Workflow`, `Workflow_Node`, `Workflow_Link`, and the edits that keep
-  a graph valid (no cycle, kinds that agree, one link into a port that takes one, one Capture node), pure. The default
-  workflows are what cliche did before: Screenshot (copy and save), Edit then share (Annotate, then copy and save), Read
-  a QR code and Read the text (copy the text, notify).
-- **The catalog** (`src/workflow_nodes.odin`): each kind's title, icon, group, ports and parameters (`Param_Def`, a generic
-  schema: Int, Float with its range and unit, Bool, Color, Choice, Text, Folder, Uploader), where its work runs, whether
-  it acts outside the picture (off in a preview), and a summary of its parameters for the node's subtitle.
-- **The engine** (`src/workflow_run.odin`): a run of a graph, pure, tested without a window. Each node is a small state
-  machine (`Idle -> Running | Waiting -> Done | Failed`, `Idle -> Skipped`, `node_step`); a node runs when every node
-  before it is decided; a failed or skipped node skips what follows it; a Condition gives one of its two outputs. Pictures
-  are shared read only between branches (a reference count on the interface's thread) and let go when no node will read
-  them. `run_summary` makes the run's one notification.
+- **The model** (`src/workflow.odin`): `Workflows`, a `flowgraph.Graph_Set` whose entries are the workflows and whose
+  labels are the names of the triggers that run each. flowgraph's edits keep a graph valid (no cycle, kinds that agree,
+  one link into a port that takes one, one Capture node: its `max_count` and `min_count`). The default workflows are
+  what cliche did before: Screenshot (copy and save), Edit then share (Annotate, then copy and save), Read a QR code and
+  Read the text (copy the text, notify).
+- **The catalog** (`src/workflow_nodes.odin`): `CATALOG`, a `flowgraph.Catalog` in `Node_Kind`'s order: each kind's
+  title, icon, group, ports and parameters (Int, Float with its range and unit, Bool, Color, Choice, Text, Folder, List:
+  the uploaders), where its work runs, whether it acts outside the picture (off in a preview), and `node_summary`, a
+  summary of its parameters for the node's subtitle. Annotate has two action outputs, "done" and "cancelled"; each
+  effect has an action input, "when": linked, the effect waits for the editor's Done (or its Cancel).
+- **The engine** (`src/workflow_run.odin`): a `flowgraph.Run` and what cliche adds, pure, tested without a window. Each
+  node is flowgraph's small state machine (`Waiting -> Running -> Done | Failed | Cancelled`, `Waiting -> Skipped`); a
+  node runs when every node before it is decided and its linked actions fired; a failed, cancelled or skipped node skips
+  what needs it; a Condition gives one of its two outputs. `run_tasks` finishes at once what the run decides itself
+  (Capture, Condition, Annotate in a preview). Pictures are shared read only between branches (a counted value) and let
+  go when no node will read them. `run_summary` makes the run's one notification.
 - **The work** (`src/workflow_ops.odin`): what runs on the worker (`Job_Node`): the transformations (`gt:image`), the save
   (`src/save.odin`), the upload, the QR code, the text. A transformation makes a new picture; one that works in place
   works on a copy. What must run on the interface's thread (the clipboard, the history) and the editor (Annotate: the run
-  waits for Done; a close stops that branch) are `src/workflow_app.odin`'s, which also starts the runs (several may be
-  in flight) and tells their end.
+  waits for Done or Cancel) are `src/workflow_app.odin`'s, which also starts the runs (several may be in flight) and
+  tells their end.
 - **The editors** (`src/editor.odin`): each Annotate opens its picture at once in an editor of its own (`app.editors`),
-  any number open together. An editor holds the run and node its picture is for (`Editor.ask`): its Done or its close
-  ends that node, and that node only. Its id (`Editor.id`) goes with its Ctrl+C and Ctrl+S to the worker and back; a
-  result whose editor has closed is said where cliche says things. A closed editor is freed, but for one kept hidden
-  for the next picture and the renderer's own window.
-- **The store** (`src/workflow_store.odin`): `<config dir>/cliche/workflows.json`, read on the worker at the start, written
-  on the worker after each change (at the end of a gesture). A broken file is kept aside as `workflows.json.broken`, and
-  the defaults take its place.
+  any number open together. An editor holds the run and node its picture is for (`Editor.ask`): its Done, its Cancel or
+  its close ends that node, and that node only. Its id (`Editor.id`) goes with its Ctrl+C and Ctrl+S to the worker and
+  back; a result whose editor has closed is said where cliche says things. A closed editor is freed, but for one kept
+  hidden for the next picture and the renderer's own window. Its undo is a `gt:undo` stack of the shapes and the crop.
+- **The store** (`src/workflow_store.odin`): `<config dir>/cliche/workflows.json`, `flowgraph.set_text` and `set_parse`
+  under cliche's keys ("workflows", "triggers"), read on the worker at the start, written on the worker after each change
+  (at the end of a gesture). A broken file is kept aside as `workflows.json.broken`, and the defaults take its place.
 - **The mode** (`src/workflow_view.odin`, `src/workflow_inspector.odin`): the main window's third mode. The list of
-  workflows, the graph (`ui.node_graph`: the program owns the model, applies the widget's events, keeps one step of undo
-  per change), and the inspector drawn from the parameters' schema. The graph's nodes are made again when the model or
-  the last run's marks change, not at each frame. "Run on the last capture" decodes the newest picture of the history
-  on the worker and runs the workflow with its effects off; each node then shows its state and a thumbnail of its
-  picture.
+  workflows, the graph (`ui.node_graph` on `ui.flow_nodes_make`'s nodes: the program owns the model, applies the widget's
+  events, keeps one step of undo per change in a `gt:undo` stack), the add palette (`ui.flow_palette`) and the inspector
+  (`ui.node_inspector`, drawn from the parameters' schema). The graph's nodes are made again when the model or the last
+  run's marks change, not at each frame. "Run on the last capture" decodes the newest picture of the history on the
+  worker and runs the workflow with its effects off; each node then shows its state and a thumbnail of its picture.
 
 ## Shortcuts
 
@@ -85,11 +90,23 @@ RegisterHotKey. The commands (`cliche --region`) stay for a compositor's own bin
 
 ## Settings
 
-`src/settings.odin` is the registry (one `config.Def` per preference, a group per page: the first segment of its name); the appearance and session
-preferences are the toolkit's standard ones (`prefs_page.standard_register`). The settings are a mode of the main
-window (`src/history_view.odin`), as the workflows are: `src/settings_view.odin` builds them with `gt:prefs_page` in place of the history, with
-its back bar, the theme cards and the shortcuts' lines the toolkit draws. What is slow (opening a folder, the desktop files of
-`src/integration.odin`) runs on the worker; the folder dialog on the chores (`ui.file_dialog`). `clichetool shots` draws each page offscreen (`src/shots.odin`).
+`src/settings.odin` is the registry (one `config.Def` per preference, a group per page: the first segment of its name);
+the look, the text, scrolling, input, the delays, rendering and the session are the toolkit's standard preferences
+(`prefs_page.standard_register`, gui_toolkit docs/settings.md), applied to each window's interface as they change
+(`app_standard_follow`: a `prefs_page.standard_watch` per open window, ended before the window closes). The settings are
+a mode of the main window (`src/history_view.odin`), as the workflows are: `src/settings_view.odin` builds them with
+`gt:prefs_page` in place of the history, with its back bar, the theme cards and the user's own themes file
+(`prefs_page.Themes_File`), the shortcuts' lines the toolkit draws, the settings file, export and import. What is slow
+(opening a folder, the desktop files of `src/integration.odin`) runs on the worker; the folder dialog on the chores
+(`ui.file_dialog`). `clichetool shots` draws each page offscreen (`src/shots.odin`).
+
+## Licence
+
+`src/licence/product.odin` describes cliche's licence for `gt:licence` (gui_toolkit docs/licence.md); `src/licence.odin`
+keeps its store, read and changed only in tasks, and draws the Licence section under the General page. `clichetool
+licence` and `clichetool paddle` are the toolkit's commands; `clichetool site build` adds the shop's pages (pricing,
+thanks, terms, refunds, privacy, imprint), whose buttons say "Coming soon" until the shop is set up. `secrets/` and
+`.sops.yaml` hold the maintainer's encrypted keys once made.
 
 ## Recording
 
