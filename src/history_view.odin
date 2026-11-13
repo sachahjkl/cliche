@@ -79,6 +79,13 @@ History_Texture :: struct {
 	seen:  u64,   // the last frame its entry was built
 }
 
+// What the main palette's table depends on.
+Palette_Key :: struct {
+	prefs:     u64,              // app.prefs.version + 1 (0: not made)
+	workflows: bool,             // the Workflows mode is shown: its actions are in the table
+	language:  ^i18n.Language,
+}
+
 History_Window :: struct {
 	host:        host.Host,
 	opened:      bool,
@@ -87,7 +94,11 @@ History_Window :: struct {
 	icons:       font.Font_Id,
 	theme_shown: ui.Theme_Shown,
 	palette:     ui.Command_Palette,
-	sheet_open:  bool,
+	palette_table: Palette_Table,     // the palette's commands (history_palette_keep)
+	palette_made:  Palette_Key,       // what they were made for
+	sheet:       ui.Shortcuts_Sheet,
+	sheet_table: Palette_Table,       // the sheet's commands (history_sheet_keep)
+	sheet_language: ^i18n.Language,   // the language they were made in
 
 	history:     History,         // the interface's copy (history.odin)
 	loaded:      bool,            // the file was read
@@ -148,29 +159,29 @@ History_Action :: enum u8 {
 }
 
 HISTORY_ACTIONS := [History_Action]ui.Command{
-	.Open           = {label = i18n.later("Open"), group = i18n.later("Capture"), keys = {{.Return, {}}, {}}, icon = lucide.EXTERNAL_LINK, tags = {"view", "launch"}},
-	.Reveal         = {label = i18n.later("Open the folder"), group = i18n.later("Capture"), keys = {{.Return, {.Ctrl}}, {}}, icon = lucide.FOLDER_OPEN, tags = {"reveal", "show", "file manager", "explorer"}},
-	.Copy_Picture   = {label = i18n.later("Copy the picture"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl}}, {}}, icon = lucide.COPY, tags = {"clipboard", "image"}},
-	.Copy_Path      = {label = i18n.later("Copy the path"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl, .Shift}}, {}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "file", "location"}},
-	.Copy_Url       = {label = i18n.later("Copy the URL"), group = i18n.later("Capture"), keys = {{.L, {.Ctrl}}, {}}, icon = lucide.LINK, tags = {"clipboard", "address", "link", "upload"}},
-	.Copy_Text      = {label = i18n.later("Copy the text"), group = i18n.later("Capture"), keys = {{.T, {.Ctrl}}, {}}, icon = lucide.FILE_TEXT, tags = {"clipboard", "ocr", "qr"}},
-	.Edit           = {label = i18n.later("Edit"), group = i18n.later("Capture"), keys = {{.E, {.Ctrl}}, {}}, icon = lucide.PENCIL, tags = {"editor", "annotate", "draw"}},
-	.Upload         = {label = i18n.later("Upload again"), group = i18n.later("Capture"), keys = {{.U, {.Ctrl}}, {}}, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link"}},
-	.Delete_File    = {label = i18n.later("Delete the file…"), group = i18n.later("Capture"), keys = {{.Delete, {.Shift}}, {}}, icon = lucide.TRASH_2, tags = {"erase", "remove", "disk"}},
-	.Remove         = {label = i18n.later("Remove from the history"), group = i18n.later("Capture"), keys = {{.Delete, {}}, {}}, icon = lucide.X, tags = {"forget", "clear"}},
-	.Preview        = {label = i18n.later("Preview"), group = i18n.later("View"), keys = {{.Space, {}}, {}}, icon = lucide.EYE, tags = {"zoom", "look"}},
-	.Select_All     = {label = i18n.later("Select all"), group = i18n.later("View"), keys = {{.A, {.Ctrl}}, {}}, icon = lucide.LIST_CHECKS, tags = {"every"}},
-	.Search         = {label = i18n.later("Search"), group = i18n.later("View"), keys = {{.F, {.Ctrl}}, {}}, icon = lucide.SEARCH, tags = {"find", "filter"}},
-	.Grid           = {label = i18n.later("Show a grid"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}, {}}, icon = lucide.LAYOUT_GRID, tags = {"thumbnails", "pictures"}},
-	.List           = {label = i18n.later("Show a list"), group = i18n.later("View"), keys = {{.N2, {.Ctrl}}, {}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
+	.Open           = {label = i18n.later("Open"), group = i18n.later("Capture"), keys = {{.Return, {}}}, icon = lucide.EXTERNAL_LINK, tags = {"view", "launch"}},
+	.Reveal         = {label = i18n.later("Open the folder"), group = i18n.later("Capture"), keys = {{.Return, {.Ctrl}}}, icon = lucide.FOLDER_OPEN, tags = {"reveal", "show", "file manager", "explorer"}},
+	.Copy_Picture   = {label = i18n.later("Copy the picture"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl}}}, icon = lucide.COPY, tags = {"clipboard", "image"}},
+	.Copy_Path      = {label = i18n.later("Copy the path"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl, .Shift}}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "file", "location"}},
+	.Copy_Url       = {label = i18n.later("Copy the URL"), group = i18n.later("Capture"), keys = {{.L, {.Ctrl}}}, icon = lucide.LINK, tags = {"clipboard", "address", "link", "upload"}},
+	.Copy_Text      = {label = i18n.later("Copy the text"), group = i18n.later("Capture"), keys = {{.T, {.Ctrl}}}, icon = lucide.FILE_TEXT, tags = {"clipboard", "ocr", "qr"}},
+	.Edit           = {label = i18n.later("Edit"), group = i18n.later("Capture"), keys = {{.E, {.Ctrl}}}, icon = lucide.PENCIL, tags = {"editor", "annotate", "draw"}},
+	.Upload         = {label = i18n.later("Upload again"), group = i18n.later("Capture"), keys = {{.U, {.Ctrl}}}, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link"}},
+	.Delete_File    = {label = i18n.later("Delete the file…"), group = i18n.later("Capture"), keys = {{.Delete, {.Shift}}}, icon = lucide.TRASH_2, tags = {"erase", "remove", "disk"}},
+	.Remove         = {label = i18n.later("Remove from the history"), group = i18n.later("Capture"), keys = {{.Delete, {}}}, icon = lucide.X, tags = {"forget", "clear"}},
+	.Preview        = {label = i18n.later("Preview"), group = i18n.later("View"), keys = {{.Space, {}}}, icon = lucide.EYE, tags = {"zoom", "look"}},
+	.Select_All     = {label = i18n.later("Select all"), group = i18n.later("View"), keys = {{.A, {.Ctrl}}}, icon = lucide.LIST_CHECKS, tags = {"every"}},
+	.Search         = {label = i18n.later("Search"), group = i18n.later("View"), keys = {{.F, {.Ctrl}}}, icon = lucide.SEARCH, tags = {"find", "filter"}},
+	.Grid           = {label = i18n.later("Show a grid"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}}, icon = lucide.LAYOUT_GRID, tags = {"thumbnails", "pictures"}},
+	.List           = {label = i18n.later("Show a list"), group = i18n.later("View"), keys = {{.N2, {.Ctrl}}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
 	.Open_Folder    = {label = i18n.later("Open the save folder"), group = i18n.later("View"), icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
 	.Capture_Region = {label = i18n.later("Capture a region"), group = i18n.later("Window"), icon = lucide.IMAGE, tags = {"screenshot", "new"}},
-	.Workflows      = {label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}, {}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}},
-	.Settings       = {label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}, {}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}},
+	.Workflows      = {label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}},
+	.Settings       = {label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}},
 	.Palette        = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
-	.Keys           = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
-	.Close          = {label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"hide"}},
-	.Quit           = {label = i18n.later("Quit cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}, {}}, icon = lucide.POWER, tags = {"exit", "stop"}},
+	.Keys           = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
+	.Close          = {label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"hide"}},
+	.Quit           = {label = i18n.later("Quit cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}}, icon = lucide.POWER, tags = {"exit", "stop"}},
 }
 
 History_Actions :: bit_set[History_Action]
@@ -367,7 +378,7 @@ history_after_frame :: proc(app: ^App) {
 	if !hw.hide_due { return }
 	hw.hide_due = false
 	hw.palette.open = false
-	hw.sheet_open = false
+	hw.sheet.open = false
 	hw.confirm_open = false
 	hw.workflow_mode.add.open = false
 	hw.workflow_mode.confirm_open = false
@@ -386,6 +397,10 @@ history_window_free :: proc(app: ^App) {
 	history_textures_drop(app)
 	delete(hw.thumbs)
 	ui.palette_destroy(&hw.palette)
+	ui.shortcuts_sheet_destroy(&hw.sheet)
+	palette_table_destroy(&hw.palette_table)
+	palette_table_destroy(&hw.sheet_table)
+	hw.palette_made, hw.sheet_language = {}, nil   // (the screenshots open the window again after this)
 	settings_mode_free(app)
 	workflow_mode_free(app)
 	ui.line_edit_destroy(&hw.search)
@@ -437,7 +452,7 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	}
 
 	workflows := hw.workflow_mode.open
-	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.menu_any_open() || hw.workflow_mode.add.open || hw.workflow_mode.confirm_open
+	dialog := hw.palette.open || hw.sheet.open || hw.confirm_open || ui.menu_any_open() || hw.workflow_mode.add.open || hw.workflow_mode.confirm_open
 	settings := hw.settings_mode.open
 	if !dialog && workflows {
 		workflow_keys(app)
@@ -807,7 +822,7 @@ history_list :: proc(app: ^App, em: f32) {
 		if len(hw.selection.marked) > 1 { for id in hw.selection.marked { t.vl.marks[id] = true } }
 		if hw.selection.focus != 0 { ui.table_select_id(t, hw.selection.focus) }
 	}
-	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.menu_any_open()
+	dialog := hw.palette.open || hw.sheet.open || hw.confirm_open || ui.menu_any_open()
 	keys: ui.Table_Events
 	if !dialog { keys = ui.table_keys(t) }
 	ui.next({width = ui.fill(), height = ui.fill()})
@@ -1005,9 +1020,36 @@ history_menu :: proc(app: ^App, em: f32) {
 		for a in HISTORY_MENU {
 			if a in HISTORY_MENU_BREAKS { ui.menu_separator() }
 			c := HISTORY_ACTIONS[a]
-			if ui.menu_item(i18n.tr(c.label), ui.chord_text(c.keys[0]), false, c.icon, a not_in enabled, icon_font = hw.icons).clicked { history_action(app, a) }
+			if ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), false, c.icon, a not_in enabled, icon_font = hw.icons).clicked { history_action(app, a) }
 		}
 	}
+}
+
+// The palette's table: the history's actions, the settings' actions, every setting, then the Workflows mode's actions
+// while it is shown. Made again only when the preferences, the mode shown or the language change.
+@(private = "file")
+history_palette_keep :: proc(app: ^App) {
+	hw := &app.history_window
+	key := Palette_Key{prefs = app.prefs.version + 1, workflows = hw.workflow_mode.open, language = i18n.current()}
+	if hw.palette_made == key { return }
+	hw.palette_made = key
+	t := &hw.palette_table
+	a := palette_table_remake(t)
+	theirs, names := settings_palette(app, a)
+	flows := key.workflows ? slice.enumerated_array(&WORKFLOW_ACTIONS) : nil
+	t.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), theirs, flows}, a)
+	t.disabled = make([]bool, len(t.commands), a)
+	t.names = names
+}
+
+// The sheet's table: every action of the window, from constant tables; made once, and again in another language.
+@(private = "file")
+history_sheet_keep :: proc(app: ^App) {
+	hw := &app.history_window
+	if hw.sheet_table.version != 0 && hw.sheet_language == i18n.current() { return }
+	hw.sheet_language = i18n.current()
+	a := palette_table_remake(&hw.sheet_table)
+	hw.sheet_table.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), slice.enumerated_array(&SETTINGS_ACTIONS), slice.enumerated_array(&WORKFLOW_ACTIONS)}, a)
 }
 
 // The palette (the history's actions, the settings' actions, then every setting), the sheet of keys, the question
@@ -1015,28 +1057,24 @@ history_menu :: proc(app: ^App, em: f32) {
 @(private = "file")
 history_dialogs :: proc(app: ^App) {
 	hw := &app.history_window
-	history_commands := slice.enumerated_array(&HISTORY_ACTIONS)
-	settings_commands := slice.enumerated_array(&SETTINGS_ACTIONS)
 	if hw.palette.open {
+		history_palette_keep(app)
+		t := &hw.palette_table
+		// (only the actions can be disabled, and they are first: as many each frame whatever the preferences)
 		set := history_enabled(app)
-		mine := make([]bool, len(History_Action), context.temp_allocator)
-		for a in History_Action { mine[int(a)] = a not_in set }
-		theirs, theirs_disabled, names := settings_palette(app)
-		// (the Workflows mode's own commands, last, while it is shown)
-		flows := hw.workflow_mode.open ? slice.enumerated_array(&WORKFLOW_ACTIONS) : nil
-		flows_disabled := make([]bool, len(flows), context.temp_allocator)
-		commands := slice.concatenate([][]ui.Command{history_commands, theirs, flows}, context.temp_allocator)
-		disabled := slice.concatenate([][]bool{mine, theirs_disabled, flows_disabled}, context.temp_allocator)
-		if i, _ := ui.palette(&hw.palette, commands, disabled); i >= 0 {
+		for a in History_Action { t.disabled[int(a)] = a not_in set }
+		settings_palette_disable(app, t.disabled[len(History_Action):])
+		if i, _ := ui.palette(&hw.palette, t.commands, t.disabled, {version = t.version}); i >= 0 {
+			theirs := len(Settings_Action) + len(t.names)
 			switch {
-			case i < len(History_Action):               history_action(app, History_Action(i))
-			case i < len(History_Action) + len(theirs): settings_palette_chosen(app, i - len(History_Action), names)
-			case:                                       workflow_action(app, Workflow_Action(i - len(History_Action) - len(theirs)))
+			case i < len(History_Action):          history_action(app, History_Action(i))
+			case i < len(History_Action) + theirs: settings_palette_chosen(app, i - len(History_Action), t.names)
+			case:                                  workflow_action(app, Workflow_Action(i - len(History_Action) - theirs))
 			}
 		}
 	}
-	sheet := slice.concatenate([][]ui.Command{history_commands, settings_commands, slice.enumerated_array(&WORKFLOW_ACTIONS)}, context.temp_allocator)
-	ui.shortcuts_sheet("keys", sheet, &hw.sheet_open, i18n.tr("cliche's keys"))
+	if hw.sheet.open { history_sheet_keep(app) }
+	ui.shortcuts_sheet(&hw.sheet, "keys", hw.sheet_table.commands, i18n.tr("cliche's keys"), version = hw.sheet_table.version)
 	if hw.confirm_open {
 		names := make([dynamic]string, context.temp_allocator)
 		for id in hw.delete_ids {
@@ -1181,7 +1219,7 @@ history_action :: proc(app: ^App, a: History_Action) {
 	case .Palette:
 		ui.palette_open(&hw.palette)
 	case .Keys:
-		hw.sheet_open = true
+		hw.sheet.open = true
 	case .Close:
 		hw.hide_due = true
 	case .Quit:

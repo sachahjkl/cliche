@@ -7,7 +7,7 @@ import ocr "gt:ocr"
 
 // The text of the shot (owned), or why there is none. `languages`: capture.ocr_languages ("": the user's).
 ocr_read :: proc(shot: Shot, languages: string, allocator := context.allocator) -> (text: string, err: Flow_Error) {
-	opts: ocr.Options
+	opts: ocr.Recognize_Options
 	if languages != "" { opts.languages = strings.split(languages, "+", context.temp_allocator) }
 	r, e := ocr.recognize(shot.rgba, shot.size.x, shot.size.y, shot.size.x * 4, .RGBA, opts)
 	if e == .No_Engine || e == .No_Language { return "", .No_Ocr }

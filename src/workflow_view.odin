@@ -14,6 +14,7 @@ package cliche
 
 import "core:fmt"
 import "core:math"
+import "core:slice"
 import "core:strings"
 import "gt:draw"
 import flowgraph "gt:flowgraph"
@@ -39,6 +40,13 @@ Node_Last :: struct {
 	size:    [2]int,
 }
 
+// What the add palette's table depends on.
+Add_Key :: struct {
+	workflows: u64,                         // app.workflows.version + 1 (0: not made)
+	shown:     u64,
+	from:      Maybe(flowgraph.Port_Ref),
+}
+
 Workflow_Mode :: struct {
 	open:       bool,
 	shown:      u64,                  // the workflow shown (its id; 0: none)
@@ -57,6 +65,8 @@ Workflow_Mode :: struct {
 	history:    undo.Stack(flowgraph.Graph),   // the graph shown as it was before each change
 
 	add:        ui.Command_Palette,   // the node kinds, searched
+	add_table:  Palette_Table,        // its commands (workflow_add_keep)
+	add_made:   Add_Key,              // what they were made for
 	add_at:     [2]f32,               // where the node added goes (graph units)
 	add_from:   Maybe(flowgraph.Port_Ref),   // the port a link was dropped from: the node added is linked to it
 	menu_node:  u64,
@@ -101,13 +111,13 @@ GROUP_COLORS := [?]struct { group: string, color: [3]f32 }{
 Workflow_Action :: enum u8 { Back, Add_Node, Add_Workflow, Undo, Redo, Fit, Preview }
 
 WORKFLOW_ACTIONS := [Workflow_Action]ui.Command{
-	.Back         = {label = i18n.later("Back to the history"), group = i18n.later("Workflows"), keys = {{.Escape, {}}, {}}, icon = lucide.ARROW_LEFT, tags = {"close", "leave"}},
-	.Add_Node     = {label = i18n.later("Add a step…"), group = i18n.later("Workflows"), keys = {{.A, {.Shift}}, {}}, icon = lucide.PLUS, tags = {"node", "new", "insert"}},
+	.Back         = {label = i18n.later("Back to the history"), group = i18n.later("Workflows"), keys = {{.Escape, {}}}, icon = lucide.ARROW_LEFT, tags = {"close", "leave"}},
+	.Add_Node     = {label = i18n.later("Add a step…"), group = i18n.later("Workflows"), keys = {{.A, {.Shift}}}, icon = lucide.PLUS, tags = {"node", "new", "insert"}},
 	.Add_Workflow = {label = i18n.later("New workflow"), group = i18n.later("Workflows"), icon = lucide.FILE_PLUS, tags = {"create", "graph"}},
-	.Undo         = {label = i18n.later("Undo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl}}, {}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
+	.Undo         = {label = i18n.later("Undo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl}}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
 	.Redo         = {label = i18n.later("Redo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again"}},
-	.Fit          = {label = i18n.later("Show the whole workflow"), group = i18n.later("Workflows"), keys = {{.F, {}}, {}}, icon = lucide.ZOOM_OUT, tags = {"fit", "zoom", "all"}},
-	.Preview      = {label = i18n.later("Run on the last capture"), group = i18n.later("Workflows"), keys = {{.R, {.Ctrl}}, {}}, icon = lucide.PLAY, tags = {"preview", "test", "try"}},
+	.Fit          = {label = i18n.later("Show the whole workflow"), group = i18n.later("Workflows"), keys = {{.F, {}}}, icon = lucide.ZOOM_OUT, tags = {"fit", "zoom", "all"}},
+	.Preview      = {label = i18n.later("Run on the last capture"), group = i18n.later("Workflows"), keys = {{.R, {.Ctrl}}}, icon = lucide.PLAY, tags = {"preview", "test", "try"}},
 }
 
 ////////////////////////////////
@@ -167,6 +177,7 @@ workflow_mode_free :: proc(app: ^App) {
 	delete(m.selection)
 	ui.flow_nodes_destroy(&m.flow)
 	ui.palette_destroy(&m.add)
+	palette_table_destroy(&m.add_table)
 	ui.line_edit_destroy(&m.rename)
 	ui.node_inspector_destroy(&m.inspector)
 	delete(m.status)
@@ -570,13 +581,30 @@ workflow_undo :: proc(app: ^App, back: bool) {
 ////////////////////////////////
 // Dialogs
 
+// The add palette's table (ui.flow_palette: the catalog's kinds, those that cannot be added disabled), made again only
+// when the graph (workflows.version), the workflow shown or the port a link was dropped from change. The catalog is
+// constant.
+@(private = "file")
+workflow_add_keep :: proc(app: ^App, wf: ^flowgraph.Graph_Entry) {
+	m := &app.history_window.workflow_mode
+	key := Add_Key{workflows = app.workflows.version + 1, shown = m.shown, from = m.add_from}
+	if m.add_made == key { return }
+	m.add_made = key
+	t := &m.add_table
+	a := palette_table_remake(t)
+	commands, disabled := ui.flow_palette(&wf.graph, &CATALOG, m.add_from)
+	t.commands = slice.clone(commands, a)   // (its strings are the catalog's)
+	t.disabled = slice.clone(disabled, a)
+}
+
 @(private = "file")
 workflow_dialogs :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
 	if m.add.open {
 		if wf := workflows_find(&app.workflows, m.shown); wf != nil {
-			commands, disabled := ui.flow_palette(&wf.graph, &CATALOG, m.add_from)
-			if i, _ := ui.palette(&m.add, commands, disabled); i >= 0 { workflow_add_chosen(app, i) }
+			workflow_add_keep(app, wf)
+			t := &m.add_table
+			if i, _ := ui.palette(&m.add, t.commands, t.disabled, {version = t.version}); i >= 0 { workflow_add_chosen(app, i) }
 		} else {
 			m.add.open = false
 		}

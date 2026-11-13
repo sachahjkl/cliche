@@ -67,31 +67,31 @@ Editor_Action :: enum u8 {
 }
 
 EDITOR_ACTIONS := [Editor_Action]ui.Command{
-	.Tool_Select      = {label = i18n.later("Select and move"), group = i18n.later("Tools"), keys = {{.V, {}}, {}}, icon = lucide.MOUSE_POINTER_2, tags = {"pointer", "move", "resize"}},
-	.Tool_Rectangle   = {label = i18n.later("Rectangle"), group = i18n.later("Tools"), keys = {{.R, {}}, {}}, icon = lucide.SQUARE, tags = {"box", "square", "frame"}},
-	.Tool_Ellipse     = {label = i18n.later("Ellipse"), group = i18n.later("Tools"), keys = {{.E, {}}, {}}, icon = lucide.CIRCLE, tags = {"circle", "oval", "round"}},
-	.Tool_Arrow       = {label = i18n.later("Arrow"), group = i18n.later("Tools"), keys = {{.A, {}}, {}}, icon = lucide.ARROW_UP_RIGHT, tags = {"point", "show"}},
-	.Tool_Line        = {label = i18n.later("Line"), group = i18n.later("Tools"), keys = {{.L, {}}, {}}, icon = lucide.SLASH, tags = {"straight", "rule"}},
-	.Tool_Pen         = {label = i18n.later("Pen"), group = i18n.later("Tools"), keys = {{.P, {}}, {}}, icon = lucide.PENCIL, tags = {"freehand", "draw", "brush"}},
-	.Tool_Text        = {label = i18n.later("Text"), group = i18n.later("Tools"), keys = {{.T, {}}, {}}, icon = lucide.TYPE, tags = {"label", "write", "words"}},
-	.Tool_Highlighter = {label = i18n.later("Highlighter"), group = i18n.later("Tools"), keys = {{.H, {}}, {}}, icon = lucide.HIGHLIGHTER, tags = {"marker", "yellow", "emphasis"}},
-	.Tool_Pixelate    = {label = i18n.later("Pixelate"), group = i18n.later("Tools"), keys = {{.B, {}}, {}}, icon = lucide.LAYOUT_GRID, tags = {"blur", "hide", "censor", "mosaic", "redact"}},
-	.Tool_Step        = {label = i18n.later("Step number"), group = i18n.later("Tools"), keys = {{.N, {}}, {}}, icon = lucide.LIST_ORDERED, tags = {"counter", "badge", "numbered"}},
-	.Tool_Crop        = {label = i18n.later("Crop"), group = i18n.later("Tools"), keys = {{.C, {}}, {}}, icon = lucide.CROP, tags = {"cut", "trim"}},
-	.Undo             = {label = i18n.later("Undo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl}}, {}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
+	.Tool_Select      = {label = i18n.later("Select and move"), group = i18n.later("Tools"), keys = {{.V, {}}}, icon = lucide.MOUSE_POINTER_2, tags = {"pointer", "move", "resize"}},
+	.Tool_Rectangle   = {label = i18n.later("Rectangle"), group = i18n.later("Tools"), keys = {{.R, {}}}, icon = lucide.SQUARE, tags = {"box", "square", "frame"}},
+	.Tool_Ellipse     = {label = i18n.later("Ellipse"), group = i18n.later("Tools"), keys = {{.E, {}}}, icon = lucide.CIRCLE, tags = {"circle", "oval", "round"}},
+	.Tool_Arrow       = {label = i18n.later("Arrow"), group = i18n.later("Tools"), keys = {{.A, {}}}, icon = lucide.ARROW_UP_RIGHT, tags = {"point", "show"}},
+	.Tool_Line        = {label = i18n.later("Line"), group = i18n.later("Tools"), keys = {{.L, {}}}, icon = lucide.SLASH, tags = {"straight", "rule"}},
+	.Tool_Pen         = {label = i18n.later("Pen"), group = i18n.later("Tools"), keys = {{.P, {}}}, icon = lucide.PENCIL, tags = {"freehand", "draw", "brush"}},
+	.Tool_Text        = {label = i18n.later("Text"), group = i18n.later("Tools"), keys = {{.T, {}}}, icon = lucide.TYPE, tags = {"label", "write", "words"}},
+	.Tool_Highlighter = {label = i18n.later("Highlighter"), group = i18n.later("Tools"), keys = {{.H, {}}}, icon = lucide.HIGHLIGHTER, tags = {"marker", "yellow", "emphasis"}},
+	.Tool_Pixelate    = {label = i18n.later("Pixelate"), group = i18n.later("Tools"), keys = {{.B, {}}}, icon = lucide.LAYOUT_GRID, tags = {"blur", "hide", "censor", "mosaic", "redact"}},
+	.Tool_Step        = {label = i18n.later("Step number"), group = i18n.later("Tools"), keys = {{.N, {}}}, icon = lucide.LIST_ORDERED, tags = {"counter", "badge", "numbered"}},
+	.Tool_Crop        = {label = i18n.later("Crop"), group = i18n.later("Tools"), keys = {{.C, {}}}, icon = lucide.CROP, tags = {"cut", "trim"}},
+	.Undo             = {label = i18n.later("Undo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl}}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
 	.Redo             = {label = i18n.later("Redo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again", "forward"}},
 	.Delete           = {label = i18n.later("Delete the selection"), group = i18n.later("Edit"), keys = {{.Delete, {}}, {.Backspace, {}}}, icon = lucide.TRASH_2, tags = {"remove", "erase"}},
-	.Duplicate        = {label = i18n.later("Duplicate the selection"), group = i18n.later("Edit"), keys = {{.D, {.Ctrl}}, {}}, icon = lucide.COPY, tags = {"clone", "copy"}},
+	.Duplicate        = {label = i18n.later("Duplicate the selection"), group = i18n.later("Edit"), keys = {{.D, {.Ctrl}}}, icon = lucide.COPY, tags = {"clone", "copy"}},
 	.Remove_Crop      = {label = i18n.later("Remove the crop"), group = i18n.later("Edit"), icon = lucide.CROP, tags = {"uncrop", "whole", "reset"}},
 	.Zoom_In          = {label = i18n.later("Zoom in"), group = i18n.later("View"), keys = {{.Equal, {.Ctrl}}, {.Num_Add, {.Ctrl}}}, icon = lucide.ZOOM_IN, tags = {"larger", "magnify"}},
 	.Zoom_Out         = {label = i18n.later("Zoom out"), group = i18n.later("View"), keys = {{.Minus, {.Ctrl}}, {.Num_Subtract, {.Ctrl}}}, icon = lucide.ZOOM_OUT, tags = {"smaller"}},
-	.Zoom_Fit         = {label = i18n.later("Fit the picture to the window"), group = i18n.later("View"), keys = {{.N0, {.Ctrl}}, {}}, icon = lucide.MAXIMIZE, tags = {"zoom", "whole", "reset"}},
-	.Copy             = {label = i18n.later("Copy the picture"), group = i18n.later("Picture"), keys = {{.C, {.Ctrl}}, {}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard"}},
-	.Save             = {label = i18n.later("Save the picture"), group = i18n.later("Picture"), keys = {{.S, {.Ctrl}}, {}}, icon = lucide.SAVE, tags = {"file", "png", "write"}},
-	.Done             = {label = i18n.later("Done: the workflow goes on"), group = i18n.later("Picture"), keys = {{.Return, {}}, {}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
-	.Close            = {label = i18n.later("Close the editor"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}},
+	.Zoom_Fit         = {label = i18n.later("Fit the picture to the window"), group = i18n.later("View"), keys = {{.N0, {.Ctrl}}}, icon = lucide.MAXIMIZE, tags = {"zoom", "whole", "reset"}},
+	.Copy             = {label = i18n.later("Copy the picture"), group = i18n.later("Picture"), keys = {{.C, {.Ctrl}}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard"}},
+	.Save             = {label = i18n.later("Save the picture"), group = i18n.later("Picture"), keys = {{.S, {.Ctrl}}}, icon = lucide.SAVE, tags = {"file", "png", "write"}},
+	.Done             = {label = i18n.later("Done: the workflow goes on"), group = i18n.later("Picture"), keys = {{.Return, {}}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
+	.Close            = {label = i18n.later("Close the editor"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}},
 	.Palette          = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
-	.Keys             = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
+	.Keys             = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
 	.Nudge            = {label = i18n.later("Move the selection a pixel (arrows; with Shift, ten)"), group = i18n.later("Edit"), keys = {{.Left, {}}, {.Left, {.Shift}}}, icon = lucide.MOUSE_POINTER_2, tags = {"nudge"}},
 }
 
@@ -131,7 +131,7 @@ Editor :: struct {
 	icons:       font.Font_Id,
 	theme_shown: ui.Theme_Shown,
 	palette:     ui.Command_Palette,
-	sheet_open:  bool,
+	sheet:       ui.Shortcuts_Sheet,
 	asking:      bool,       // the question before the changes are dropped
 	close_due:   bool,       // closed in a frame: acted on after it (editor_after_frame)
 	done_due:    bool,       // Done with nothing changed, in a frame: acted on after it (what follows may open a window)
@@ -418,6 +418,7 @@ editor_free :: proc(ed: ^Editor) {
 	editor_load_stop(ed)
 	editor_picture_drop(ed)
 	ui.palette_destroy(&ed.palette)
+	ui.shortcuts_sheet_destroy(&ed.sheet)
 	ui.line_edit_destroy(&ed.field)
 }
 
@@ -425,7 +426,7 @@ editor_free :: proc(ed: ^Editor) {
 @(private = "file")
 editor_close :: proc(ed: ^Editor) {
 	ed.palette.open = false
-	ed.sheet_open = false
+	ed.sheet.open = false
 	ed.asking = false
 	ed.ask = {}
 	if ed.visible {
@@ -536,7 +537,7 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 	if !ed.has_picture {
 		return events
 	}
-	blocked := ed.palette.open || ed.sheet_open || ed.asking || ed.exporting || ui.menu_any_open()
+	blocked := ed.palette.open || ed.sheet.open || ed.asking || ed.exporting || ui.menu_any_open()
 	_, typing := m.mode.(Edit_Typing)
 	for e in events {
 		#partial switch e.kind {
@@ -664,7 +665,7 @@ editor_action :: proc(ed: ^Editor, a: Editor_Action) {
 	case .Done:        editor_export_start(ed, .Done)
 	case .Close:       editor_close_asked(ed)
 	case .Palette:     ui.palette_open(&ed.palette)
-	case .Keys:        ed.sheet_open = true
+	case .Keys:        ed.sheet.open = true
 	case .Nudge:       edit_nudge(m, {1, 0})
 	}
 	editor_hover(ed)
@@ -750,7 +751,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 
 	// (while a text is typed, its field has the keys: no command takes a letter from it)
 	_, typing := m.mode.(Edit_Typing)
-	dialog := ed.palette.open || ed.sheet_open || ed.asking
+	dialog := ed.palette.open || ed.sheet.open || ed.asking
 	if !dialog && !typing && !ed.exporting {
 		if ui.key_press(.Escape) {
 			if !edit_deselect(m) { editor_close_asked(ed) }
@@ -968,7 +969,7 @@ editor_dialogs :: proc(ed: ^Editor) {
 		for i in 0 ..< len(listed) { disabled[i] = !editor_action_enabled(ed, Editor_Action(i)) }
 		if i, _ := ui.palette(&ed.palette, listed, disabled); i >= 0 { editor_action(ed, Editor_Action(i)) }
 	}
-	ui.shortcuts_sheet("keys", all, &ed.sheet_open, i18n.tr("The editor's keys"))
+	ui.shortcuts_sheet(&ed.sheet, "keys", all, i18n.tr("The editor's keys"))
 	switch ui.confirm("drop", &ed.asking, {title = i18n.tr("Close the editor and drop the changes?"), note = i18n.tr("The annotations on this picture are lost. Nothing is copied or saved."), act = i18n.tr("Drop the changes")}) {
 	case .Confirmed: ed.close_due = true
 	case .Cancelled, .None:

@@ -12,6 +12,7 @@ package cliche
 // its choices, the lines under the save folder's name and the file name, and what is under the pages (the licence, the
 // folder, the uploaders, the commands).
 
+import "base:runtime"
 import "core:fmt"
 import "core:math"
 import "core:slice"
@@ -107,14 +108,20 @@ settings_build :: proc(app: ^App, em: f32) {
 }
 
 // The palette's part of the settings: cliche's actions the history lacks, then every preference (`names`: the
-// preferences' names, in their order after the actions).
-settings_palette :: proc(app: ^App) -> (commands: []ui.Command, disabled: []bool, names: []string) {
+// preferences' names, in their order after the actions), in `allocator`. Its disabled actions: settings_palette_disable.
+settings_palette :: proc(app: ^App, allocator: runtime.Allocator) -> (commands: []ui.Command, names: []string) {
 	actions := slice.enumerated_array(&SETTINGS_ACTIONS)
-	prefs, pref_names := prefs_page.palette_commands(&app.prefs, settings_options(app))
-	commands = slice.concatenate([][]ui.Command{actions, prefs}, context.temp_allocator)
-	disabled = make([]bool, len(commands), context.temp_allocator)
+	prefs, pref_names := prefs_page.palette_commands(&app.prefs, settings_options(app), allocator)
+	commands = slice.concatenate([][]ui.Command{actions, prefs}, allocator)
+	names = make([]string, len(pref_names), allocator)
+	for n, i in pref_names { names[i] = strings.clone(n, allocator) }
+	return commands, names
+}
+
+// The settings' actions that cannot act now, in `disabled` (one per Settings_Action, first): the preferences after them
+// always can.
+settings_palette_disable :: proc(app: ^App, disabled: []bool) {
 	for a in Settings_Action { disabled[int(a)] = !settings_action_enabled(app, a) }
-	return commands, disabled, pref_names
 }
 
 // The palette's choice `i` in settings_palette's list: an action, or a preference shown alone on the settings.
@@ -152,7 +159,7 @@ settings_action :: proc(app: ^App, a: Settings_Action) {
 	}
 }
 
-settings_options :: proc(app: ^App) -> prefs_page.Options {
+settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 	return {
 		user = app,
 		changed = proc(user: rawptr, name: string) { app_prefs_changed((^App)(user)) },
