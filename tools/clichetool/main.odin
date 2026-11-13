@@ -49,7 +49,7 @@ LICENCE_TOOL :: toolbox.Licence_Tool{
 	// (the development pair's private key, public on purpose: "cliche-dev-licence-test-seed-01!")
 	dev_seed = "Y2xpY2hlLWRldi1saWNlbmNlLXRlc3Qtc2VlZC0wMSE",
 	hint     = "Open cliche's settings, the General page, Licence: choose this file, or paste the key there.",
-	paddle   = {name = "cliche User Licence", description = "A personal, perpetual licence of cliche, the screenshot and screen-recording tool.", amounts = "supporter=1500,patron=4500", currency = "EUR"},
+	paddle   = {name = "cliche licence", description = "A personal, perpetual licence of cliche, the screenshot and screen-recording tool.", amounts = "supporter=1500", currency = "EUR"},
 }
 
 main :: proc() {
@@ -118,20 +118,17 @@ site_meta :: proc() -> tk_site.Meta {
 // The shop: cliche's licence (src/licence), sold through Paddle by the toolkit's licence Worker. Its pages (pricing,
 // thanks, terms, refunds, privacy, imprint) are the toolkit's templates, filled at each `site build`. What is empty is
 // the maintainer's to give once the shop is set up (gui_toolkit docs/licence.md, "What the maintainer does at the end"):
-// until the client token, the price ids and the Worker are there, the buttons say "Coming soon".
-
-@(rodata)
-SHOP_PRICES := [?]tk_site.Shop_Price{
-	{edition = "supporter", label = "Buy the Supporter licence"},
-	{edition = "patron", label = "Buy the Patron licence"},
-}
+// until the client token, the price id and the Worker are there, the button says "Coming soon".
 
 SHOP :: tk_site.Shop{
 	name           = "cliche",
-	product_title  = "cliche User Licence",
+	icon           = "../img/logo.png",
+	product_title  = "cliche licence",
 	price          = "15&nbsp;&euro;",
-	price_note     = "Once. Taxes included. Patron: 45&nbsp;&euro;.",
+	price_note     = "",
 	environment    = "sandbox",
+	edition        = "supporter",
+	price_id       = "",
 	thanks         = "https://cliche.froment.software/thanks/",
 	help           = "https://github.com/sachahjkl/cliche/issues",
 	register       = "Open cliche's settings (Ctrl+,), the <b>General</b> page, <b>Licence</b>: paste the key, or choose the file.",
@@ -156,9 +153,7 @@ site_run :: proc(args: []string, user: rawptr) -> int {
 	inner := (^toolbox.Command)(user)
 	code := inner.run_with(args, inner.user)
 	if code != toolbox.EXIT_DONE || len(args) != 3 || args[0] != "build" { return code }
-	shop := SHOP
-	shop.prices = SHOP_PRICES[:]
-	for page in tk_site.licence_pages(shop) {
+	for page in tk_site.licence_pages(SHOP) {
 		path := fmt.tprintf("%s/%s", args[2], page.path)
 		_ = os.make_directory_all(path[:strings.last_index_byte(path, '/')])
 		if os.write_entire_file(path, transmute([]u8)page.text) != nil { fmt.eprintfln("clichetool site: %s cannot be written", path); return toolbox.EXIT_FAILED }

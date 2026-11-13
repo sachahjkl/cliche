@@ -15,5 +15,5 @@ PRODUCT :: licence.Product{
 	public_key     = "",
 	// (the development pair: its seed is public on purpose, clichetool's dev_seed)
 	dev_public_key = "4u0W0RNCU5S16f_LtlKwtM4uokN4fZ6m8jIgT26ynyo",
-	editions       = {0 = {id = "supporter", title = "Supporter"}, 1 = {id = "patron", title = "Patron"}},
+	editions       = {0 = {id = "supporter", title = "Supporter"}},
 }

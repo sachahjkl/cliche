@@ -13,15 +13,25 @@ import "core:time"
 import config "gt:config"
 import prefs_page "gt:prefs_page"
 import "gt:host"
+import pic "gt:image"
 import png "gt:png"
 import "gt:render"
 import "gt:ui"
 
 CLICHE_SHOTS :: #config(CLICHE_SHOTS, "")
 
+// (only a build of the pictures holds it: a normal build has none of this file's work)
+when CLICHE_SHOTS != "" {
+	SHOTS_EDITOR_PICTURE := #load("../assets/shots/autumn.webp")
+} else {
+	SHOTS_EDITOR_PICTURE: []u8
+}
+
 // Frames drawn before a picture (the layout settles, the fonts' glyphs arrive), and frames a capture may take.
 SHOTS_SETTLE_FRAMES  :: 6
 SHOTS_CAPTURE_FRAMES :: 20
+// How long the editor's mosaic (a task) may take before its picture is taken.
+SHOTS_MOSAIC_WAIT    :: 10 * time.Second
 
 shots_run :: proc(folder: string, which: string) -> int {
 	app := new(App)
@@ -97,40 +107,37 @@ shots_settings :: proc(app: ^App, folder: string) -> int {
 	return failed ? 1 : 0
 }
 
-// A made-up screenshot (a window on a gradient) with an arrow, a box, a text, step numbers and a pixelated part.
+// A landscape (assets/shots/autumn.webp: a public domain photograph, see assets/shots/README.md) with an arrow, a box, a
+// text, step numbers and a pixelated part: the editor shows what it marks on a picture worth looking at.
 @(private = "file")
 shots_editor :: proc(app: ^App, folder: string) -> int {
 	ed := editor_open(app, headless = true)
 	if ed == nil { return 1 }
 	defer editor_dispose(ed)
-	W, H :: 1200, 720
-	px := make([]u8, W * H * 4)
-	for y in 0 ..< H {
-		for x in 0 ..< W {
-			p := px[(y * W + x) * 4:]
-			inside := x > 140 && x < 1060 && y > 90 && y < 640
-			bar := inside && y < 130
-			switch {
-			case bar:    p[0], p[1], p[2] = 48, 52, 70
-			case inside: p[0], p[1], p[2] = 236, 238, 244
-			case:        p[0], p[1], p[2] = u8(30 + x / 20), u8(40 + y / 18), 90
-			}
-			if inside && !bar && y % 40 > 30 && x > 200 && x < 200 + (y * 7) % 600 { p[0], p[1], p[2] = 150, 156, 170 }
-			p[3] = 255
-		}
-	}
-	if !editor_open_shot(ed, {rgba = px, size = {W, H}, source = .Region, scale = 1}) { return 1 }
+	img, ok := pic.webp_decode(SHOTS_EDITOR_PICTURE)
+	if !ok { fmt.eprintln("shots: assets/shots/autumn.webp does not decode (is libwebp there?)"); return 1 }
+	// (the editor takes the pixels, as it takes a capture's)
+	if !editor_open_shot(ed, {rgba = img.pixels, size = {img.width, img.height}, source = .Region, scale = 1}) { return 1 }
 	m := &ed.model
 	st := EDIT_STYLE_DEFAULT
-	edit_add(m, {kind = .Arrow, a = {880, 560}, b = {640, 330}, style = st})
-	edit_add(m, {kind = .Rectangle, a = {190, 160}, b = {600, 290}, style = st})
-	edit_add(m, {kind = .Text, a = {640, 170}, text = strings.clone("Click here first"), style = st})
-	edit_add(m, {kind = .Step, a = {170, 150}, b = {170, 150}, number = 1, style = st})
-	edit_add(m, {kind = .Step, a = {620, 300}, b = {620, 300}, number = 2, style = st})
-	edit_add(m, {kind = .Pixelate, a = {700, 420}, b = {1020, 500}, style = {width = st.width, text_size = st.text_size}})
+	edit_add(m, {kind = .Arrow, a = {990, 640}, b = {810, 345}, style = st})
+	edit_add(m, {kind = .Rectangle, a = {140, 165}, b = {420, 430}, style = st})
+	edit_add(m, {kind = .Text, a = {450, 190}, text = strings.clone("The best colours"), style = st})
+	edit_add(m, {kind = .Step, a = {140, 165}, b = {140, 165}, number = 1, style = st})
+	edit_add(m, {kind = .Step, a = {790, 320}, b = {790, 320}, number = 2, style = st})
+	edit_add(m, {kind = .Pixelate, a = {1010, 395}, b = {1190, 432}, style = {width = st.width, text_size = st.text_size}})
 	m.doc.selected = 0   // (the arrow: its properties in the bar)
-	ok := shots_write(app, &ed.host, folder, "editor", frames = 30)   // (the mosaic is made on a thread)
-	return ok ? 0 : 1
+	// (the mosaic is made by a task: frames until it is there, bounded, or the pixelated box is a grey block)
+	deadline := time.tick_add(time.tick_now(), SHOTS_MOSAIC_WAIT)
+	for ed.mosaic_work != nil || len(ed.mosaic.colors) == 0 {
+		if time.tick_diff(time.tick_now(), deadline) <= 0 { fmt.eprintln("shots: the editor's mosaic did not come"); return 1 }
+		ed.host.settle = 1
+		host.host_frame(&ed.host)
+		editor_after_frame(ed)   // (what the program's loop does after a frame: it takes the task's mosaic)
+		time.sleep(10 * time.Millisecond)
+	}
+	written := shots_write(app, &ed.host, folder, "editor")
+	return written ? 0 : 1
 }
 
 @(private = "file")
