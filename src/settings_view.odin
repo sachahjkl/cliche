@@ -6,8 +6,8 @@ package cliche
 // Each change is applied at once and written by the worker (app_prefs_changed). What is slow (a folder chosen, a folder
 // opened) goes to the worker too.
 //
-// What is the toolkit's: the standard preferences (the look, the text, scrolling, input, the delays, rendering, the
-// session: gui_toolkit docs/settings.md), the theme cards and the user's own themes file, the lines of the shortcuts (the
+// What is the toolkit's: the standard preferences (the look, the text, scrolling, input, the delays, the updates and
+// the Updater's state, rendering, the session: gui_toolkit docs/settings.md), the theme cards and the user's own themes file, the lines of the shortcuts (the
 // keys recorded, what the system said), the settings file, export and import. What is cliche's: the pages, the words of
 // its choices, the lines under the save folder's name and the file name, and what is under the pages (the licence, the
 // folder, the uploaders, the commands).
@@ -46,13 +46,14 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "scrolling",  title = i18n.later("Scrolling"),     icon = lucide.ARROW_DOWN_UP},
 	{category = "input",      title = i18n.later("Input"),         icon = lucide.MOUSE},
 	{category = "timing",     title = i18n.later("Delays and menus"), icon = lucide.TIMER},
+	{category = "update",     title = i18n.later("Updates"),       icon = lucide.REFRESH_CW},
 	{category = "rendering",  title = i18n.later("Rendering"),     icon = lucide.CPU},
 }
 
 // The actions of the palette and of the sheet of keys that the history's (History_Action) do not hold already.
 Settings_Action :: enum u8 {
 	Capture_Screen, Capture_Window, Read_Qr, Read_Text, Record, Record_Gif,
-	Choose_Folder, Open_Uploaders, Import_Uploader, Shortcuts_Page, System_Shortcuts,
+	Choose_Folder, Open_Uploaders, Import_Uploader, Shortcuts_Page, System_Shortcuts, Check_Updates,
 }
 
 SETTINGS_ACTIONS := [Settings_Action]ui.Command{
@@ -67,6 +68,7 @@ SETTINGS_ACTIONS := [Settings_Action]ui.Command{
 	.Import_Uploader  = {label = i18n.later("Import a ShareX uploader…"), group = i18n.later("Upload"), icon = lucide.EXTERNAL_LINK, tags = {"sxcu", "sharex", "host", "add"}},
 	.Shortcuts_Page   = {label = i18n.later("Shortcuts"), group = i18n.later("Settings"), icon = lucide.KEYBOARD, tags = {"hotkey", "keys", "keybinding"}},
 	.System_Shortcuts = {label = i18n.later("The system's shortcut settings…"), group = i18n.later("Settings"), icon = lucide.EXTERNAL_LINK, tags = {"hotkey", "portal", "keys"}},
+	.Check_Updates    = {label = i18n.later("Check for updates"), group = i18n.later("Settings"), icon = lucide.REFRESH_CW, tags = {"upgrade", "version", "release"}},
 }
 
 // `cliche --settings`, the tray's Settings: the main window, shown, in settings mode.
@@ -135,6 +137,7 @@ settings_palette_chosen :: proc(app: ^App, i: int, names: []string) {
 settings_action_enabled :: proc(app: ^App, a: Settings_Action) -> bool {
 	#partial switch a {
 	case .System_Shortcuts: return shortcuts.can_configure(app.shortcuts)
+	case .Check_Updates:    return app.updates.updater != nil
 	}
 	return true
 }
@@ -156,6 +159,7 @@ settings_action :: proc(app: ^App, a: Settings_Action) {
 		delete(hw.settings_mode.page.current)
 		hw.settings_mode.page.current = strings.clone("shortcut")
 	case .System_Shortcuts: shortcuts.configure(app.shortcuts)
+	case .Check_Updates:    update_check_asked(app)
 	}
 }
 
@@ -170,9 +174,12 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		shortcut_prefs = slice.enumerated_array(&SHORTCUT_PAGE_PREFS),
 		status = settings_status,
 		page_foot = settings_page_foot,
-		pages = SETTINGS_PAGES[:], icon_font = app.history_window.icons, search_icon = lucide.SEARCH, reset_icon = lucide.REFRESH_CW,
+		pages = SETTINGS_PAGES[:], icon_font = app.history_window.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = prefs_file(),
 		version = "cliche " + APP_VERSION,
+		install = &app.install, diagnostics = &app.history_window.host,
+		// (the Updates page: the Updater's state and its buttons under update.auto, as in every program of the toolkit)
+		updater = app.updates.updater, restart = updates_page_restart,
 	}
 }
 

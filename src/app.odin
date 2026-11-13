@@ -33,6 +33,7 @@ import shortcuts "gt:shortcuts"
 import "gt:platform"
 import "gt:render"
 import prefs_page "gt:prefs_page"
+import crash_bar "gt:crash_bar"
 import "gt:ui"
 
 // cliche's own texts in each language it has (i18n/<language>.txt, written by `clichetool i18n <language>`).
@@ -92,8 +93,12 @@ App :: struct {
 	shortcuts_bound: [Shortcut_Action]string,              // the keys the service was given last (owned)
 	tray_keys:  [Shortcut_Action]string,                   // the keys the tray's menu shows (owned): built again when they change
 	tray_menu:  Tray_Menu,                                 // the menu shown
+	tray_language: u32,                                    // i18n.version() of its texts: the system keeps what it was given
 	default_folder: string,                                // where screenshots go when save.folder is empty (the worker's, owned)
 	integrated: [2]bool,                                   // general.menu and general.autostart as applied last
+	install:    prefs_page.Install,                        // the install: its offer, its dialog, the settings' page (integration.odin)
+	crash_bar:  crash_bar.Bar,                             // the last session's crash, said at the top of the main window
+	updates:    Updates,                                   // the Updater and the restart it asks (updates.odin)
 	quit:       bool,
 }
 
@@ -103,6 +108,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app.prefs = prefs^
 	prefs^ = {}
 	app.settings = prefs_read(&app.prefs)
+	prefs_page.install_init(&app.install, &app.prefs, setup_options())
 	app.flow = Flow_Idle{}
 	app.record = Record_Idle{}
 
@@ -115,7 +121,11 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	crash_settings_keep(&app.crash_settings, &app.prefs)
 	_ = crash.install({program = APP_NAME, version = APP_VERSION, log_tail = {tk_log.tail, logger.data}, settings = {crash_settings_text, &app.crash_settings}})
 	crash.begin_session()
-	crashed, has_crashed := crash.last_report()
+	// (said in a bar at the top of the main window when it shows: cliche starts in the notification area)
+	if crashed, has_crashed := crash.last_report(context.temp_allocator); has_crashed {
+		log.warnf("the last session did not end cleanly: %s", crashed)
+		crash_bar.init(&app.crash_bar, crashed)
+	}
 
 	platform.set_app_id(APP_NAME)
 	platform.notify_set_app({name = "cliche"})
@@ -142,8 +152,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app_tray_open(app)
 	app_shortcuts_start(app)
 	app_integrate(app, force = true)
-	if has_crashed { app_announce(app, .Bad, i18n.tr("cliche stopped unexpectedly: its report is in this file"), crashed) }
-	delete(crashed)
+	updates_start(app)
 	app_command(app, first.verb, first.token)
 
 	for !app.quit {
@@ -158,9 +167,11 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 		app_tray_follow(app)
 		app_frames(app)
 		app_prefs_save(app)
+		updates_follow(app)
 	}
 
 	instance.serve_stop(app.server)
+	updates_stop(app)   // (its news wakes the windows: before they go)
 	app_shortcuts_stop(app)
 	recorder_join(&app.recorder)   // (a recording running is stopped, its file closed)
 	workflows_save(app)   // (a change still waiting for the end of its gesture)
@@ -169,12 +180,16 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	if !config.user_writer_stop(&app.prefs_writer, &app.prefs) { log.errorf("%s cannot be written", prefs_file()) }
 	if app.has_desktop { desktop_free(&app.desktop) }
 	app_windows_close(app)
+	// (the instance is let go above: the installed copy the install's dialog opened is the running cliche now)
+	prefs_page.install_launch(&app.install)
 	// (after every window: a task's result has no window to go to now; the editors' reads end before app is freed)
 	ui.chores_stop()
 	// (no task holds them any more)
 	prefs_page.themes_file_destroy(&app.themes_file)
 	licence_destroy(app)
 	platform.destroy_window(app.anchor)   // (its tray icon with it)
+	// (the instance is let go, the tray icon gone: the new cliche, an update or Restart now, takes their place)
+	updates_launch(app)
 	app_free(app)
 	crash.end_session()
 	context.logger = {}
@@ -259,6 +274,9 @@ app_windows_close :: proc(app: ^App) {
 	clear(&app.wakes)
 	sync.mutex_unlock(&app.wake_lock)
 	overlay_destroy(app)
+	// (the install's thread waited for while the main window's State is there)
+	prefs_page.install_end(&app.install)
+	crash_bar.destroy(&app.crash_bar)
 	// (textures go while the renderer is there: before any host closes)
 	history_window_free(app)
 	for ed in app.editors { editor_destroy(ed) }
@@ -366,6 +384,7 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Workflows: workflows_show(app)
 	case .History:  history_window_show(app)
 	case .Settings: settings_show(app)
+	case .Setup:    setup_show(app)
 	case .Quit:     app.quit = true
 	}
 }
@@ -429,6 +448,8 @@ app_results :: proc(app: ^App) {
 		case Result_Integrated:
 			if v.problem != "" { log.error(v.problem) }
 			delete(v.problem)
+		case Result_Setup_Facts:
+			updates_facts(app, v)
 		case Result_Desktop:
 			app_desktop(app, v)
 		case Result_Shot:
@@ -616,6 +637,7 @@ TRAY_SHORTCUT_TEXT := [Shortcut_Action]string{
 
 // The tray's menu for the recording's state, each command with the keys that run it (tray_keys).
 app_tray_menu :: proc(app: ^App) {
+	app.tray_language = i18n.version()
 	if app.tray == nil { return }
 	switch {
 	case record_running(app.record): app.tray_menu = .Recording
@@ -666,8 +688,8 @@ tray_item_of_click :: proc(c: Tray_Click) -> Tray_Item {
 }
 
 // Once a turn of the loop: the menu built again when the keys that work changed (the settings, or the system's answer:
-// the shortcuts' service wakes the loop when it comes), or the recording's state did. A few strings compared, not a frame's
-// work.
+// the shortcuts' service wakes the loop when it comes), or the recording's state or the language did. A few strings
+// compared, not a frame's work.
 @(private = "file")
 app_tray_follow :: proc(app: ^App) {
 	if app.tray == nil { return }
@@ -681,7 +703,7 @@ app_tray_follow :: proc(app: ^App) {
 	}
 	menu := Tray_Menu.Rest
 	if record_running(app.record) { menu = .Recording } else if record_ready(app.record) { menu = .Ready }
-	if changed || menu != app.tray_menu { app_tray_menu(app) }
+	if changed || menu != app.tray_menu || app.tray_language != i18n.version() { app_tray_menu(app) }
 }
 
 @(private = "file")
@@ -730,6 +752,7 @@ app_prefs_changed :: proc(app: ^App) {
 	app.announcer.mode = prefs_page.announce_mode(&app.prefs)
 	app_shortcuts_follow_prefs(app)
 	app_integrate(app, force = false)
+	updates_auto(app)
 	history_prefs_changed(app)
 }
 

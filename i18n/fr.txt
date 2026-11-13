@@ -1,9 +1,6 @@
 # The texts in fr (docs/i18n.md). Written by the i18n command: a translation left empty is the English.
 language fr
 
-en cliche stopped unexpectedly: its report is in this file
-fr cliche s'est arrêté de façon inattendue : son rapport est dans ce fichier
-
 en No screenshot
 fr Aucune capture d'écran
 
@@ -856,6 +853,9 @@ fr Saisie
 en Delays and menus
 fr Délais et menus
 
+en Updates
+fr Mises à jour
+
 en Rendering
 fr Rendu
 
@@ -876,6 +876,9 @@ fr Importer un hébergeur ShareX…
 
 en The system's shortcut settings…
 fr Les réglages des raccourcis du système…
+
+en Check for updates
+fr Rechercher des mises à jour
 
 en Back to the history (Escape)
 fr Retour à l'historique (Échap)

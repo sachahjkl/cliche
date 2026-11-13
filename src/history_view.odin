@@ -27,6 +27,7 @@ import "gt:host"
 import lucide "gt:lucide"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
+import crash_bar "gt:crash_bar"
 import "gt:render"
 import timefmt "gt:timefmt"
 import "gt:ui"
@@ -83,7 +84,7 @@ History_Texture :: struct {
 Palette_Key :: struct {
 	prefs:     u64,              // app.prefs.version + 1 (0: not made)
 	workflows: bool,             // the Workflows mode is shown: its actions are in the table
-	language:  ^i18n.Language,
+	language:  u32,              // i18n.version(): a change of language makes it again
 }
 
 History_Window :: struct {
@@ -98,7 +99,7 @@ History_Window :: struct {
 	palette_made:  Palette_Key,       // what they were made for
 	sheet:       ui.Shortcuts_Sheet,
 	sheet_table: Palette_Table,       // the sheet's commands (history_sheet_keep)
-	sheet_language: ^i18n.Language,   // the language they were made in
+	sheet_language: u32,          // i18n.version() they were made in
 
 	history:     History,         // the interface's copy (history.odin)
 	loaded:      bool,            // the file was read
@@ -281,6 +282,9 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 		return false
 	}
 	hw.opened = true
+	// (the install read on a task, once the main window is there to show its dialog: offered on Windows; never to a
+	// window of the screenshots)
+	if !headless && !app.install.known { prefs_page.install_offer(&app.install, &hw.host.state, offer = ODIN_OS == .Windows) }
 	app_standard_follow(app, &hw.host)
 	// (the window's close hides it)
 	hw.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).history_window.hide_due = true }
@@ -400,7 +404,7 @@ history_window_free :: proc(app: ^App) {
 	ui.shortcuts_sheet_destroy(&hw.sheet)
 	palette_table_destroy(&hw.palette_table)
 	palette_table_destroy(&hw.sheet_table)
-	hw.palette_made, hw.sheet_language = {}, nil   // (the screenshots open the window again after this)
+	hw.palette_made, hw.sheet_language = {}, 0   // (the screenshots open the window again after this)
 	settings_mode_free(app)
 	workflow_mode_free(app)
 	ui.line_edit_destroy(&hw.search)
@@ -452,7 +456,7 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	}
 
 	workflows := hw.workflow_mode.open
-	dialog := hw.palette.open || hw.sheet.open || hw.confirm_open || ui.menu_any_open() || hw.workflow_mode.add.open || hw.workflow_mode.confirm_open
+	dialog := hw.palette.open || hw.sheet.open || hw.confirm_open || ui.menu_any_open() || hw.workflow_mode.add.open || hw.workflow_mode.confirm_open || prefs_page.install_open_now(&app.install)
 	settings := hw.settings_mode.open
 	if !dialog && workflows {
 		workflow_keys(app)
@@ -480,6 +484,7 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	}
 	if !settings && !workflows { history_menu(app, em) }
 	history_dialogs(app)
+	if prefs_page.install_frame(&app.install, em) == .Launched { app.quit = true }   // (the installed copy starts at the end: app_run)
 }
 
 // The history's mode: the toolbar, the grid or the list (and the preview), the footer.
@@ -488,6 +493,7 @@ history_page :: proc(app: ^App, em: f32) {
 	hw := &app.history_window
 	history_toolbar(app, em)
 	ui.hline(ui.fill())
+	crash_bar.bar(&app.crash_bar, {name = "cliche", version = APP_VERSION, repository = "sachahjkl/cliche"})
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 	if ui.row(id = "###body") {
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
@@ -1030,7 +1036,7 @@ history_menu :: proc(app: ^App, em: f32) {
 @(private = "file")
 history_palette_keep :: proc(app: ^App) {
 	hw := &app.history_window
-	key := Palette_Key{prefs = app.prefs.version + 1, workflows = hw.workflow_mode.open, language = i18n.current()}
+	key := Palette_Key{prefs = app.prefs.version + 1, workflows = hw.workflow_mode.open, language = i18n.version()}
 	if hw.palette_made == key { return }
 	hw.palette_made = key
 	t := &hw.palette_table
@@ -1046,8 +1052,8 @@ history_palette_keep :: proc(app: ^App) {
 @(private = "file")
 history_sheet_keep :: proc(app: ^App) {
 	hw := &app.history_window
-	if hw.sheet_table.version != 0 && hw.sheet_language == i18n.current() { return }
-	hw.sheet_language = i18n.current()
+	if hw.sheet_table.version != 0 && hw.sheet_language == i18n.version() { return }
+	hw.sheet_language = i18n.version()
 	a := palette_table_remake(&hw.sheet_table)
 	hw.sheet_table.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), slice.enumerated_array(&SETTINGS_ACTIONS), slice.enumerated_array(&WORKFLOW_ACTIONS)}, a)
 }

@@ -14,6 +14,7 @@ import capture "gt:capture"
 import flowgraph "gt:flowgraph"
 import png "gt:png"
 import "gt:platform"
+import setup "gt:setup"
 import tasks "gt:tasks"
 
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
@@ -28,8 +29,10 @@ Job_Uploaders :: struct {}                                    // the uploaders f
 Job_Import_Uploader :: struct { path: string }                // a .sxcu file chosen in the system's dialog, copied in; owned
 Job_Open_Folder :: struct { folder: string }                  // the save folder in the file manager ("": the default); owned
 Job_Integrate :: struct { menu, autostart: bool }             // cliche's launcher and its start with the session (integration.odin)
+Job_Setup_Facts :: struct {}                                  // whether this cliche is the installed copy (updates.odin)
+Job_Setup_Updated :: struct { version: string }               // an update in place: the install's manifest and record say it (owned)
 
-Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader }
+Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Setup_Facts, Job_Setup_Updated }
 
 // The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
@@ -65,10 +68,13 @@ Result_Uploaders :: struct { names: []string, problems: []string, imported: stri
 
 Result_Written :: struct { ok: bool, path: string }   // (path owned)
 
-// What went wrong putting cliche on the desktop (owned; "": nothing).
+// What went wrong putting cliche on the desktop, or recording an update in its install (owned; "": nothing).
 Result_Integrated :: struct { problem: string }
 
-Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders }
+// This cliche is the installed copy (setup.facts): it updates itself (update.auto).
+Result_Setup_Facts :: struct { installed: bool }
+
+Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders, Result_Setup_Facts }
 
 Worker :: struct {
 	pool:      tasks.Pool,
@@ -221,6 +227,12 @@ worker_do :: proc(w: ^Worker, j: Job) {
 	case Job_Integrate:
 		problem := integration_apply(v.menu, v.autostart)
 		worker_post(w, Result_Integrated{problem != "" ? strings.clone(problem) : ""})
+	case Job_Setup_Facts:
+		worker_post(w, Result_Setup_Facts{installed = setup.facts(setup_options()).running_it})
+	case Job_Setup_Updated:
+		ok, why := setup.updated(setup_options(), v.version)
+		delete(v.version)
+		worker_post(w, Result_Integrated{ok ? "" : strings.concatenate({"the update is in place, but ", why})})
 	}
 }
 
@@ -257,6 +269,8 @@ job_free :: proc(j: ^Job) {
 		delete(v.folder)
 	case Job_History:
 		history_job_free(&v)
+	case Job_Setup_Updated:
+		delete(v.version)
 	}
 }
 

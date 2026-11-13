@@ -9,6 +9,8 @@ import "core:os"
 import config "gt:config"
 import instance "gt:instance"
 import "gt:platform"
+import process "gt:process"
+import setup "gt:setup"
 
 APP_VERSION :: "0.2.2"
 
@@ -26,6 +28,12 @@ USAGE :: `cliche: screenshots
   cliche --history            show the captures kept
   cliche --workflows          edit what happens after each capture
   cliche --settings           open the settings
+  cliche --setup              the install's dialog: install cliche for you, repair, upgrade or uninstall it (also
+                              in the settings: Installation)
+  cliche --install            install this copy for you, without a window
+  cliche --uninstall          take the install away (the history and the settings stay)
+  cliche --status             what is installed, and whether cliche runs (exit 0 installed, 2 to repair,
+                              1 not installed)
 
 Each capture runs its workflow: by default a screenshot is copied and saved, a QR code's
 or a region's text is copied.
@@ -47,6 +55,11 @@ run :: proc(all_args: []string) -> int {
 	args, problems := prefs_open(&prefs, all_args)
 	defer config.prefs_destroy(&prefs)
 	for p in problems { fmt.eprintfln("cliche: %s", p) }
+	// (--install, --uninstall and --status: no window, whether cliche runs or not; --setup is a verb: the running cliche
+	// shows it)
+	if cmd, _ := setup.command_of(args[:]); setup.command_alone(cmd) {
+		return setup.command_run(cmd, setup_options(), process.console_write)
+	}
 	if len(args) > 1 { fmt.eprint(USAGE); return 2 }
 	arg := len(args) > 0 ? args[0] : ""
 	switch arg {

@@ -17,9 +17,9 @@ DEFAULT_NAME_PATTERN :: "cliche-%Y%m%d-%H%M%S.png"
 
 // The pages of the settings, in this order (settings_view.odin gives their titles and icons). What happens after a
 // capture is not here: it is the workflows (workflow.odin). The choices of general.tray_click are settings_view.odin's,
-// with their words. The look, the text, scrolling, input, the delays, rendering and the session (general.menu,
-// general.autostart, general.messages) are the toolkit's standard preferences (prefs_register, gui_toolkit
-// docs/settings.md).
+// with their words. The look, the text, scrolling, input, the delays, rendering, the updates and the session
+// (general.menu, general.autostart, general.messages) are the toolkit's standard preferences (prefs_register,
+// gui_toolkit docs/settings.md).
 PREF_DEFS := [?]config.Def{
 	// General
 	{name = "general.tray_click", title = i18n.later("A click on the icon"), description = i18n.later("What a click on cliche's icon in the notification area does."), kind = .String, default = {s = "region"}, tags = {"tray", "icon", "notification area", "panel"}},
@@ -79,6 +79,7 @@ TRAY_CLICK_NAMES := [Tray_Click]string{.Region = "region", .Screen = "screen", .
 // The values the program reads, copied out of the registry (prefs_read).
 Settings :: struct {
 	menu, autostart:    bool,
+	update_auto:        bool,   // update.auto: the installed copy updates itself (updates.odin)
 	tray_click:         Tray_Click,
 	appearance:         prefs_page.Appearance,   // appearance.theme, mode, finish, font_size (theme owned)
 	delay_s:            int,
@@ -120,21 +121,25 @@ prefs_open :: proc(p: ^config.Prefs, args: []string) -> (rest: [dynamic]string, 
 	return
 }
 
-// The toolkit's standard sets cliche takes: all but the updates (a package manager or a release's archive updates it).
-STANDARD_SETS :: prefs_page.Standard{.Appearance, .Text, .Scrolling, .Input, .Timing, .Rendering, .Session}
+// The toolkit's standard sets: all of them, as in every program of the toolkit (the updates: updates.odin).
+STANDARD_SETS :: prefs_page.STANDARD_ALL
 
-// The toolkit's standard preferences, then cliche's own.
+// The toolkit's standard preferences, then cliche's own. Its identity alone differs from the toolkit's defaults: its
+// theme and its name.
 prefs_register :: proc(p: ^config.Prefs) {
-	d := prefs_page.STANDARD_DEFAULTS   // (the toolkit's defaults for the rest: system mode, machined, 14 px)
+	d := prefs_page.STANDARD_DEFAULTS
 	d.theme, d.app_name = "cliche", APP_NAME
-	d.system_title = true   // (cliche's windows have the system's title bar)
+	d.system_title = true
 	prefs_page.standard_register(p, STANDARD_SETS, d)
+	// (cliche's windows have the system's title bar and draw none of their own: a switch that changes nothing is not shown)
+	if r := config.ref_of(p, prefs_page.SYSTEM_TITLE_PREF); r != config.NO_REF { config.entry(p, r).def.hidden = true }
 	config.register(p, PREF_DEFS[:])
 }
 
 prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Settings) {
 	s.menu = config.bool_of(p, "general.menu")
 	s.autostart = config.bool_of(p, "general.autostart")
+	s.update_auto = config.bool_of(p, prefs_page.UPDATE_AUTO_PREF)
 	click := config.string_of(p, "general.tray_click")
 	for name, c in TRAY_CLICK_NAMES { if name == click { s.tray_click = c } }
 	s.appearance = prefs_page.appearance_read(p, allocator)

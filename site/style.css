@@ -38,6 +38,9 @@ em { font-style: normal; color: var(--accent); }
 .bar nav { display: flex; gap: 18px; font-size: 0.95rem; }
 .bar nav a { color: var(--weak); }
 .bar nav a:hover { color: var(--text); text-decoration: none; }
+/* the nav's last link, "Buy license": the accent button, small, as Wren's (gt:site's NAV_BUY_CLASS) */
+.bar nav { align-items: center; }
+.bar nav a.nav-buy, .bar nav a.nav-buy:hover { padding: 4px 14px; border-radius: 7px; color: #2a0e02; font-size: 0.88rem; }
 /* the burger: a bevelled button with three carved bars, only on narrow screens */
 .burger {
   display: none; width: 40px; height: 34px; padding: 0; border-radius: 8px; cursor: pointer;
@@ -184,6 +187,8 @@ footer .small span, footer .small a { white-space: nowrap; }
   .bar.open nav { display: flex; }
   .bar nav a { padding: 11px 2px; font-size: 1rem; }
   .bar nav a + a { border-top: 1px solid #000; box-shadow: inset 0 1px 0 var(--lip); }
+  .bar nav { align-items: stretch; }
+  .bar nav a.nav-buy, .bar nav a.nav-buy:hover { margin: 8px 0 4px; padding: 10px 14px; text-align: center; font-size: 1rem; }
 }
 @media (max-width: 600px) {
   .hero { padding-top: 48px; }

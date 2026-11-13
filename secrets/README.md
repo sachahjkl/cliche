@@ -19,6 +19,12 @@ Keys of both files (the Worker's secrets, `licence-worker/src/env.ts`):
 | `PADDLE_API_KEY` | Paddle > Developer tools > Authentication > API keys (server side, `customer.read`) |
 | `ADMIN_TOKEN` | optional: the bearer token of the Worker's `/admin/*` |
 
+`production.yaml` also holds the updates' signing key, which the Worker does not take:
+
+| Key | What it is |
+|---|---|
+| `UPDATE_SIGNING_KEY` | the private half of the update key (`clichetool update keygen`); its public half is `UPDATE_PUBLIC_KEY` in `src/update/product.odin`. The same value is the repository's secret `UPDATE_SIGNING_KEY`, which the release workflow signs the update manifests with |
+
 A key that sets the catalogue up (`clichetool paddle -apply`: product and price rights) does not go to the Worker. Keep it here
 only while the set-up lasts (`PADDLE_SETUP_KEY`), revoke it in Paddle, then `sops unset` it.
 

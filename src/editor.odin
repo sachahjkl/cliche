@@ -751,7 +751,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 
 	// (while a text is typed, its field has the keys: no command takes a letter from it)
 	_, typing := m.mode.(Edit_Typing)
-	dialog := ed.palette.open || ed.sheet.open || ed.asking
+	dialog := ed.palette.open || ed.sheet.open || ed.asking || ui.toolbar_menu_open(EDITOR_BAR)
 	if !dialog && !typing && !ed.exporting {
 		if ui.key_press(.Escape) {
 			if !edit_deselect(m) { editor_close_asked(ed) }
@@ -846,34 +846,43 @@ editor_text_field :: proc(ed: ^Editor, em: f32) {
 	}
 }
 
-// The bar: the tools, the properties, then what is done with the picture.
+// The bar: the tools, the properties, then what is done with the picture. A window too narrow for all of it folds the
+// properties first, then undo, redo, copy and save, then the tools, into the bar's "…" panel; Cancel and Done stay.
 @(private = "file")
 editor_bar :: proc(ed: ^Editor, em: f32) {
 	m := &ed.model
 	side := math.round(em * 2.2)
-	ui.next({width = ui.fill(), height = ui.px(side + math.round(em * 0.8)), axis = .X, cross = .Center})
-	if ui.row(id = "###bar") {
+	ui.next({width = ui.fill(), height = ui.px(side + math.round(em * 0.8))})
+	if ui.toolbar(EDITOR_BAR) {
 		ui.spacer(ui.px(em * 0.5))
-		for t in Edit_Tool {
-			a := Editor_Action(int(Editor_Action.Tool_Select) + int(t))
-			if bar_icon(fmt.tprintf("tool%d", int(t)), EDITOR_ACTIONS[a], side, active = m.tool == t, enabled = true) { editor_action(ed, a) }
+		if ui.toolbar_group("tools", {priority = 2}) {
+			for t in Edit_Tool {
+				a := Editor_Action(int(Editor_Action.Tool_Select) + int(t))
+				if bar_icon(fmt.tprintf("tool%d", int(t)), EDITOR_ACTIONS[a], side, active = m.tool == t, enabled = true) { editor_action(ed, a) }
+			}
 		}
-		bar_separator(em, side)
-		editor_properties(ed, em, side)
+		if ui.toolbar_group("properties", {separator = true}) { editor_properties(ed, em, side) }
 		ui.spacer(ui.fill())
-		for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save}) {
-			if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(ed, a)) { editor_action(ed, a) }
+		if ui.toolbar_group("acts", {priority = 1}) {
+			for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save}) {
+				if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(ed, a)) { editor_action(ed, a) }
+			}
 		}
-		ui.spacer(ui.px(em * 0.5))
-		// (Cancel ends the workflow's step as given up: what hangs on its "cancelled" runs, what needs its picture does not)
-		ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
-		if ui.button("cancel", i18n.tr("Cancel"), o = {tip = ui.command_tip(EDITOR_ACTIONS[.Close])}).clicked { editor_action(ed, .Close) }
-		ui.spacer(ui.px(em * 0.4))
-		ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
-		if ui.button("done", i18n.tr("Done"), o = {intent = .Primary, tip = ui.command_tip(EDITOR_ACTIONS[.Done])}).clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
-		ui.spacer(ui.px(em * 0.5))
+		if ui.toolbar_group("end", {pinned = true}) {
+			ui.spacer(ui.px(em * 0.5))
+			// (Cancel ends the workflow's step as given up: what hangs on its "cancelled" runs, what needs its picture does not)
+			ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
+			if ui.button("cancel", i18n.tr("Cancel"), o = {tip = ui.command_tip(EDITOR_ACTIONS[.Close])}).clicked { editor_action(ed, .Close) }
+			ui.spacer(ui.px(em * 0.4))
+			ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
+			if ui.button("done", i18n.tr("Done"), o = {intent = .Primary, tip = ui.command_tip(EDITOR_ACTIONS[.Done])}).clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
+			ui.spacer(ui.px(em * 0.5))
+		}
 	}
 }
+
+// The id of the editor's tool bar (ui.toolbar_menu_open: its "…" panel has Escape).
+@(private = "file") EDITOR_BAR :: "editor_bar"
 
 // The properties of the selection, else of the tool: what applies to its kind only.
 @(private = "file")

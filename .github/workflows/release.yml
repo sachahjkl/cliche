@@ -1,7 +1,8 @@
 name: Release
 
 # A version tag vX.Y.Z (clichetool ship makes it) builds cliche and publishes it: the Linux and the Windows archives, each
-# with its SHA-256, on a GitHub release whose notes are the changelog's section of that version. The Linux job makes the
+# with its SHA-256, the programs alone and their update manifests signed by the secret UPDATE_SIGNING_KEY (what installed
+# copies update themselves from), on a GitHub release whose notes are the changelog's section of that version. The Linux job makes the
 # release as a draft; the Windows job adds its files and publishes it. The tag must be APP_VERSION's (clichetool package
 # checks).
 on:
@@ -34,6 +35,8 @@ jobs:
           odin build tools/clichetool -collection:gt=ext/gui_toolkit/src -out:build/clichetool -vet
           build/clichetool check
       - name: Package
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: build/clichetool package ${{ github.ref_name }}
       - name: Publish
         env:
@@ -57,6 +60,8 @@ jobs:
       - uses: ./ext/gui_toolkit/.github/actions/setup-odin
       - name: Build, test, package
         shell: pwsh
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
           odin build tools/clichetool -collection:gt=ext/gui_toolkit/src -out:build/clichetool.exe -vet
