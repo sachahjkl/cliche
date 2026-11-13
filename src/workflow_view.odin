@@ -725,12 +725,6 @@ workflow_rename_start :: proc(app: ^App, id: u64) {
 
 @(private = "file")
 workflow_icon_button :: proc(id, glyph, tip: string, em: f32, enabled := true) -> bool {
-	mod := ui.Style_Mod{width = ui.px(math.round(em * 2.1)), height = ui.px(math.round(em * 2.1)), font_size = em * 1.15}
-	if !enabled { mod.flags = {.Disabled} }
-	ui.next(mod)
-	sig := ui.icon_button(fmt.tprintf("###wf_%s", id), glyph)
-	if ui.hovered_for(sig, 0.5) {
-		if ui.tooltip() { ui.tooltip_text(tip) }
-	}
-	return sig.clicked && enabled
+	ui.next({width = ui.px(math.round(em * 2.1)), height = ui.px(math.round(em * 2.1)), font_size = em * 1.15})
+	return ui.icon_button(fmt.tprintf("wf_%s", id), glyph, tip = tip, disabled = !enabled).clicked && enabled
 }

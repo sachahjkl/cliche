@@ -15,6 +15,7 @@ package cliche
 // is copied into the other when the view changes, so the actions read one selection.
 
 import "core:fmt"
+import "core:log"
 import "core:math"
 import "core:slice"
 import "core:strings"
@@ -151,7 +152,7 @@ HISTORY_ACTIONS := [History_Action]ui.Command{
 	.Copy_Url       = {label = "Copy the URL", group = "Capture", keys = {{.L, {.Ctrl}}, {}}, icon = lucide.LINK, tags = {"clipboard", "address", "link", "upload"}},
 	.Copy_Text      = {label = "Copy the text", group = "Capture", keys = {{.T, {.Ctrl}}, {}}, icon = lucide.FILE_TEXT, tags = {"clipboard", "ocr", "qr"}},
 	.Edit           = {label = "Edit", group = "Capture", keys = {{.E, {.Ctrl}}, {}}, icon = lucide.PENCIL, tags = {"editor", "annotate", "draw"}},
-	.Upload         = {label = "Upload again", group = "Capture", keys = {{.U, {.Ctrl}}, {}}, icon = lucide.SEND_HORIZONTAL, tags = {"share", "host", "link"}},
+	.Upload         = {label = "Upload again", group = "Capture", keys = {{.U, {.Ctrl}}, {}}, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link"}},
 	.Delete_File    = {label = "Delete the file…", group = "Capture", keys = {{.Delete, {.Shift}}, {}}, icon = lucide.TRASH_2, tags = {"erase", "remove", "disk"}},
 	.Remove         = {label = "Remove from the history", group = "Capture", keys = {{.Delete, {}}, {}}, icon = lucide.X, tags = {"forget", "clear"}},
 	.Preview        = {label = "Preview", group = "View", keys = {{.Space, {}}, {}}, icon = lucide.EYE, tags = {"zoom", "look"}},
@@ -262,7 +263,7 @@ history_window_show :: proc(app: ^App, select: u64 = 0) {
 history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw := &app.history_window
 	if !host.host_open(&hw.host, &app.shared, {title = "cliche", size = HISTORY_WINDOW_SIZE, headless = headless}, history_build, app) {
-		fmt.eprintln("cliche: the main window cannot open")
+		log.error("the main window cannot open")
 		return false
 	}
 	hw.opened = true
@@ -568,11 +569,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 @(private = "file")
 history_icon_button :: proc(id, glyph, tip: string, em: f32) -> bool {
 	ui.next({width = ui.px(math.round(em * 2.1)), height = ui.px(math.round(em * 2.1)), font_size = em * 1.15})
-	sig := ui.icon_button(id, glyph)
-	if ui.hovered_for(sig, 0.5) {
-		if ui.tooltip() { ui.tooltip_text(tip) }
-	}
-	return sig.clicked
+	return ui.icon_button(id, glyph, tip = tip).clicked
 }
 
 // The grid, the list, or what stands for them with nothing to show.
@@ -1130,7 +1127,7 @@ history_action :: proc(app: ^App, a: History_Action) {
 	case .Reveal:
 		for id in ids {
 			if e := history_find(&hw.history, id); e != nil && e.path != "" && !e.missing {
-				worker_send(&app.worker, Job_Reveal{path = strings.clone(e.path)})
+				ui.open(e.path, .Reveal)
 				break
 			}
 		}

@@ -20,6 +20,7 @@ package cliche
 // The decision is acted on after the frame (overlay_after_frame): the window is not hidden from inside its own frame.
 
 import "core:fmt"
+import "core:log"
 import "core:math"
 import "gt:draw"
 import "gt:font"
@@ -72,7 +73,7 @@ overlay_show :: proc(app: ^App) -> bool {
 		layer := host.Open{title = "cliche region", size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area, overlay_keyboard = .Exclusive}
 		o.layer = out.w > 0 && host.host_open(&o.host, &app.shared, layer, overlay_build, app)
 		if !o.layer && !host.host_open(&o.host, &app.shared, {title = "cliche region", size = {1280, 720}}, overlay_build, app) {
-			fmt.eprintln("cliche: the region's window cannot open")
+			log.error("the region's window cannot open")
 			return false
 		}
 		if o.layer { o.out = out }

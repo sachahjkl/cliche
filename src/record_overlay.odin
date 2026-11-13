@@ -189,13 +189,13 @@ record_bar_ready :: proc(app: ^App, em, side: f32) {
 	ui.next({width = ui.px(math.round(em * 6.6)), height = ui.px(side), radius = math.round(em * 0.4), axis = .X, cross = .Center})
 	sig: ui.Signal
 	// (ui.button's look, with a dot before its word: the toolkit's button holds words only)
-	if ui.tags("danger_button") {
+	if ui.tags(ui.intent_tag(.Danger)) {
 		if ui.tags("button") {
 			b := ui.build_box({.Clickable, .Focusable, .Draw_Background, .Draw_Border, .Draw_Hot_Effects}, "###record")
 			sig = ui.signal(b)
 			if ui.parent(b) {
 				ui.spacer(ui.px(math.round(em * 0.75)))
-				record_dot("###record_dot", math.round(em * 0.7), ui.color("text"))
+				ui.dot("###record_dot", math.round(em * 0.7))   // (the button's words' colour)
 				ui.spacer(ui.px(math.round(em * 0.45)))
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
 				ui.label("Record###record_label")
@@ -203,7 +203,9 @@ record_bar_ready :: proc(app: ^App, em, side: f32) {
 		}
 	}
 	if sig.clicked { ro.decision = .Start }
-	record_tip(sig, keys != "" ? fmt.tprintf("Start recording (%s)", keys) : "Start recording")
+	if ui.hovered_for(sig) {
+		if ui.tooltip() { ui.tooltip_text(keys != "" ? fmt.tprintf("Start recording (%s)", keys) : "Start recording") }
+	}
 	ui.spacer(ui.px(math.round(em * 0.6)))
 	@(static, rodata) labels := [2]string{"MP4", "GIF"}
 	@(static, rodata) tips := [2]string{"A video (H.264)", "An animated GIF"}
@@ -226,7 +228,7 @@ record_bar_running :: proc(app: ^App, em, side: f32) {
 	case Record_Stopping:   text, can = "Saving…", false
 	case Record_Discarding: text, can = "Deleting…", false
 	}
-	record_dot("###live_dot", math.round(em * 0.75), ui.color("bad text"))
+	ui.dot("###live_dot", math.round(em * 0.75), .Danger)
 	ui.spacer(ui.px(math.round(em * 0.5)))
 	ui.next({width = ui.px(math.round(em * 5.5)), height = ui.pct(1), text_pad = 0, font = ui.mono_font()})
 	ui.label(fmt.tprintf("%s###clock", text))
@@ -235,35 +237,9 @@ record_bar_running :: proc(app: ^App, em, side: f32) {
 	if record_icon("discard", lucide.X, "Cancel: the recording is deleted", side, can) { ro.decision = .Cancel }
 }
 
-@(private = "file")
-Record_Dot_Draw :: struct { color: draw.Color }
-
-// A filled disc `side` wide (lucide has no filled circle).
-@(private = "file")
-record_dot :: proc(id: string, side: f32, color: draw.Color) {
-	d := ui.frame_new(Record_Dot_Draw)
-	d.color = color
-	ui.next({width = ui.px(side), height = ui.px(side)})
-	ui.custom(id, proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		d := (^Record_Dot_Draw)(user)
-		draw.rect(dc, b.rect, d.color, (b.rect.max.x - b.rect.min.x) * 0.5)
-	}, d)
-}
-
 // An icon button of the bar, as the editor's bar draws them.
 @(private = "file")
 record_icon :: proc(id, glyph, tip: string, side: f32, enabled := true) -> bool {
-	mod := ui.Style_Mod{width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)}
-	if !enabled { mod.flags = {.Disabled} }
-	ui.next(mod)
-	sig := ui.icon_button(id, glyph)
-	record_tip(sig, tip)
-	return enabled && sig.clicked
-}
-
-@(private = "file")
-record_tip :: proc(sig: ui.Signal, tip: string) {
-	if ui.hovered_for(sig, 0.4) {
-		if ui.tooltip() { ui.tooltip_text(tip) }
-	}
+	ui.next({width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)})
+	return ui.icon_button(id, glyph, tip = tip, disabled = !enabled).clicked && enabled
 }

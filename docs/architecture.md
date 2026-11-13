@@ -16,7 +16,14 @@ renderer is made at the first window that needs one, and that window is hidden, 
 - **The interface's thread** reads the anchor's events, the commands of other starts, the tray and the worker's results,
   then draws the shown windows. It never captures, encodes, reads or writes a file.
 - **The worker** (`src/worker.odin`) owns the capture session (`gt:capture`) and does everything slow: it reads the
-  desktop, cuts a region, swaps the channels, encodes PNG, writes files. Its results are posted back.
+  desktop, cuts a region, swaps the channels, encodes PNG, writes files. Its results are posted back. It is a `gt:tasks`
+  pool of one thread that never grows: the session belongs to the thread that opened it, and the jobs run in order.
+- **The chores** (`ui.chores()`, gt:tasks) run the rest: an editor's file read and decoded, its mosaic, the system's
+  file dialogs (`ui.file_dialog`), a file shown in its folder (`ui.open`).
+- **The preferences' writer** (`config.User_Writer`) writes the preferences' file; the loop hands it the text once a
+  turn, when they changed.
+- **The log** (`gt:log`) writes `cliche.log` in the state folder; a crash writes a report beside it (`gt:crash`), which
+  the next start announces.
 
 ## The capture flow
 
@@ -78,11 +85,11 @@ RegisterHotKey. The commands (`cliche --region`) stay for a compositor's own bin
 
 ## Settings
 
-`src/settings.odin` is the registry (one `config.Def` per preference, a category per page); the appearance and session
+`src/settings.odin` is the registry (one `config.Def` per preference, a group per page: the first segment of its name); the appearance and session
 preferences are the toolkit's standard ones (`prefs_page.standard_register`). The settings are a mode of the main
 window (`src/history_view.odin`), as the workflows are: `src/settings_view.odin` builds them with `gt:prefs_page` in place of the history, with
-its back bar, the theme cards and the shortcuts' lines the toolkit draws. What is slow (the folder dialog, opening a folder, the desktop files of
-`src/integration.odin`) runs on the worker. `clichetool shots` draws each page offscreen (`src/shots.odin`).
+its back bar, the theme cards and the shortcuts' lines the toolkit draws. What is slow (opening a folder, the desktop files of
+`src/integration.odin`) runs on the worker; the folder dialog on the chores (`ui.file_dialog`). `clichetool shots` draws each page offscreen (`src/shots.odin`).
 
 ## Recording
 

@@ -6,14 +6,14 @@ package clichetool
 // assets/logo.png (1024 px), the sizes the program and the site embed, cliche.ico and .project/image.png: the toolkit's
 // toolbox.write_logo writes them from logo_render.
 
-import "core:fmt"
 import paint "gt:paint"
 import toolbox "gt:toolbox"
 
 LOGO_DIR    :: "assets"
 LOGO_MASTER :: 1024
-LOGO_SIZES  :: [?]int{16, 32, 64, 128, 256}
 LOGO_ICO    :: "assets/cliche.ico"
+@(rodata)
+LOGO_SIZES  := [?]int{16, 32, 64, 128, 256}
 // The drawing's own units: a square of LOGO_UNITS, scaled to the canvas.
 LOGO_UNITS  :: 512.0
 // The width of an edge, in units.
@@ -122,12 +122,9 @@ logo_render :: proc(size: int) -> paint.Canvas {
 	return c
 }
 
-run_logo :: proc(args: []string) -> int {
-	sizes := LOGO_SIZES
-	why := toolbox.write_logo({
+logo :: proc() -> toolbox.Logo {
+	return {
 		render = proc(size: int, _: rawptr) -> paint.Canvas { return logo_render(size) },
-		dir = LOGO_DIR, master = LOGO_MASTER, sizes = sizes[:], ico = LOGO_ICO, project_image = true,
-	})
-	if why != "" { fmt.eprintfln("clichetool: %s", why); return 1 }
-	return 0
+		dir = LOGO_DIR, master = LOGO_MASTER, sizes = LOGO_SIZES[:], ico = LOGO_ICO, project_image = true,
+	}
 }

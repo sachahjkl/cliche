@@ -24,14 +24,14 @@ package cliche
 // Done hands the flattened picture back to the run that asked for it (workflow_editor_done); a picture of the history
 // runs the workflow of "Capture a region and edit". A close without Done stops that branch of the run
 // (workflow_editor_closed). Flattening runs on the GPU (an offscreen target read back a frame later); Ctrl+S encodes and
-// writes the PNG on the worker (Job_Save). A file of the history is read and decoded on a thread of the editor's.
+// writes the PNG on the worker (Job_Save). A file of the history is read and decoded by a task of the chores.
 
 import "core:fmt"
+import "core:log"
 import "core:math"
 import "core:os"
 import "core:slice"
 import "core:sync"
-import "core:thread"
 import "core:time"
 import "core:strconv"
 import "core:strings"
@@ -44,6 +44,7 @@ import "gt:platform"
 import png "gt:png"
 import prefs_page "gt:prefs_page"
 import "gt:render"
+import tasks "gt:tasks"
 import "gt:ui"
 
 EDITOR_SIZE :: [2]int{1180, 780}
@@ -51,18 +52,6 @@ EDITOR_DOUBLE_CLICK_MS :: 450
 EDITOR_DOUBLE_CLICK_PX :: 5
 EDITOR_HANDLE_SIDE :: 8     // a handle's side, logical pixels
 EDITOR_CROP_DIM :: 0.55     // how dark the picture is outside the crop
-
-// Lucide's icons that gt:lucide has no name for yet: the font's code points, under Lucide's names. (They belong in
-// gt:lucide; they are here until the toolkit names them.)
-@(private = "file") ICON_POINTER     :: ""   // mouse-pointer-2
-@(private = "file") ICON_CIRCLE      :: ""   // circle
-@(private = "file") ICON_ARROW       :: ""   // arrow-up-right
-@(private = "file") ICON_LINE        :: ""   // slash
-@(private = "file") ICON_HIGHLIGHTER :: ""   // highlighter
-@(private = "file") ICON_PIXELATE    :: ""   // layout-grid
-@(private = "file") ICON_STEP        :: ""   // list-ordered
-@(private = "file") ICON_CROP        :: ""   // crop
-@(private = "file") ICON_FIT         :: ""   // maximize
 
 // The actions of the bar, the keys, the palette and the sheet. The tools come first, in Edit_Tool's order. Nudge is
 // last: the sheet lists it, the palette does not (the arrow keys are its own).
@@ -77,57 +66,60 @@ Editor_Action :: enum u8 {
 }
 
 EDITOR_ACTIONS := [Editor_Action]ui.Command{
-	.Tool_Select      = {label = "Select and move", group = "Tools", keys = {{.V, {}}, {}}, icon = ICON_POINTER, tags = {"pointer", "move", "resize"}},
+	.Tool_Select      = {label = "Select and move", group = "Tools", keys = {{.V, {}}, {}}, icon = lucide.MOUSE_POINTER_2, tags = {"pointer", "move", "resize"}},
 	.Tool_Rectangle   = {label = "Rectangle", group = "Tools", keys = {{.R, {}}, {}}, icon = lucide.SQUARE, tags = {"box", "square", "frame"}},
-	.Tool_Ellipse     = {label = "Ellipse", group = "Tools", keys = {{.E, {}}, {}}, icon = ICON_CIRCLE, tags = {"circle", "oval", "round"}},
-	.Tool_Arrow       = {label = "Arrow", group = "Tools", keys = {{.A, {}}, {}}, icon = ICON_ARROW, tags = {"point", "show"}},
-	.Tool_Line        = {label = "Line", group = "Tools", keys = {{.L, {}}, {}}, icon = ICON_LINE, tags = {"straight", "rule"}},
+	.Tool_Ellipse     = {label = "Ellipse", group = "Tools", keys = {{.E, {}}, {}}, icon = lucide.CIRCLE, tags = {"circle", "oval", "round"}},
+	.Tool_Arrow       = {label = "Arrow", group = "Tools", keys = {{.A, {}}, {}}, icon = lucide.ARROW_UP_RIGHT, tags = {"point", "show"}},
+	.Tool_Line        = {label = "Line", group = "Tools", keys = {{.L, {}}, {}}, icon = lucide.SLASH, tags = {"straight", "rule"}},
 	.Tool_Pen         = {label = "Pen", group = "Tools", keys = {{.P, {}}, {}}, icon = lucide.PENCIL, tags = {"freehand", "draw", "brush"}},
 	.Tool_Text        = {label = "Text", group = "Tools", keys = {{.T, {}}, {}}, icon = lucide.TYPE, tags = {"label", "write", "words"}},
-	.Tool_Highlighter = {label = "Highlighter", group = "Tools", keys = {{.H, {}}, {}}, icon = ICON_HIGHLIGHTER, tags = {"marker", "yellow", "emphasis"}},
-	.Tool_Pixelate    = {label = "Pixelate", group = "Tools", keys = {{.B, {}}, {}}, icon = ICON_PIXELATE, tags = {"blur", "hide", "censor", "mosaic", "redact"}},
-	.Tool_Step        = {label = "Step number", group = "Tools", keys = {{.N, {}}, {}}, icon = ICON_STEP, tags = {"counter", "badge", "numbered"}},
-	.Tool_Crop        = {label = "Crop", group = "Tools", keys = {{.C, {}}, {}}, icon = ICON_CROP, tags = {"cut", "trim"}},
+	.Tool_Highlighter = {label = "Highlighter", group = "Tools", keys = {{.H, {}}, {}}, icon = lucide.HIGHLIGHTER, tags = {"marker", "yellow", "emphasis"}},
+	.Tool_Pixelate    = {label = "Pixelate", group = "Tools", keys = {{.B, {}}, {}}, icon = lucide.LAYOUT_GRID, tags = {"blur", "hide", "censor", "mosaic", "redact"}},
+	.Tool_Step        = {label = "Step number", group = "Tools", keys = {{.N, {}}, {}}, icon = lucide.LIST_ORDERED, tags = {"counter", "badge", "numbered"}},
+	.Tool_Crop        = {label = "Crop", group = "Tools", keys = {{.C, {}}, {}}, icon = lucide.CROP, tags = {"cut", "trim"}},
 	.Undo             = {label = "Undo", group = "Edit", keys = {{.Z, {.Ctrl}}, {}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
 	.Redo             = {label = "Redo", group = "Edit", keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again", "forward"}},
 	.Delete           = {label = "Delete the selection", group = "Edit", keys = {{.Delete, {}}, {.Backspace, {}}}, icon = lucide.TRASH_2, tags = {"remove", "erase"}},
 	.Duplicate        = {label = "Duplicate the selection", group = "Edit", keys = {{.D, {.Ctrl}}, {}}, icon = lucide.COPY, tags = {"clone", "copy"}},
-	.Remove_Crop      = {label = "Remove the crop", group = "Edit", icon = ICON_CROP, tags = {"uncrop", "whole", "reset"}},
+	.Remove_Crop      = {label = "Remove the crop", group = "Edit", icon = lucide.CROP, tags = {"uncrop", "whole", "reset"}},
 	.Zoom_In          = {label = "Zoom in", group = "View", keys = {{.Equal, {.Ctrl}}, {.Num_Add, {.Ctrl}}}, icon = lucide.ZOOM_IN, tags = {"larger", "magnify"}},
 	.Zoom_Out         = {label = "Zoom out", group = "View", keys = {{.Minus, {.Ctrl}}, {.Num_Subtract, {.Ctrl}}}, icon = lucide.ZOOM_OUT, tags = {"smaller"}},
-	.Zoom_Fit         = {label = "Fit the picture to the window", group = "View", keys = {{.N0, {.Ctrl}}, {}}, icon = ICON_FIT, tags = {"zoom", "whole", "reset"}},
+	.Zoom_Fit         = {label = "Fit the picture to the window", group = "View", keys = {{.N0, {.Ctrl}}, {}}, icon = lucide.MAXIMIZE, tags = {"zoom", "whole", "reset"}},
 	.Copy             = {label = "Copy the picture", group = "Picture", keys = {{.C, {.Ctrl}}, {}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard"}},
 	.Save             = {label = "Save the picture", group = "Picture", keys = {{.S, {.Ctrl}}, {}}, icon = lucide.SAVE, tags = {"file", "png", "write"}},
 	.Done             = {label = "Done: the workflow goes on", group = "Picture", keys = {{.Return, {}}, {}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
 	.Close            = {label = "Close the editor", group = "Window", keys = {{.W, {.Ctrl}}, {}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}},
 	.Palette          = {label = "Command palette", group = "Window", keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
 	.Keys             = {label = "Keyboard shortcuts", group = "Window", keys = {{.F1, {}}, {}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
-	.Nudge            = {label = "Move the selection a pixel (arrows; with Shift, ten)", group = "Edit", keys = {{.Left, {}}, {.Left, {.Shift}}}, icon = ICON_POINTER, tags = {"nudge"}},
+	.Nudge            = {label = "Move the selection a pixel (arrows; with Shift, ten)", group = "Edit", keys = {{.Left, {}}, {.Left, {.Shift}}}, icon = lucide.MOUSE_POINTER_2, tags = {"nudge"}},
 }
 
 @(rodata)
 EDITOR_COLOR_NAMES := [len(EDIT_COLORS)]string{"Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Black", "White"}
 
-// The mosaic of a picture, made on a thread of its own (it reads every pixel). The thread owns this until `done`.
+// The mosaic of a picture, made by a task of the chores (it reads every pixel). The task owns this until `ended`.
 Editor_Mosaic_Work :: struct {
 	rgba:   []u8,   // the editor's picture, read only
 	size:   [2]int,
 	cell:   int,
 	out:    Edit_Mosaic,
-	cancel: bool,   // atomic: the picture goes, the thread stops early
-	done:   bool,   // atomic
+	cancel: bool,   // atomic: the picture goes, the task stops early
+	ended:  sync.One_Shot_Event,
 	app:    ^App,
 }
 
-// A PNG file read and decoded on a thread of its own (editor_open_file). The thread owns this until `done`.
+// A PNG file read and decoded by a task of the chores (editor_open_file). Who frees it is whoever comes last: the task
+// when the editor gave it up, else the editor once it is done (Load_State).
 Editor_Load_Work :: struct {
-	path: string,   // owned
-	rgba: []u8,     // owned once read
-	size: [2]int,
-	ok:   bool,
-	done: bool,     // atomic
-	app:  ^App,
+	path:  string,   // owned
+	rgba:  []u8,     // owned once read
+	size:  [2]int,
+	ok:    bool,
+	state: Load_State,   // atomic
+	app:   ^App,
 }
+
+Load_State :: enum i32 { Running, Done, Given_Up }
 
 // The heap's (app.editors holds the pointers): its host must stay where it is while the window is open.
 Editor :: struct {
@@ -140,8 +132,6 @@ Editor :: struct {
 	theme_shown: ui.Theme_Shown,
 	palette:     ui.Command_Palette,
 	sheet_open:  bool,
-	width_field: ui.Slider_Field,   // the bar's width: its slider's field
-	shadow_field: ui.Slider_Field,  // the bar's shadow: its slider's field
 	asking:      bool,       // the question before the changes are dropped
 	close_due:   bool,       // closed in a frame: acted on after it (editor_after_frame)
 	done_due:    bool,       // Done with nothing changed, in a frame: acted on after it (what follows may open a window)
@@ -153,9 +143,7 @@ Editor :: struct {
 	tex_size:    [2]int,
 	mosaic:      Edit_Mosaic,
 	mosaic_work: ^Editor_Mosaic_Work,
-	mosaic_thread: ^thread.Thread,
 	load_work:   ^Editor_Load_Work,   // a file being read (editor_open_file)
-	load_thread: ^thread.Thread,
 	load_problem: string,             // why the file could not be shown (static text; "" none)
 
 	field:        ui.Text_Field,   // the text being typed
@@ -198,7 +186,7 @@ editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
 		ed.tex_size = shot.size
 	}
 	if ed.tex == 0 {
-		fmt.eprintln("cliche: the editor cannot hold the picture")
+		log.error("the editor cannot hold the picture")
 		shot_free(&shot)
 		return false
 	}
@@ -244,7 +232,7 @@ editor_free_for_picture :: proc(ed: ^Editor) -> bool {
 	return !ed.visible && !ed.has_picture && ed.load_work == nil
 }
 
-// The PNG file at `path` (not kept) in an editor of its own, read and decoded on a thread of the editor's: the window
+// The PNG file at `path` (not kept) in an editor of its own, read and decoded by a task of the chores: the window
 // says so meanwhile, and says why when the file cannot be read.
 editor_open_file :: proc(app: ^App, path: string) {
 	ed := editor_take(app)
@@ -253,27 +241,38 @@ editor_open_file :: proc(app: ^App, path: string) {
 	ed.load_problem = ""
 	work := new(Editor_Load_Work)
 	work^ = {path = strings.clone(path), app = app}
-	t := thread.create(proc(t: ^thread.Thread) {
-		work := (^Editor_Load_Work)(t.data)
-		if data, err := os.read_entire_file(work.path, context.allocator); err == nil {
-			rgba, w, h, ok := png.decode(data)
-			delete(data)
-			if ok { work.rgba, work.size, work.ok = rgba, {w, h}, true }
-		}
-		free_all(context.temp_allocator)
-		sync.atomic_store(&work.done, true)
-		app_wake(work.app)
-	})
-	if t == nil {
+	if tasks.add(ui.chores(), editor_load_run, work) {
+		ed.load_work = work
+	} else {
 		delete(work.path)
 		free(work)
 		ed.load_problem = "The picture cannot be read."
-	} else {
-		t.data = work
-		ed.load_work, ed.load_thread = work, t
-		thread.start(t)
 	}
 	editor_show(ed)
+}
+
+@(private = "file")
+editor_load_run :: proc(data: rawptr) {
+	work := (^Editor_Load_Work)(data)
+	if bytes, err := os.read_entire_file(work.path, context.allocator); err == nil {
+		rgba, w, h, ok := png.decode(bytes)
+		delete(bytes)
+		if ok { work.rgba, work.size, work.ok = rgba, {w, h}, true }
+	}
+	app := work.app
+	if _, done := sync.atomic_compare_exchange_strong(&work.state, .Running, .Done); done {
+		app_wake(app)
+		return
+	}
+	// (the editor gave it up meanwhile: nobody takes it)
+	editor_load_free(work)
+}
+
+@(private = "file")
+editor_load_free :: proc(work: ^Editor_Load_Work) {
+	delete(work.path)
+	delete(work.rgba)
+	free(work)
 }
 
 // Opens a new editor's window (hidden) and adds it to app.editors. `headless`: offscreen, on the software renderer
@@ -283,7 +282,7 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 	app.editor_next_id += 1
 	ed.app, ed.id = app, app.editor_next_id
 	if !host.host_open(&ed.host, &app.shared, {title = "cliche editor", size = EDITOR_SIZE, headless = headless}, editor_build, ed) {
-		fmt.eprintln("cliche: the editor's window cannot open")
+		log.error("the editor's window cannot open")
 		free(ed)
 		return nil
 	}
@@ -360,14 +359,12 @@ editor_dispose :: proc(ed: ^Editor) {
 	free(ed)
 }
 
-// The file, once its thread is done: shown, or why not.
+// The file, once its task is done: shown, or why not.
 @(private = "file")
 editor_load_take :: proc(ed: ^Editor) {
 	work := ed.load_work
-	if work == nil || !sync.atomic_load(&work.done) { return }
-	thread.join(ed.load_thread)
-	thread.destroy(ed.load_thread)
-	ed.load_work, ed.load_thread = nil, nil
+	if work == nil || sync.atomic_load(&work.state) != .Done { return }
+	ed.load_work = nil
 	delete(work.path)
 	ok, rgba, size := work.ok, work.rgba, work.size
 	free(work)
@@ -383,16 +380,14 @@ editor_load_take :: proc(ed: ^Editor) {
 	editor_open_shot(ed, {rgba = rgba, size = size, source = .Region})
 }
 
-// Before the window closes for good: a file being read is waited for, then dropped.
+// Before the window closes for good, or another picture comes: a file being read is given up, without a wait.
 @(private = "file")
 editor_load_stop :: proc(ed: ^Editor) {
-	if ed.load_thread == nil { return }
-	thread.join(ed.load_thread)
-	thread.destroy(ed.load_thread)
-	delete(ed.load_work.path)
-	delete(ed.load_work.rgba)
-	free(ed.load_work)
-	ed.load_work, ed.load_thread = nil, nil
+	work := ed.load_work
+	if work == nil { return }
+	ed.load_work = nil
+	if _, given_up := sync.atomic_compare_exchange_strong(&work.state, .Running, .Given_Up); given_up { return }   // (its task frees it)
+	editor_load_free(work)
 }
 
 // What the worker said of a save asked from an editor (Ctrl+S): told as cliche tells (app_announce), in that editor
@@ -422,8 +417,6 @@ editor_free :: proc(ed: ^Editor) {
 	editor_picture_drop(ed)
 	ui.palette_destroy(&ed.palette)
 	ui.field_destroy(&ed.field)
-	ui.slider_field_destroy(&ed.width_field)
-	ui.slider_field_destroy(&ed.shadow_field)
 }
 
 // The window hidden, the picture and its shapes let go: editors_sweep frees it, or keeps it for the next picture.
@@ -462,51 +455,46 @@ editor_measure :: proc(user: rawptr, text: string, size: f32) -> Edit_Vec {
 }
 
 ////////////////////////////////
-// The mosaic's thread
+// The mosaic's task
 
 @(private = "file")
 editor_mosaic_start :: proc(ed: ^Editor, cell: int) {
 	work := new(Editor_Mosaic_Work)
 	work^ = {rgba = ed.shot.rgba, size = ed.shot.size, cell = cell, app = ed.app}
-	t := thread.create(proc(t: ^thread.Thread) {
-		work := (^Editor_Mosaic_Work)(t.data)
+	run :: proc(data: rawptr) {
+		work := (^Editor_Mosaic_Work)(data)
 		work.out = edit_mosaic_make(work.rgba, work.size, work.cell, &work.cancel)
-		free_all(context.temp_allocator)
-		sync.atomic_store(&work.done, true)
-		app_wake(work.app)
-	})
-	if t == nil {
-		free(work)
-		return   // (no thread: a pixelated box stays grey)
+		app := work.app   // (read first: once ended, the editor may free the work)
+		sync.one_shot_event_signal(&work.ended)
+		app_wake(app)
 	}
-	t.data = work
-	ed.mosaic_work, ed.mosaic_thread = work, t
-	thread.start(t)
+	if !tasks.add(ui.chores(), run, work) {
+		free(work)
+		return   // (the chores are stopping: a pixelated box stays grey)
+	}
+	ed.mosaic_work = work
 }
 
-// The mosaic, once its thread is done.
+// The mosaic, once its task is done.
 @(private = "file")
 editor_mosaic_take :: proc(ed: ^Editor) {
-	if ed.mosaic_work == nil || !sync.atomic_load(&ed.mosaic_work.done) { return }
-	thread.join(ed.mosaic_thread)
-	thread.destroy(ed.mosaic_thread)
+	if ed.mosaic_work == nil || sync.atomic_load(&ed.mosaic_work.ended.state) == 0 { return }
 	edit_mosaic_free(&ed.mosaic)
 	ed.mosaic = ed.mosaic_work.out
 	free(ed.mosaic_work)
-	ed.mosaic_work, ed.mosaic_thread = nil, nil
+	ed.mosaic_work = nil
 	ed.host.settle = max(ed.host.settle, 1)
 }
 
-// Before the picture goes: the thread reads it. Told to stop, it ends within a row of cells.
+// Before the picture goes: the task reads it. Told to stop, it ends within a row of cells, and is waited for.
 @(private = "file")
 editor_mosaic_stop :: proc(ed: ^Editor) {
-	if ed.mosaic_thread == nil { return }
+	if ed.mosaic_work == nil { return }
 	sync.atomic_store(&ed.mosaic_work.cancel, true)
-	thread.join(ed.mosaic_thread)
-	thread.destroy(ed.mosaic_thread)
+	sync.one_shot_event_wait(&ed.mosaic_work.ended)
 	edit_mosaic_free(&ed.mosaic_work.out)
 	free(ed.mosaic_work)
-	ed.mosaic_work, ed.mosaic_thread = nil, nil
+	ed.mosaic_work = nil
 }
 
 ////////////////////////////////
@@ -787,7 +775,6 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	// (the toasts at the bottom of the canvas: over the bar they hid the buttons just pressed)
 	if canvas.max.x > canvas.min.x { ui.set_toast_area(canvas) }
 	ui.set_toast_position(&ed.host.state, .Bottom_Center)
-	ui.toasts_build()
 }
 
 // No picture yet: a file is read, or could not be. Escape closes.
@@ -875,10 +862,7 @@ editor_bar :: proc(ed: ^Editor, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
-		sig: ui.Signal
-		if ui.tags("accent_button") { sig = ui.button("Done###done") }
-		if sig.clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
-		if ui.hovered_for(sig, 0.4) { if ui.tooltip() { ui.tooltip_text(ui.command_tip(EDITOR_ACTIONS[.Done])) } }
+		if ui.button("Done###done", intent = .Primary, tip = ui.command_tip(EDITOR_ACTIONS[.Done])).clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
 		ui.spacer(ui.px(em * 0.5))
 	}
 }
@@ -900,7 +884,7 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 	if .Width in props {
 		// (a slider for the feel, its field for the exact width)
 		ui.next({width = ui.px(math.round(em * 13)), height = ui.px(math.round(side * 0.85))})
-		ui.slider_field("###width", &ed.width_field, &style.width, EDIT_WIDTH_MIN, EDIT_WIDTH_MAX, 1, unit = "px")
+		ui.number("###width", &style.width, lo = f32(EDIT_WIDTH_MIN), hi = f32(EDIT_WIDTH_MAX), step = 1, unit = "px", track = true)
 		ui.spacer(ui.px(em * 0.5))
 	}
 	if .Text_Size in props {
@@ -918,7 +902,7 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 		ui.label("Shadow###shadow_label")
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.px(math.round(em * 12)), height = ui.px(math.round(side * 0.85))})
-		ui.slider_field("###shadow", &ed.shadow_field, &style.shadow, 0, EDIT_SHADOW_MAX, 1, unit = "px")
+		ui.number("###shadow", &style.shadow, lo = f32(0), hi = f32(EDIT_SHADOW_MAX), step = 1, unit = "px", track = true)
 		ui.spacer(ui.px(em * 0.5))
 	}
 	if .Fill in props {
@@ -931,17 +915,8 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 // An icon of the bar: its command's tooltip; `active`: the tool in use.
 @(private = "file")
 bar_icon :: proc(id: string, c: ui.Command, side: f32, active, enabled: bool) -> bool {
-	mod := ui.Style_Mod{width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)}
-	if active {
-		bg := ui.color("accent")
-		bg.a *= 0.28
-		mod.bg = bg
-	}
-	if !enabled { mod.flags = {.Disabled} }
-	ui.next(mod)
-	sig := ui.icon_button(id, c.icon)
-	if ui.hovered_for(sig, 0.4) { if ui.tooltip() { ui.tooltip_text(ui.command_tip(c)) } }
-	return enabled && sig.clicked
+	ui.next({width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)})
+	return ui.icon_button(id, c.icon, tip = ui.command_tip(c), face = active ? .Toggled : .Ghost, intent = active ? .Primary : .Neutral, disabled = !enabled).clicked && enabled
 }
 
 @(private = "file")
@@ -972,7 +947,7 @@ swatch :: proc(id: string, rgb: u32, name: string, chosen: bool, side: f32) -> b
 		if d.chosen { draw.rect(dc, r, d.ring, half, max(math.round(1.5 * d.scale), 1)) }
 	}, d, {.Clickable, .Draw_Hot_Effects})
 	sig := ui.signal(b)
-	if ui.hovered_for(sig, 0.4) { if ui.tooltip() { ui.tooltip_text(name) } }
+	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(name) } }
 	return sig.clicked
 }
 
@@ -1078,7 +1053,7 @@ editor_choices_load :: proc(app: ^App, m: ^Edit_Model) {
 
 // The model's tool and styles in the preferences, when they changed (written by the worker: app_prefs_changed).
 editor_choices_keep :: proc(app: ^App, m: ^Edit_Model) {
-	if app.worker.thread == nil { return }   // (an editor of clichetool shots: the user's preferences are not its)
+	if !app.worker.started { return }   // (an editor of clichetool shots: the user's preferences are not its)
 	tool, styles := edit_choices_text(m)
 	if tool == config.string_of(&app.prefs, "editor.tool") && styles == config.string_of(&app.prefs, "editor.styles") { return }
 	config.set_from_string(&app.prefs, "editor.tool", tool, .User)

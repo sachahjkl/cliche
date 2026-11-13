@@ -19,12 +19,14 @@ package cliche
 //   frames   a frame of each shown window
 // Every other thread wakes it through app_wake: the waits end on a wake of any of the windows.
 
-import "core:fmt"
+import "core:log"
 import "core:strings"
 import "core:sync"
 import capture "gt:capture"
 import config "gt:config"
+import crash "gt:crash"
 import "gt:host"
+import tk_log "gt:log"
 import instance "gt:instance"
 import shortcuts "gt:shortcuts"
 import "gt:platform"
@@ -40,7 +42,9 @@ Inbox_Item :: struct { verb: Verb, token: string }
 
 App :: struct {
 	prefs:      config.Prefs,
+	prefs_writer: config.User_Writer,                      // the preferences' file, written off this thread
 	settings:   Settings,
+	crash_settings: Crash_Settings,                        // what a crash report says of the preferences
 	anchor:     ^platform.Window,
 	tray:       ^platform.Tray,
 	server:     ^instance.Server,
@@ -95,23 +99,30 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app.flow = Flow_Idle{}
 	app.record = Record_Idle{}
 
+	// (this process is the one that runs: its log and its crash reports, before any thread starts, so that each has them)
+	logger := tk_log.install({program = APP_NAME, echo = ODIN_DEBUG})
+	context.logger = logger
+	crash_settings_keep(&app.crash_settings, &app.prefs)
+	_ = crash.install({program = APP_NAME, version = APP_VERSION, log_tail = {tk_log.tail, logger.data}, settings = {crash_settings_text, &app.crash_settings}})
+	crash.begin_session()
+	crashed, has_crashed := crash.last_report()
+
 	platform.set_app_id(APP_NAME)
 	platform.notify_set_app({name = "cliche"})
 	app.anchor = platform.open_window("cliche", {1, 1})
 	if app.anchor == nil {
-		fmt.eprintln("cliche: no window can be opened here")
+		log.error("no window can be opened here")
 		app_free(app)
+		crash.end_session()
+		context.logger = {}
+		tk_log.close(logger)
 		return 1
 	}
 	app_wake_add(app, app.anchor)
-	if !worker_start(&app.worker, app_wake, app) {
-		fmt.eprintln("cliche: the worker's thread cannot start")
-		platform.destroy_window(app.anchor)
-		app_free(app)
-		return 1
-	}
+	worker_start(&app.worker, app_wake, app)
 	// (opened now, on the worker: the first capture does not wait for the compositor's protocols)
 	worker_send(&app.worker, Job_Open{})
+	config.user_writer_start(&app.prefs_writer, &app.prefs, prefs_file())
 	history_start(app)
 	workflows_start(app)
 	app.server = instance.serve_start(owner, app_message, app)
@@ -119,6 +130,8 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app_tray_open(app)
 	app_shortcuts_start(app)
 	app_integrate(app, force = true)
+	if has_crashed { app_announce(app, .Bad, "cliche stopped unexpectedly: its report is in this file", crashed) }
+	delete(crashed)
 	app_command(app, first.verb, first.token)
 
 	for !app.quit {
@@ -132,6 +145,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 		app_record_messages(app)
 		app_tray_follow(app)
 		app_frames(app)
+		app_prefs_save(app)
 	}
 
 	instance.serve_stop(app.server)
@@ -140,10 +154,16 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	workflows_save(app)   // (a change still waiting for the end of its gesture)
 	worker_stop(&app.worker)   // (before the desktop goes: a cut may be reading it)
 	workflows_stop(app)   // (after the worker: its jobs held the runs' pictures)
+	if !config.user_writer_stop(&app.prefs_writer, &app.prefs) { log.errorf("%s cannot be written", prefs_file()) }
 	if app.has_desktop { desktop_free(&app.desktop) }
 	app_windows_close(app)
+	// (after every window: a task's result has no window to go to now; the editors' reads end before app is freed)
+	ui.chores_stop()
 	platform.destroy_window(app.anchor)   // (its tray icon with it)
 	app_free(app)
+	crash.end_session()
+	context.logger = {}
+	tk_log.close(logger)
 	return 0
 }
 
@@ -372,14 +392,7 @@ app_results :: proc(app: ^App) {
 			app.backend = v.backend
 			delete(app.default_folder)
 			app.default_folder = v.default_folder
-			if v.error != .None { fmt.eprintfln("cliche: no capture here: %s", FLOW_ERROR_TEXT[flow_error_of(v.error)]) }
-		case Result_Folder:
-			if v.node != 0 {
-				workflow_folder_chosen(app, v.workflow, v.node, v.path)
-			} else if v.path != "" && config.set_from_string(&app.prefs, "save.folder", v.path, .User) == .None {
-				app_prefs_changed(app)
-			}
-			delete(v.path)
+			if v.error != .None { log.errorf("no capture here: %s", FLOW_ERROR_TEXT[flow_error_of(v.error)]) }
 		case Result_Node:
 			workflow_node_result(app, v)
 		case Result_Workflows:
@@ -395,7 +408,7 @@ app_results :: proc(app: ^App) {
 		case Result_Uploaders:
 			app_uploaders(app, v)
 		case Result_Integrated:
-			if v.problem != "" { fmt.eprintfln("cliche: %s", v.problem) }
+			if v.problem != "" { log.error(v.problem) }
 			delete(v.problem)
 		case Result_Desktop:
 			app_desktop(app, v)
@@ -404,7 +417,7 @@ app_results :: proc(app: ^App) {
 		case Result_Saved:
 			editor_saved(app, v)
 		case Result_Written:
-			if !v.ok { fmt.eprintfln("cliche: %s cannot be written", v.path) }
+			if !v.ok { log.errorf("%s cannot be written", v.path) }
 			delete(v.path)
 		}
 	}
@@ -514,7 +527,7 @@ app_announce :: proc(app: ^App, kind: ui.Toast_Kind, title: string, body := "", 
 	if h == nil { h = app.shared.main }   // (hidden: a toast there waits for it; the system's notification is what is seen)
 	if h == nil {
 		// (no window at all yet, so no toast: the system's notification alone, and the console)
-		fmt.eprintfln("cliche: %s%s%s", title, body != "" ? ": " : "", body)
+		log.infof("%s%s%s", title, body != "" ? ": " : "", body)
 		if app.announcer.mode == .Off && kind != .Bad { return }
 		if app.announcer.mode != .Window && !app.announcer.missing {
 			platform.notify_async(app.anchor, {title = title, body = body, silent = true, replace = app.announcer.last})
@@ -537,7 +550,7 @@ app_outcome :: proc(app: ^App) {
 		case .Ocr: title = "No text"
 		}
 		body := FLOW_ERROR_TEXT[s.error]
-		fmt.eprintfln("cliche: %s", body)
+		log.warn(body)
 		app_announce(app, .Bad, title, body)
 	}
 	app_step(app, Flow_Reset{})
@@ -688,16 +701,51 @@ app_tray :: proc(app: ^App) {
 	}
 }
 
-// A preference was set or reset: the file written on the worker, the settings read again and applied.
+// A preference was set or reset: the settings read again and applied (the file is written at the end of the turn,
+// app_prefs_save).
 app_prefs_changed :: proc(app: ^App) {
-	text := config.serialize_user(&app.prefs)
-	worker_send(&app.worker, Job_Write{path = strings.clone(prefs_file()), text = text})
+	crash_settings_keep(&app.crash_settings, &app.prefs)
 	settings_free(&app.settings)
 	app.settings = prefs_read(&app.prefs)
 	app.announcer.mode = prefs_page.messages_mode(&app.prefs)
 	app_shortcuts_follow_prefs(app)
 	app_integrate(app, force = false)
 	history_prefs_changed(app)
+}
+
+// Once a turn of the loop: the preferences changed since the last text go to the writer's thread.
+@(private = "file")
+app_prefs_save :: proc(app: ^App) {
+	config.user_writer_save(&app.prefs_writer, &app.prefs)
+	if config.user_writer_failed(&app.prefs_writer) { app_announce(app, .Bad, "The preferences cannot be written", prefs_file()) }
+}
+
+// The system's dialog for a folder, its answer at a next frame of the main window (where it was asked): the save folder
+// (node 0), or a Save node's.
+app_pick_folder :: proc(app: ^App, start: string, workflow: u64 = 0, node: u64 = 0) {
+	Pick :: struct { app: ^App, workflow, node: u64 }
+	ui.file_dialog(&app.history_window.host.state, .Folder, {title = "The folder of the screenshots", start_dir = start}, proc(r: platform.Dialog_Result, user: rawptr) {
+		pick := (^Pick)(user)
+		defer free(pick)
+		app := pick.app
+		path := r.status == .Chosen && len(r.paths) > 0 ? r.paths[0] : ""
+		if pick.node != 0 {
+			workflow_folder_chosen(app, pick.workflow, pick.node, path)
+		} else if path != "" && config.set_from_string(&app.prefs, "save.folder", path, .User) == .None {
+			app_prefs_changed(app)
+		}
+	}, new_clone(Pick{app, workflow, node}))
+}
+
+// The system's dialog for a ShareX uploader; the file chosen is copied in on the worker.
+app_import_uploader :: proc(app: ^App) {
+	patterns := []string{"*.sxcu"}
+	filters := []platform.File_Filter{{"ShareX uploaders", patterns}}
+	ui.file_dialog(&app.history_window.host.state, .Open, {title = "A ShareX uploader", filters = filters}, proc(r: platform.Dialog_Result, user: rawptr) {
+		app := (^App)(user)
+		if r.status != .Chosen || len(r.paths) == 0 { return }
+		worker_send(&app.worker, Job_Import_Uploader{path = strings.clone(r.paths[0])})
+	}, app)
 }
 
 // cliche's launcher and its start with the session as the preferences say: at the start (the files may have gone),
@@ -715,5 +763,5 @@ app_uploaders :: proc(app: ^App, r: Result_Uploaders) {
 	uploaders_result_free(&app.uploaders)
 	app.uploaders = r
 	if r.imported != "" && config.set_from_string(&app.prefs, "upload.uploader", r.imported, .User) == .None { app_prefs_changed(app) }
-	if r.import_problem != "" { fmt.eprintfln("cliche: %s", r.import_problem) }
+	if r.import_problem != "" { log.warn(r.import_problem) }
 }

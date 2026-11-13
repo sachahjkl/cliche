@@ -31,7 +31,7 @@ Settings_Mode :: struct {
 SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "general",    title = "General",       icon = lucide.SETTINGS},
 	{category = "appearance", title = "Appearance",    icon = lucide.PALETTE},
-	{category = "shortcuts",  title = "Shortcuts",     icon = lucide.KEYBOARD},
+	{category = "shortcut",   title = "Shortcuts",     icon = lucide.KEYBOARD},
 	{category = "capture",    title = "Capture",       icon = lucide.MONITOR},
 	{category = "region",     title = "Region",        icon = lucide.IMAGE},
 	{category = "record",     title = "Recording",     icon = lucide.FILM},
@@ -134,13 +134,13 @@ settings_action :: proc(app: ^App, a: Settings_Action) {
 	case .Read_Text:        hw.hide_due = true; app_trigger(app, .Ocr)
 	case .Record:           hw.hide_due = true; app_record_trigger(app, .Mp4)
 	case .Record_Gif:       hw.hide_due = true; app_record_trigger(app, .Gif)
-	case .Choose_Folder:    worker_send(&app.worker, Job_Pick_Folder{start = strings.clone(app.settings.folder)})
+	case .Choose_Folder:    app_pick_folder(app, app.settings.folder)
 	case .Open_Uploaders:   worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(uploaders_folder())})
-	case .Import_Uploader:  worker_send(&app.worker, Job_Import_Uploader{})
+	case .Import_Uploader:  app_import_uploader(app)
 	case .Shortcuts_Page:
 		settings_enter(app)
 		delete(hw.settings_mode.page.current)
-		hw.settings_mode.page.current = strings.clone("shortcuts")
+		hw.settings_mode.page.current = strings.clone("shortcut")
 	case .System_Shortcuts: shortcuts.configure(app.shortcuts)
 	}
 }
@@ -157,7 +157,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Options {
 		status = settings_status,
 		page_foot = settings_page_foot,
 		pages = SETTINGS_PAGES[:], icon_font = app.history_window.icons, search_icon = lucide.SEARCH, reset_icon = lucide.REFRESH_CW,
-		foot = "prefs: " + APP_NAME + "/prefs in the configuration folder",
+		file = prefs_file(),
 		version = "cliche " + APP_VERSION,
 	}
 }
@@ -219,7 +219,7 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			if foot_button("Open the folder###open", em) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
 		}
-	case "shortcuts":
+	case "shortcut":
 		shortcuts_foot(app, em)
 	case "upload":
 		upload_foot(app, em)

@@ -182,7 +182,7 @@ NODE_DEFS := [Node_Kind]Node_Def{
 		{name = "format", title = "Format", type = .Choice, choices = {"PNG, small", "PNG, fast", "JPEG", "WebP", "WebP, lossless"}},
 		{name = "quality", title = "Quality", type = .Int, lo = 1, hi = 100, step = 1, unit = "%", default_number = 90},   // (JPEG and WebP)
 	}},
-	.Upload = {title = "Upload", group = .Outputs, icon = lucide.SEND_HORIZONTAL, tags = {"share", "host", "link", "sxcu", "imgur"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "address", kind = .Url}}, place = .Worker, effect = true, params = {
+	.Upload = {title = "Upload", group = .Outputs, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link", "sxcu", "imgur"}, inputs = {{name = "picture", kind = .Image}}, outputs = {{name = "address", kind = .Url}}, place = .Worker, effect = true, params = {
 		{name = "uploader", title = "Host", type = .Uploader, placeholder = "The default host (Settings, Upload)"},
 	}},
 	.Copy_Text = {title = "Copy text", group = .Outputs, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "url", "address", "link"}, inputs = {{name = "text", kind = .Text}}, outputs = {{name = "text", kind = .Text}}, place = .Interface, effect = true},

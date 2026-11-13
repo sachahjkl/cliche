@@ -11,8 +11,10 @@ package cliche
 // to stop it.
 
 import "core:fmt"
+import "core:log"
 import capture "gt:capture"
 import "gt:platform"
+import "gt:ui"
 
 // `cliche --record`, `--record-gif`, their shortcuts: a region to choose; again, the recording starts; again, it stops.
 app_record_trigger :: proc(app: ^App, format: Record_Format) {
@@ -127,7 +129,7 @@ app_record_messages :: proc(app: ^App) {
 			app_record_end(app)
 			if discarding { continue }   // (the file is deleted: nothing to tell)
 			app_record_told(app, v.path, v.bytes, v.length_ms)
-			if v.error == .None && v.path != "" && app.settings.record_reveal { worker_send(&app.worker, Job_Reveal{path = clone_string(v.path)}) }
+			if v.error == .None && v.path != "" && app.settings.record_reveal { ui.open(v.path, .Reveal) }
 		}
 	}
 }
@@ -154,7 +156,7 @@ app_record_told :: proc(app: ^App, path: string, bytes, length_ms: i64) {
 	case Record_Failed:
 		title, body = "No recording", RECORD_ERROR_TEXT[s.error]
 		failed = true
-		fmt.eprintfln("cliche: %s", body)
+		log.warn(body)
 	}
 	if title != "" && (app.settings.record_notify || failed) { app_announce(app, failed ? .Bad : .Good, title, body) }
 	app_record_step(app, Record_Reset{})

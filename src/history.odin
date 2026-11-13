@@ -11,7 +11,7 @@ package cliche
 // The file is <state folder>/cliche/history (history_file_*.odin): a first line HISTORY_HEADER, then one line per
 // entry, oldest first, its fields separated by tabs and escaped (history_format).
 
-import "core:fmt"
+import "core:log"
 import "core:os"
 import "core:slice"
 import "core:strconv"
@@ -662,7 +662,7 @@ history_result_free :: proc(r: ^Result_History) {
 history_disk_write :: proc(d: ^History_Disk) {
 	if d.path == "" || !d.loaded { return }
 	text := history_format(d.history.entries[:], context.temp_allocator)
-	if !write_file(d.path, transmute([]u8)text) { fmt.eprintfln("cliche: the history cannot be written to %s", d.path) }
+	if !write_file(d.path, transmute([]u8)text) { log.errorf("the history cannot be written to %s", d.path) }
 }
 
 // The ids whose file is gone (a stat each: the worker's).
@@ -711,4 +711,12 @@ history_offset_minutes :: proc() -> int {
 	lt, lok := time.datetime_to_time(local)
 	if !lok { return 0 }
 	return int(time.diff(now, lt) / time.Minute)
+}
+
+// The history's file: what cliche keeps of its own past belongs to the state folder, not to the preferences. It reads
+// the environment: the worker calls it.
+history_file :: proc(allocator := context.allocator) -> string {
+	dir := platform.user_dir(.State, APP_NAME, context.temp_allocator)
+	if dir == "" { return "" }
+	return strings.concatenate({dir, "/history"}, allocator)
 }

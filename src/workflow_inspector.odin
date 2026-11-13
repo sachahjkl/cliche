@@ -14,7 +14,6 @@ import "gt:ui"
 
 Workflow_Inspector :: struct {
 	node:        u64,     // the node the fields below were made for (0: made again at the next build)
-	sliders:     [NODE_PARAMS_MAX]ui.Slider_Field,
 	texts:       [NODE_PARAMS_MAX]ui.Text_Field,
 	color:       ui.Color_Pick,
 	color_param: int,     // the parameter whose colour picker is open (-1: none)
@@ -23,12 +22,11 @@ Workflow_Inspector :: struct {
 }
 
 workflow_inspector_free :: proc(ins: ^Workflow_Inspector) {
-	for &f in ins.sliders { ui.slider_field_destroy(&f) }
 	for &f in ins.texts { ui.field_destroy(&f) }
 	ui.color_pick_destroy(&ins.color)
 }
 
-// The folder chosen in the system's dialog for a Save node (the worker's Result_Folder).
+// The folder chosen in the system's dialog for a Save node (app_pick_folder).
 workflow_folder_chosen :: proc(app: ^App, workflow, node: u64, path: string) {
 	wf := workflows_find(&app.workflows, workflow)
 	if wf == nil || path == "" { return }
@@ -124,7 +122,7 @@ workflow_list_item_body :: proc(app: ^App, wf: ^Workflow, em: f32) {
 		sig := ui.nav_item("###wf_name", wf.name, "", 0, shown, em)
 		if sig.clicked { workflow_show(app, wf.id) }
 		if sig.double_clicked { workflow_rename_start(app, wf.id) }
-		if ui.hovered_for(sig, 0.8) {
+		if ui.hovered_for(sig) {
 			if ui.tooltip() { ui.tooltip_text("Double-click to rename") }
 		}
 	}
@@ -149,14 +147,8 @@ workflow_duplicate :: proc(app: ^App, id: u64) {
 
 @(private = "file")
 list_icon_button :: proc(id, glyph, tip: string, em: f32, enabled: bool) -> bool {
-	mod := ui.Style_Mod{width = ui.px(math.round(em * 1.9)), height = ui.px(math.round(em * 1.9)), font_size = em * 1.05}
-	if !enabled { mod.flags = {.Disabled} }
-	ui.next(mod)
-	sig := ui.icon_button(fmt.tprintf("###wf_list_%s", id), glyph)
-	if ui.hovered_for(sig, 0.5) {
-		if ui.tooltip() { ui.tooltip_text(tip) }
-	}
-	return sig.clicked && enabled
+	ui.next({width = ui.px(math.round(em * 1.9)), height = ui.px(math.round(em * 1.9)), font_size = em * 1.05})
+	return ui.icon_button(fmt.tprintf("wf_list_%s", id), glyph, tip = tip, disabled = !enabled).clicked && enabled
 }
 
 ////////////////////////////////
@@ -272,12 +264,12 @@ workflow_param :: proc(app: ^App, wf: ^Workflow, n: ^Workflow_Node, i: int, d: P
 	p := &n.params[i]
 	switch d.type {
 	case .Int, .Float:
-		v := f32(p.number)
-		decimals := d.type == .Float && d.step < 1 ? 1 : 0
+		// (a copy: param_change keeps the value before the change for its undo)
+		v := p.number
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9))})
-		if ui.slider_field("###slider", &ins.sliders[i], &v, f32(d.lo), f32(d.hi), f32(d.step), decimals, d.unit) {
+		if ui.number("###number", &v, lo = f64(d.lo), hi = f64(d.hi), step = f64(d.step), unit = d.unit, track = true) {
 			param_change(app, wf, n, i)
-			p.number = f64(v)
+			p.number = v
 		}
 	case .Bool:
 		on := p.number != 0
@@ -326,7 +318,7 @@ workflow_param :: proc(app: ^App, wf: ^Workflow, n: ^Workflow_Node, i: int, d: P
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.text_size(em * 0.8), height = ui.px(math.round(em * 1.9)), radius = em * 0.4})
 			if ui.button("Choose…###choose").clicked {
-				worker_send(&app.worker, Job_Pick_Folder{start = strings.clone(p.text != "" ? p.text : app.settings.folder), workflow = wf.id, node = n.id})
+				app_pick_folder(app, p.text != "" ? p.text : app.settings.folder, wf.id, n.id)
 			}
 		}
 	case .Uploader:

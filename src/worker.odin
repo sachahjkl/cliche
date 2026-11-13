@@ -2,17 +2,18 @@ package cliche
 
 // The worker: one thread for everything that may block or that costs in proportion to the pixels. It owns the capture
 // session (gt:capture's calls block: a round trip to the compositor, a portal's dialog), cuts and converts pictures,
-// encodes PNG files and writes them, and writes the preferences. The interface's thread hands it jobs and takes its
-// results, in order; the worker wakes the interface's loop (Worker.wake) after each result.
+// encodes PNG files and writes them. The interface's thread hands it jobs and takes its results, in order; the worker
+// wakes the interface's loop (Worker.wake) after each result. Its thread is a gt:tasks pool of one thread that never
+// grows: a capture session belongs to the thread that opened it, and each job sees the ones before it done.
 
 import "core:os"
 import "core:strings"
 import "core:sync"
-import "core:thread"
 import "core:time"
 import capture "gt:capture"
 import png "gt:png"
 import "gt:platform"
+import tasks "gt:tasks"
 
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
 Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
@@ -22,14 +23,12 @@ Job_Copy_Encode :: struct { editor: u64, shot: Shot }         // an editor's Ctr
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences, the workflows); owned
 Job_Workflows_Load :: struct {}                               // the workflows' file, read at the start (workflow_store.odin)
 Job_Picture_Load :: struct { path: string, workflow: u64 }    // a PNG of the history decoded, for a preview run of `workflow`; owned
-Job_Reveal    :: struct { path: string }                     // a file shown in its folder; owned
 Job_Uploaders :: struct {}                                    // the uploaders found, for the settings
-Job_Import_Uploader :: struct {}                              // a .sxcu file chosen in the system's dialog, copied in
-Job_Pick_Folder :: struct { start: string, workflow, node: u64 }   // the system's dialog for a folder: the save folder (node 0) or a Save node's; owned
+Job_Import_Uploader :: struct { path: string }                // a .sxcu file chosen in the system's dialog, copied in; owned
 Job_Open_Folder :: struct { folder: string }                  // the save folder in the file manager ("": the default); owned
 Job_Integrate :: struct { menu, autostart: bool }             // cliche's launcher and its start with the session (integration.odin)
 
-Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Pick_Folder, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Reveal }
+Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader }
 
 // The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
@@ -65,21 +64,18 @@ Result_Uploaders :: struct { names: []string, problems: []string, imported: stri
 
 Result_Written :: struct { ok: bool, path: string }   // (path owned)
 
-// The folder chosen in the system's dialog (owned; "": none chosen), for the save folder (node 0) or a Save node's.
-Result_Folder :: struct { path: string, workflow, node: u64 }
-
 // What went wrong putting cliche on the desktop (owned; "": nothing).
 Result_Integrated :: struct { problem: string }
 
-Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Folder, Result_Integrated, Result_Uploaders }
+Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders }
 
 Worker :: struct {
-	thread:    ^thread.Thread,
+	pool:      tasks.Pool,
+	started:   bool,              // (an editor of clichetool shots has none: the user's preferences are not its)
+	stopping:  bool,              // (atomic) the jobs that wait are handed back, not run
 	mutex:     sync.Mutex,
-	cond:      sync.Cond,
-	jobs:      [dynamic]Job,      // guarded by `mutex`
 	results:   [dynamic]Result,   // guarded by `mutex`
-	stop:      bool,              // guarded by `mutex`
+	left:      [dynamic]Job,      // guarded by `mutex`: the jobs not run, freed by worker_stop on the interface's thread
 	wake:      proc(user: rawptr),
 	wake_user: rawptr,
 	pointer:   proc() -> (Point, bool),   // where the pointer is on the desktop, when the system says (pointer_*.odin)
@@ -91,37 +87,38 @@ Worker :: struct {
 	session_error: capture.Error,
 }
 
-worker_start :: proc(w: ^Worker, wake: proc(user: rawptr), wake_user: rawptr) -> bool {
+// A job handed to the pool (the heap's: the pool's thread frees it).
+@(private = "file")
+Worker_Item :: struct { w: ^Worker, job: Job }
+
+worker_start :: proc(w: ^Worker, wake: proc(user: rawptr), wake_user: rawptr) {
 	w.wake, w.wake_user = wake, wake_user
 	w.pointer = pointer_on_desktop
-	w.thread = thread.create(worker_run)
-	if w.thread == nil { return false }
-	w.thread.data = w
-	thread.start(w.thread)
-	return true
+	tasks.start(&w.pool, {threads = 1})
+	w.started = true
 }
 
-// Ends the thread once the job it runs is done; the jobs left are dropped.
+// Ends the thread once the job it runs is done; the jobs left are dropped here, where their pictures may be let go.
 worker_stop :: proc(w: ^Worker) {
-	if w.thread == nil { return }
-	sync.mutex_lock(&w.mutex)
-	w.stop = true
-	sync.cond_signal(&w.cond)
-	sync.mutex_unlock(&w.mutex)
-	thread.join(w.thread)
-	thread.destroy(w.thread)
-	w.thread = nil
-	for &j in w.jobs { job_free(&j) }
-	delete(w.jobs)
+	if !w.started { return }
+	sync.atomic_store(&w.stopping, true)
+	// (last in the queue: the session closes on the thread that opened it, after every job left is handed back)
+	_ = tasks.add(&w.pool, worker_close, w)
+	tasks.stop(&w.pool)
+	for &j in w.left { job_free(&j) }
+	delete(w.left)
 	for &r in w.results { result_free(&r) }
 	delete(w.results)
 }
 
 worker_send :: proc(w: ^Worker, j: Job) {
-	sync.mutex_lock(&w.mutex)
-	append(&w.jobs, j)
-	sync.cond_signal(&w.cond)
-	sync.mutex_unlock(&w.mutex)
+	it := new(Worker_Item)
+	it^ = {w, j}
+	// (a pool not started runs its work on the caller's thread: an app of clichetool shots has no worker, nothing runs)
+	if !w.started || !tasks.add(&w.pool, worker_item_run, it) {
+		job_free(&it.job)
+		free(it)
+	}
 }
 
 // The results since the last call, in order (temp allocator; what each holds is the caller's).
@@ -142,18 +139,22 @@ worker_post :: proc(w: ^Worker, r: Result) {
 }
 
 @(private = "file")
-worker_run :: proc(t: ^thread.Thread) {
-	w := (^Worker)(t.data)
-	for {
+worker_item_run :: proc(data: rawptr) {
+	it := (^Worker_Item)(data)
+	w := it.w
+	if sync.atomic_load(&w.stopping) {
 		sync.mutex_lock(&w.mutex)
-		for len(w.jobs) == 0 && !w.stop { sync.cond_wait(&w.cond, &w.mutex) }
-		if w.stop { sync.mutex_unlock(&w.mutex); break }
-		j := w.jobs[0]
-		ordered_remove(&w.jobs, 0)
+		append(&w.left, it.job)
 		sync.mutex_unlock(&w.mutex)
-		worker_do(w, j)
-		free_all(context.temp_allocator)
+	} else {
+		worker_do(w, it.job)
 	}
+	free(it)
+}
+
+@(private = "file")
+worker_close :: proc(data: rawptr) {
+	w := (^Worker)(data)
 	capture.close(w.session)
 	w.session = nil
 	history_disk_free(&w.history)
@@ -203,12 +204,6 @@ worker_do :: proc(w: ^Worker, j: Job) {
 	case Job_Picture_Load:
 		worker_post(w, picture_load(v.path, v.workflow))
 		delete(v.path)
-	case Job_Pick_Folder:
-		r := platform.pick_folder_dialog({title = "The folder of the screenshots", start_dir = v.start})
-		delete(v.start)
-		path := r.status == .Chosen && len(r.paths) > 0 ? strings.clone(r.paths[0]) : ""
-		platform.dialog_result_destroy(&r)
-		worker_post(w, Result_Folder{path, v.workflow, v.node})
 	case Job_Open_Folder:
 		folder := v.folder != "" ? v.folder : save_folder_default(context.temp_allocator)
 		_ = os.make_directory_all(folder)
@@ -216,18 +211,11 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		delete(v.folder)
 	case Job_History:
 		if r, has := history_job_run(&w.history, v); has { worker_post(w, r) }
-	case Job_Reveal:
-		_ = platform.reveal_in_folder(v.path)
-		delete(v.path)
 	case Job_Uploaders:
 		worker_post(w, uploaders_result("", ""))
 	case Job_Import_Uploader:
-		patterns := []string{"*.sxcu"}
-		filters := []platform.File_Filter{{"ShareX uploaders", patterns}}
-		r := platform.open_file_dialog({title = "A ShareX uploader", filters = filters})
-		defer platform.dialog_result_destroy(&r)
-		if r.status != .Chosen || len(r.paths) == 0 { worker_post(w, uploaders_result("", "")); break }
-		name, problem := uploader_import(r.paths[0], context.temp_allocator)
+		name, problem := uploader_import(v.path, context.temp_allocator)
+		delete(v.path)
 		worker_post(w, uploaders_result(name, problem))
 	case Job_Integrate:
 		problem := integration_apply(v.menu, v.autostart)
@@ -264,12 +252,10 @@ job_free :: proc(j: ^Job) {
 		job_node_free(&v)
 	case Job_Picture_Load:
 		delete(v.path)
-	case Job_Pick_Folder:
-		delete(v.start)
+	case Job_Import_Uploader:
+		delete(v.path)
 	case Job_Open_Folder:
 		delete(v.folder)
-	case Job_Reveal:
-		delete(v.path)
 	case Job_History:
 		history_job_free(&v)
 	}
@@ -289,7 +275,6 @@ result_free :: proc(r: ^Result) {
 	case Result_History: history_result_free(&v)
 	case Result_Written: delete(v.path)
 	case Result_Opened:  delete(v.default_folder)
-	case Result_Folder:  delete(v.path)
 	case Result_Integrated: delete(v.problem)
 	}
 }

@@ -7,50 +7,91 @@
 // GT=<folder>: another checkout of gui_toolkit (its root, not its src).
 package clichetool
 
-import "core:fmt"
-import "core:os"
-import "core:strings"
+import tk_changelog "gt:changelog"
+import release "gt:release"
+import tk_site "gt:site"
 import toolbox "gt:toolbox"
 
-EXIT_USAGE :: 2
-ROOT_MARK  :: "odin.version"
-
-Command :: struct {
-	name, about: string,
-	run:         proc(args: []string) -> int,
+when ODIN_OS == .Windows {
+	PROGRAM :: "build/cliche.exe"
+} else {
+	PROGRAM :: "build/cliche"
 }
 
-COMMANDS :: [?]Command{
-	{name = "build", about = "[release]: the toolkit's text library when its sources changed, then build/cliche", run = run_build},
-	{name = "test", about = "the tests of the program", run = run_test},
-	{name = "check", about = "odin check of the program for this system and for Windows, and of this tool (-vet), the changelog's fragments, the tests, then a release build", run = run_check},
-	{name = "logo", about = "assets/logo*.png and cliche.ico, drawn by the toolkit's paint package", run = run_logo},
-	{name = "shots", about = "[folder [window...]]: (window: settings, editor, history, workflows, record, or motion: the Workflows mode frame by frame) the settings' pages, the editor, the history and the workflows drawn offscreen, as PNG files (default build/shots)", run = run_shots},
-	{name = "changelog", about = "new <type> <text> | check | preview: the fragments of changelog.d/", run = run_changelog},
-	{name = "site", about = "build <site> <out> | check [--site folder] [--shot file.png] [--browser program]: the site's pages", run = run_site},
-	{name = "package", about = "[version]: build/dist: the archive of a release build and its SHA-256", run = run_package},
-	{name = "notes", about = "<version>: the changelog's section of that version", run = run_notes},
-	{name = "ship", about = "<version> [--dry-run]: from a clean master, the fragments into the changelog, APP_VERSION, a commit, the tag, the push", run = run_ship},
+// What a build on Linux needs: the toolkit's native text backend.
+@(rodata)
+LINUX_DEFINES := [?]string{"-define:FONT_BACKEND=native"}
+
+// What goes beside the program in a release's archive: the file, and its name there.
+@(rodata)
+DIST_FILES := [?][2]string{
+	{"README.md", "README.md"}, {"LICENSE", "LICENSE"}, {"CHANGELOG.md", "CHANGELOG.md"},
+	{"ext/gui_toolkit/src/lucide/LICENSE.txt", "LUCIDE-LICENSE.txt"},
+}
+
+project :: proc() -> toolbox.Project {
+	return {
+		name = "cliche", repository = "https://github.com/sachahjkl/cliche", changelog = "CHANGELOG.md",
+		version_file = "src/main.odin", version_line = "APP_VERSION :: ", program = PROGRAM,
+		linux_defines = LINUX_DEFINES[:],
+	}
 }
 
 main :: proc() {
-	if len(os.args) < 2 || os.args[1] == "help" || os.args[1] == "-h" || os.args[1] == "--help" { usage(); return }
-	if !os.exists(ROOT_MARK) {
-		root, code := toolbox.capture({"git", "rev-parse", "--show-toplevel"})
-		if code != 0 { fmt.eprintln("clichetool: not in the repository"); os.exit(EXIT_USAGE) }
-		if os.set_working_directory(strings.trim_space(root)) != nil { fmt.eprintfln("clichetool: cannot work in %s", root); os.exit(EXIT_USAGE) }
-	}
-	commands := COMMANDS
-	for c in commands {
-		if c.name == os.args[1] { os.exit(c.run(os.args[2:])) }
-	}
-	fmt.eprintfln("clichetool: no command %s", os.args[1])
-	usage()
-	os.exit(EXIT_USAGE)
+	p := project()
+	r := release.commands({project = p, dist = "build/dist", files = DIST_FILES[:], check = proc() -> int { return run_check(nil) }})
+	toolbox.tool_main("clichetool", {
+		{name = "build", usage = "[release]: the toolkit's text library when its sources changed, then build/cliche", run = run_build},
+		{name = "test", usage = ": the tests of the program", run = run_test},
+		{name = "check", usage = ": odin check of the program for this system and for Windows, and of this tool (-vet), the ui scopes, the changelog's fragments, the tests, then a release build", run = run_check},
+		{name = "shots", usage = "[folder [window...]]: (window: settings, editor, history, workflows, record, or motion: the Workflows mode frame by frame) the windows drawn offscreen, as PNG files (default build/shots)", run = run_shots},
+		toolbox.logo_command(logo()),
+		tk_changelog.command(p),
+		tk_site.command({meta = site_meta(), pages = {version_mark = "{{version}}", downloads = SITE_DOWNLOADS[:]}}),
+		toolbox.notices_command(p),
+		r[0], r[1], r[2],
+	}, toolbox.ROOT_MARK_DEFAULT)
 }
 
-usage :: proc() {
-	fmt.println("clichetool <command> [arguments]")
-	commands := COMMANDS
-	for c in commands { fmt.printfln("  %-10s %s", c.name, c.about) }
+////////////////////////////////
+// The site, made when it is deployed (.github/workflows/pages.yml) so that it cannot be behind a release.
+// {{version}} in the home page is the last version: its download links name the files of that release.
+
+SITE_META :: tk_site.Meta{
+	url         = "https://cliche.froment.software/",
+	name        = "cliche",
+	repository  = "https://github.com/sachahjkl/cliche",
+	tagline     = "Fast screenshots and screen recordings, shared at once",
+	changes     = "CHANGELOG.md",
+	card        = "img/editor.png",
+	logo        = "img/logo.png",
+	logo_file   = "site/img/logo.png",
+	theme       = "#0e0f14",
+	accent      = "#ef8a5a",
+	author      = "Sacha Froment",
+	author_url  = "https://froment.software",
+	publisher   = "Froment Software",
+	ld_type     = "SoftwareApplication",
+	root_domain = false,   // (github.io answers for /robots.txt and /favicon.ico, not the site)
+}
+
+@(rodata)
+SITE_LD := [?][2]string{
+	{"applicationCategory", "MultimediaApplication"},
+	{"operatingSystem", "Linux, Windows"},
+	{"license", "https://opensource.org/license/mit"},
+}
+
+// The home page's download button, one per system the release workflow builds for (the reader's shown).
+@(rodata)
+SITE_DOWNLOADS := [?]tk_site.Download{
+	{os = "linux", label = "Linux", href = "https://github.com/sachahjkl/cliche/releases/download/v{{version}}/cliche-{{version}}-linux-x64.tar.gz", detail = "v{{version}} · x64 · .tar.gz · Wayland"},
+	{os = "windows", label = "Windows", href = "https://github.com/sachahjkl/cliche/releases/download/v{{version}}/cliche-{{version}}-windows-x64.zip", detail = "v{{version}} · Windows 10 / 11 · x64 · .zip"},
+}
+
+@(private = "file")
+site_meta :: proc() -> tk_site.Meta {
+	m := SITE_META
+	m.ld_fields = SITE_LD[:]
+	return m
 }
