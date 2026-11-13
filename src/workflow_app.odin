@@ -62,7 +62,7 @@ workflows_save :: proc(app: ^App) {
 
 // Whether an editor is opened ahead (app_prewarm): a screenshot's workflow opens one.
 workflows_want_editor :: proc(app: ^App) -> bool {
-	for t in ([]Trigger{.Region, .Screen, .Window}) {
+	for t in ([]Trigger{.Region, .Screen, .Window, .Edit}) {
 		if wf := workflows_for(&app.workflows, t); wf != nil && workflow_has(wf, .Annotate) { return true }
 	}
 	return false
