@@ -10,7 +10,7 @@ import config "gt:config"
 import instance "gt:instance"
 import "gt:platform"
 
-APP_VERSION :: "0.2.0"
+APP_VERSION :: "0.2.1"
 
 USAGE :: `cliche: screenshots
 
