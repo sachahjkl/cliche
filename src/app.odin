@@ -181,7 +181,7 @@ app_prewarm :: proc(app: ^App) {
 @(private = "file")
 app_wait :: proc(app: ^App) {
 	shown := make([dynamic]^host.Host, 0, 4, context.temp_allocator)
-	if app.overlay.visible { append(&shown, &app.overlay.host) }
+	if app.overlay.visible { overlay_hosts(app, &shown, shown = true) }
 	if app.history_window.visible { append(&shown, &app.history_window.host) }
 	for ed in app.editors { if ed.visible { append(&shown, &ed.host) } }
 	if app.record_overlay.visible { append(&shown, &app.record_overlay.host) }
@@ -194,9 +194,12 @@ app_wait :: proc(app: ^App) {
 app_frames :: proc(app: ^App) {
 	if app.overlay.visible {
 		overlay_prepare(app)
-		host.host_frame(&app.overlay.host)
-		if app_close_asked(&app.overlay.host) { app.overlay.decision = .Cancel }
-		overlay_after_frame(app)
+		for s in app.overlay.surfaces {
+			if !s.visible { continue }
+			host.host_frame(&s.host)
+			if app_close_asked(&s.host) { app.overlay.decision = .Cancel }
+		}
+		overlay_after_frame(app)   // (after every surface's frame: none of them is inside its own)
 	}
 	if app.history_window.visible {
 		host.host_frame(&app.history_window.host)
@@ -244,13 +247,14 @@ app_windows_close :: proc(app: ^App) {
 	// (textures go while the renderer is there: before any host closes)
 	history_window_free(app)
 	for ed in app.editors { editor_destroy(ed) }
-	hosts := make([dynamic]^host.Host, 0, 3 + len(app.editors), context.temp_allocator)
-	if app.overlay.opened { append(&hosts, &app.overlay.host) }
+	hosts := make([dynamic]^host.Host, 0, 3 + len(app.editors) + len(app.overlay.surfaces), context.temp_allocator)
+	overlay_hosts(app, &hosts, shown = false)
 	if app.history_window.opened { append(&hosts, &app.history_window.host) }
 	for ed in app.editors { append(&hosts, &ed.host) }
 	if app.record_overlay.opened { append(&hosts, &app.record_overlay.host) }
 	for h in hosts { if app.shared.main != h { host.host_close(h) } }
 	for h in hosts { if app.shared.main == h { host.host_close(h) } }
+	overlay_free(app)
 	for ed in app.editors {
 		editor_free(ed)
 		free(ed)
