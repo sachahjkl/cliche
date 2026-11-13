@@ -3,6 +3,29 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.2.0] - 2026-11-13
+
+### Added
+- **cliche says when it cannot write its preferences**: if the disk is full or the folder cannot be made, a message names the file, instead of a change that is lost without a word.
+- **Crash reports**: if cliche stops unexpectedly, the next start says so and names the file of its report, in the state folder (on Linux, `~/.local/state/cliche/crashes`). Nothing is sent anywhere. cliche also keeps a log there (`logs/cliche.log`); its last lines go into a report.
+- **A licence to support cliche**: the General page of the settings says whether cliche is registered and to whom. Paste a licence key or choose a licence file to register; cliche checks it on your computer, with no network. cliche stays free and does the same with or without a licence.
+- **More settings, your own themes, and export and import**: the pages Window, Scrolling, Input, Delays and menus, and Rendering join cliche's own pages, and Appearance now sets the text and the fonts. Each setting applies at once in every window. The technical settings are in a folded Advanced part. The Appearance page links to a file where you can write themes of your own; they show as soon as the file is saved. The settings export to a JSON, TOML or INI file and import back.
+- **The editor has a Cancel button, and a workflow can wait for Done or Cancel**: an Annotate step has a "done" and a "cancelled" output. Link one of them to the "when" of a step that copies, saves, uploads, notifies or adds the picture to the history: that step then runs only when you press Done, or only when you cancel. Cancel skips the steps that need the edited picture, as closing the editor does.
+- **cliche in French**: its menus, the tray, the history, the editor, the workflows and their steps, the recording bar, the notifications and the settings all show in French. The Language setting (Settings, General) chooses System, English or Français; System follows the language of the system. A new language takes effect at the next start. The French texts put a space before ":", ";", "?" and "!".
+
+### Changed
+- **On Windows, the history moves to the state folder**: it is now in `%LOCALAPPDATA%\cliche\state\history`. cliche no longer reads the history in `%LOCALAPPDATA%\cliche\history`.
+- **Questions in the middle of the window, and one red for recording**: a question before cliche deletes or drops something (delete captures, delete a workflow, drop the editor's changes) shows in the middle of its window, not near its top. The red dot of the Record button and the red dot while a recording runs have the same red.
+- **The editor remembers your choices and gives the shadow a size**:
+  - It opens with the tool you used last, and each tool with the colour, width, shadow, fill and text size you gave it, also after cliche restarts.
+  - The shadow of an annotation has a slider and a field, from 0 to 20 px, instead of on or off. It sets how soft the shadow is and how far it falls.
+  - The tool in use shows pressed in, and the Done button has the colour of the theme's accent.
+
+### Fixed
+- **The shade around the selection shows its value**: the settings wrote "%!(MISSING ARGUMENT)" after its percentage.
+- **Renaming a workflow and switching its triggers look smooth**: the name no longer shows only its last letters for a moment when its field opens, and the switches of the triggers slide instead of jumping.
+- **Screenshots work again after the connection to the desktop breaks**: "No screenshot" came back at each capture until cliche restarted. The capture now reconnects by itself.
+
 ## [0.1.1] - 2026-11-12
 
 ### Added
@@ -58,5 +81,6 @@ and the versions follow [semantic versioning](https://semver.org/).
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.2.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.2.0
 [0.1.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.1.0
