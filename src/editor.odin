@@ -288,6 +288,7 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 	}
 	app_standard_follow(app, &ed.host)
 	ed.host.input = editor_input
+	ed.host.close_asked = editor_host_close
 	ed.host.params = editor_params
 	ed.host.after_input = 3
 	ed.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
@@ -515,6 +516,16 @@ editor_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = a.font_size, text_pad = 6, cursor = .Arrow}
 }
 
+// The window's close (its title bar's, Alt+F4): a file being read, or one that could not be, closes at once; a picture
+// asks first when it has changes (editor_close_asked), its question drawn.
+@(private = "file")
+editor_host_close :: proc(h: ^host.Host) {
+	ed := (^Editor)(h.user)
+	if !ed.has_picture { ed.close_due = true; return }
+	editor_close_asked(ed)
+	h.settle = max(h.settle, 2)
+}
+
 // The canvas' pointer goes to the model; the rest to the widgets. A press is the canvas' when it lands on it with no
 // dialog or menu open, and not on the text field; a release, a move or the wheel when a gesture goes on.
 @(private = "file")
@@ -523,21 +534,12 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 	m := &ed.model
 	out := make([dynamic]platform.Event, 0, len(events), context.temp_allocator)
 	if !ed.has_picture {
-		// (a file being read, or one that could not be: the window's close still closes it)
-		for e in events {
-			if e.kind == .Close { platform.cancel_close(h.win); ed.close_due = true; continue }
-			append(&out, e)
-		}
-		return out[:]
+		return events
 	}
 	blocked := ed.palette.open || ed.sheet_open || ed.asking || ed.exporting || ui.ctx_menu_any_open()
 	_, typing := m.mode.(Edit_Typing)
 	for e in events {
 		#partial switch e.kind {
-		case .Close:
-			platform.cancel_close(h.win)
-			editor_close_asked(ed)
-			continue
 		case .Key_Press:
 			if e.key == .Space && !typing && !blocked && !e.repeat { ed.space = true }
 		case .Key_Release:

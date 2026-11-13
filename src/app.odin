@@ -216,19 +216,17 @@ app_wait :: proc(app: ^App) {
 	if len(shown) > 0 { host.hosts_wait(shown[:]) } else { platform.wait_event(app.anchor, 0) }
 }
 
-// A frame of each shown window, then what it decided. A close the system asked for is read after the frame
-// (app_close_asked): each of these windows is hidden or given up, never closed by the system.
+// A frame of each shown window, then what it decided. A close the system asked for is each window's close_asked: each of
+// these windows is hidden or given up, never closed by the system.
 @(private = "file")
 app_frames :: proc(app: ^App) {
 	if app.overlay.visible {
 		overlay_prepare(app)
 		host.host_frame(&app.overlay.host)
-		if app_close_asked(&app.overlay.host) { app.overlay.decision = .Cancel }
 		overlay_after_frame(app)
 	}
 	if app.history_window.visible {
 		host.host_frame(&app.history_window.host)
-		if app_close_asked(&app.history_window.host) { app.history_window.hide_due = true }
 		history_after_frame(app)
 	}
 	// (by index: an editor's Done may open another editor, appended meanwhile; the pointers stay)
@@ -237,28 +235,13 @@ app_frames :: proc(app: ^App) {
 		if !ed.visible { continue }
 		host.host_frame(&ed.host)
 		timing_mark("editor frame")
-		if app_close_asked(&ed.host) {
-			editor_close_asked(ed)
-			ed.host.settle = max(ed.host.settle, 2)   // (its question, when it asks one, is drawn)
-		}
 		editor_after_frame(ed)
 	}
 	editors_sweep(app)   // (after every frame: none of them is inside its own)
 	if app.record_overlay.visible {
 		host.host_frame(&app.record_overlay.host)
-		if app_close_asked(&app.record_overlay.host) { app.record_overlay.decision = .Cancel }
 		record_overlay_after_frame(app)
 	}
-}
-
-// The system asked to close `h`'s window (its title bar's button, Alt+F4): the ask is taken back, the caller hides it.
-// gt:host's frame ends at once on a window marked closed, before its input hook sees the .Close event: a window whose
-// hook alone cancels the close would stay shown, and every later frame of it would end there too.
-@(private = "file")
-app_close_asked :: proc(h: ^host.Host) -> bool {
-	if h.win == nil || !platform.is_closed(h.win) { return false }
-	platform.cancel_close(h.win)
-	return true
 }
 
 // The windows with a renderer close in the order the host asks: the renderer's own window last.

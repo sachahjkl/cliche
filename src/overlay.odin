@@ -80,6 +80,7 @@ overlay_show :: proc(app: ^App) -> bool {
 		o.opened = true
 		app_standard_follow(app, &o.host)
 		o.host.input = overlay_input
+		o.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).overlay.decision = .Cancel }
 		o.host.after_input = 2
 		app_wake_add(app, o.host.win)
 	}

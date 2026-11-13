@@ -268,7 +268,8 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	}
 	hw.opened = true
 	app_standard_follow(app, &hw.host)
-	hw.host.input = history_input
+	// (the window's close hides it)
+	hw.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).history_window.hide_due = true }
 	hw.host.params = history_params
 	hw.host.after_input = 3
 	hw.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
@@ -414,21 +415,6 @@ history_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 		platform.set_dark_title(h.win, !hw.theme_shown.light)
 	}
 	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(28)}, font = app.shared.font, font_size = a.font_size, text_pad = 6, cursor = .Arrow}
-}
-
-@(private = "file")
-history_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
-	app := (^App)(h.user)
-	out := make([dynamic]platform.Event, 0, len(events), context.temp_allocator)
-	for e in events {
-		if e.kind == .Close {
-			platform.cancel_close(h.win)
-			app.history_window.hide_due = true
-			continue
-		}
-		append(&out, e)
-	}
-	return out[:]
 }
 
 @(private = "file")
