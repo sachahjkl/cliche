@@ -132,17 +132,6 @@ prefs_register :: proc(p: ^config.Prefs) {
 	config.register(p, PREF_DEFS[:])
 }
 
-// cliche's own preferences' titles and descriptions in the language in use, once, after prefs_page.language_start: the
-// settings' page and its search show the registry's words as they are. The toolkit's standard ones are its own.
-prefs_translate :: proc(p: ^config.Prefs) {
-	for d in PREF_DEFS {
-		r := config.ref_of(p, d.name)
-		if r == config.NO_REF { continue }
-		e := config.entry(p, r)
-		e.def.title, e.def.description = i18n.tr(e.def.title), i18n.tr(e.def.description)
-	}
-}
-
 prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Settings) {
 	s.menu = config.bool_of(p, "general.menu")
 	s.autostart = config.bool_of(p, "general.autostart")
@@ -171,7 +160,7 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 }
 
 settings_free :: proc(s: ^Settings, allocator := context.allocator) {
-	prefs_page.appearance_free(&s.appearance)
+	prefs_page.appearance_destroy(&s.appearance)
 	delete(s.ocr_languages, allocator)
 	delete(s.uploader, allocator)
 	delete(s.folder, allocator)
@@ -205,7 +194,7 @@ Crash_Settings :: struct {
 }
 
 crash_settings_keep :: proc(c: ^Crash_Settings, p: ^config.Prefs) {
-	text := config.export_own(p, allocator = context.temp_allocator)
+	text := config.export(p, .Own, allocator = context.temp_allocator)
 	sync.atomic_store(&c.size, 0)   // (a crash meanwhile says nothing rather than half of two texts)
 	n := copy(c.text[:], text)
 	sync.atomic_store(&c.size, n)

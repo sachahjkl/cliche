@@ -60,7 +60,7 @@ done_with_text :: proc(run: ^Run, node: int, kind: flowgraph.Port_Kind, text: st
 @(test)
 nodes_run_in_the_order_of_their_links :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Resize, .Save_File}, {{0, 1}, {1, 2}})
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	run: Run
 	run_start(&run, g, picture(4, 4), {id = 1})
 	defer run_free(&run)
@@ -88,7 +88,7 @@ nodes_run_in_the_order_of_their_links :: proc(t: ^testing.T) {
 @(test)
 fan_out_gives_each_branch_the_same_picture :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Copy_Image, .Save_File, .Blur}, {{0, 1}, {0, 2}, {0, 3}})
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	run: Run
 	run_start(&run, g, picture(3, 3), {id = 1})
 	defer run_free(&run)
@@ -106,7 +106,7 @@ fan_out_gives_each_branch_the_same_picture :: proc(t: ^testing.T) {
 @(test)
 a_condition_sends_the_picture_one_way :: proc(t: ^testing.T) {
 	g: flowgraph.Graph
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	capture := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Capture), {})
 	condition := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Condition), {})
 	yes := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Copy_Image), {})
@@ -152,7 +152,7 @@ a_condition_sends_the_picture_one_way :: proc(t: ^testing.T) {
 @(test)
 a_failure_skips_what_follows_it :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Resize, .Save_File, .Show_In_Folder, .Copy_Image}, {{0, 1}, {1, 2}, {2, 3}, {0, 4}})
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	run: Run
 	run_start(&run, g, picture(4, 4), {id = 1})
 	defer run_free(&run)
@@ -178,7 +178,7 @@ a_failure_skips_what_follows_it :: proc(t: ^testing.T) {
 @(test)
 annotate_waits_for_the_editor :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Annotate, .Save_File}, {{0, 1}, {1, 2}})
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	{
 		run: Run
 		run_start(&run, g, picture(4, 4), {id = 1})
@@ -228,7 +228,7 @@ annotate_waits_for_the_editor :: proc(t: ^testing.T) {
 @(test)
 the_editor_s_actions_decide_what_runs :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Annotate, .Save_File, .Notify}, {{0, 1}, {0, 2}, {0, 3}})
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	when_port := u32(1)   // (the effects' action input, after their value input)
 	DONE, CANCELLED :: u32(1), u32(2)   // (Annotate's action outputs, after its picture)
 	_, linked := flowgraph.link(&g, &CATALOG, {2, DONE, 3, when_port})
@@ -260,7 +260,7 @@ the_editor_s_actions_decide_what_runs :: proc(t: ^testing.T) {
 @(test)
 two_runs_go_on_side_by_side :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Annotate, .Copy_Image}, {{0, 1}, {1, 2}})
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	a, b: Run
 	run_start(&a, g, picture(4, 4), {id = 1})
 	run_start(&b, g, picture(6, 6), {id = 2})
@@ -282,7 +282,7 @@ two_runs_go_on_side_by_side :: proc(t: ^testing.T) {
 @(test)
 a_run_copies_its_workflow :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Copy_Image}, {{0, 1}})
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	run: Run
 	run_start(&run, g, picture(2, 2), {id = 1})
 	defer run_free(&run)
@@ -310,7 +310,7 @@ a_node_moves_only_as_its_table_says :: proc(t: ^testing.T) {
 @(test)
 the_summary_says_what_the_run_did :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Read_Qr, .Copy_Text, .Notify}, {{0, 1}, {1, 2}, {2, 3}})
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	run: Run
 	run_start(&run, g, picture(2, 2), {id = 1})
 	defer run_free(&run)

@@ -58,6 +58,9 @@ History_View_Mode :: enum u8 { Grid, List }
 HISTORY_VIEW_NAMES := [History_View_Mode]string{.Grid = "grid", .List = "list"}
 HISTORY_THUMBNAIL_NAMES := [3]string{"small", "medium", "large"}
 
+// The history's context menu (history_menu).
+HISTORY_MENU_ID :: "history_menu"
+
 // The list's columns, in the order of History_Column.
 HISTORY_COLUMNS := [History_Column]ui.Table_Column{
 	.Name = {title = i18n.later("Name"), width = 0},
@@ -90,7 +93,7 @@ History_Window :: struct {
 	loaded:      bool,            // the file was read
 	offset_minutes: int,          // the local time's, read by the worker
 
-	search:      ui.Text_Field,
+	search:      ui.Line_Edit,
 	search_key:  ui.Key,
 	search_focused: bool,
 	query:       string,          // the search the entries shown were made with (owned)
@@ -131,7 +134,6 @@ History_Window :: struct {
 	enabled_stamp: [3]u64,
 	enabled_made: bool,
 
-	menu_key:    ui.Key,
 	settings_mode: Settings_Mode,   // settings_view.odin
 	workflow_mode: Workflow_Mode,   // workflow_view.odin
 	confirm_open: bool,
@@ -247,7 +249,7 @@ history_window_show :: proc(app: ^App, select: u64 = 0) {
 		host.host_show(&hw.host)
 		hw.visible = true
 		hw.shown_due = true
-		ui.field_select_all(&hw.search)
+		ui.line_edit_select_all(&hw.search)
 		// (a file deleted elsewhere since: its entry shows as missing)
 		worker_send(&app.worker, Job_History(History_Check{}))
 	}
@@ -275,7 +277,6 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw.host.after_input = 3
 	hw.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	hw.host.state.icon_font = hw.icons
-	hw.menu_key = ui.key_from_string(0, "history_menu")
 	hw.sort, hw.descending = .Date, true
 	ui.table_init(&hw.table, slice.enumerated_array(&HISTORY_COLUMNS), int(History_Column.Date), descending = true)
 	hw.table.vl.multi = true
@@ -370,7 +371,7 @@ history_after_frame :: proc(app: ^App) {
 	hw.confirm_open = false
 	hw.workflow_mode.add.open = false
 	hw.workflow_mode.confirm_open = false
-	ui.ctx_menu_close()
+	ui.menu_close()
 	host.host_hide(&hw.host)
 	hw.visible = false
 	history_textures_drop(app)
@@ -387,7 +388,7 @@ history_window_free :: proc(app: ^App) {
 	ui.palette_destroy(&hw.palette)
 	settings_mode_free(app)
 	workflow_mode_free(app)
-	ui.field_destroy(&hw.search)
+	ui.line_edit_destroy(&hw.search)
 	ui.table_destroy(&hw.table)
 	ui.table_data_destroy(&hw.table_data)
 	ui.vlist_destroy(&hw.grid)
@@ -436,7 +437,7 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	}
 
 	workflows := hw.workflow_mode.open
-	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.ctx_menu_any_open() || hw.workflow_mode.add.open || hw.workflow_mode.confirm_open
+	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.menu_any_open() || hw.workflow_mode.add.open || hw.workflow_mode.confirm_open
 	settings := hw.settings_mode.open
 	if !dialog && workflows {
 		workflow_keys(app)
@@ -448,7 +449,7 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 		if !prefs_page.editing(&hw.settings_mode.page) { history_keys(app) }
 	} else if !dialog {
 		if ui.key_press(.Escape) {
-			if hw.search_focused && len(hw.search.buf) > 0 { ui.field_set(&hw.search, ""); hw.shown_due = true } else { hw.hide_due = true }
+			if hw.search_focused && len(hw.search.buf) > 0 { ui.line_edit_set(&hw.search, ""); hw.shown_due = true } else { hw.hide_due = true }
 		}
 		history_keys(app)
 		ui.type_to_field(hw.search_key)
@@ -485,7 +486,8 @@ history_page :: proc(app: ^App, em: f32) {
 			split := ui.splitter("###preview_split", .X, &w, HISTORY_PREVIEW_MIN_EM, HISTORY_PREVIEW_MAX_EM,
 				{after = true, unit = em, flush = true, line_at = .Start, default_size = HISTORY_PREVIEW_EM})
 			if split.changed { app.settings.history_preview_em = w }
-			if split.finished { history_pref(app, "history.preview_width", fmt.tprintf("%.1f", w)) }
+			// (a tenth of an em: the file keeps a short number)
+			if split.finished && config.set_float(&app.prefs, "history.preview_width", f64(math.round(w * 10) / 10)) == .None { app_prefs_changed(app) }
 			history_preview_pane(app, em)
 		}
 	}
@@ -496,7 +498,7 @@ history_page :: proc(app: ^App, em: f32) {
 @(private = "file")
 history_refresh :: proc(app: ^App) {
 	hw := &app.history_window
-	query := strings.trim_space(ui.field_string(&hw.search))
+	query := strings.trim_space(ui.line_edit_string(&hw.search))
 	if query != hw.query { hw.shown_due = true }
 	if !hw.shown_due && hw.shown_version == hw.history.version { return }
 	delete(hw.query)
@@ -519,7 +521,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 	if ui.row(id = "###toolbar") {
 		ui.spacer(ui.px(em * 0.6))
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9))})
-		r := ui.line_edit("###search", &hw.search, i18n.tr("Search names, texts, URLs"), clearable = true)
+		r := ui.line_edit("###search", &hw.search, {placeholder = i18n.tr("Search names, texts, URLs"), clearable = true})
 		if r.box != nil { hw.search_key = r.box.key }
 		hw.search_focused = r.focused
 		if r.changed { hw.shown_due = true }
@@ -527,7 +529,9 @@ history_toolbar :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.8))
 		chosen := int(hw.filter)
 		ui.next({width = ui.px(math.round(em * 31)), height = ui.px(math.round(em * 1.9))})
-		if ui.segmented("filter", slice.enumerated_array(&HISTORY_FILTER_TEXT), &chosen) {
+		filters: [History_Filter]string
+		for text, f in HISTORY_FILTER_TEXT { filters[f] = i18n.tr(text) }
+		if ui.segmented("filter", slice.enumerated_array(&filters), &chosen) {
 			hw.filter = History_Filter(chosen)
 			hw.shown_due = true
 		}
@@ -559,7 +563,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 @(private = "file")
 history_icon_button :: proc(id, glyph, tip: string, em: f32) -> bool {
 	ui.next({width = ui.px(math.round(em * 2.1)), height = ui.px(math.round(em * 2.1)), font_size = em * 1.15})
-	return ui.icon_button(id, glyph, tip = tip).clicked
+	return ui.button(id, icon = glyph, o = {tip = tip}).clicked
 }
 
 // The grid, the list, or what stands for them with nothing to show.
@@ -577,7 +581,7 @@ history_main :: proc(app: ^App, em: f32) {
 	}
 	if len(hw.shown_ids) == 0 {
 		if ui.empty_state("nothing", {icon = lucide.SEARCH, title = i18n.tr("Nothing matches"), note = i18n.tr("No capture has these words, or is of this kind."), actions = {{text = i18n.tr("Clear the search"), icon = lucide.X}}}) == 0 {
-			ui.field_set(&hw.search, "")
+			ui.line_edit_set(&hw.search, "")
 			hw.filter = .All
 			hw.shown_due = true
 		}
@@ -694,7 +698,7 @@ history_cell :: proc(app: ^App, i: int, cell, em: f32) {
 	if sig.double_clicked { history_action(app, .Open) }
 	if sig.right_clicked {
 		if e.id not_in hw.selection.marked { history_select_one(&hw.selection, e.id); hw.table_give = true }
-		ui.ctx_menu_open(hw.menu_key, ui.mouse_pos())
+		ui.menu_open(HISTORY_MENU_ID, ui.mouse_pos())
 	}
 }
 
@@ -788,7 +792,7 @@ history_list :: proc(app: ^App, em: f32) {
 			name := history_name(e)
 			ui.table_data_row(&hw.table_data, e.id, name, e.missing ? .Dim : .Normal)
 			ui.table_data_cell(&hw.table_data, e.missing ? fmt.tprintf(i18n.tr("%s (missing)"), name) : name)
-			ui.table_data_cell(&hw.table_data, HISTORY_KIND_TEXT[e.kind])
+			ui.table_data_cell(&hw.table_data, history_kind_text(e.kind))
 			ui.table_data_cell(&hw.table_data, history_size_text(e), f64(e.bytes) + f64(e.size.x * e.size.y) * 1e-9)
 			ui.table_data_cell(&hw.table_data, history_time_text(hw, e.time_ms), f64(e.time_ms))
 			ui.table_data_cell(&hw.table_data, e.url)
@@ -803,7 +807,7 @@ history_list :: proc(app: ^App, em: f32) {
 		if len(hw.selection.marked) > 1 { for id in hw.selection.marked { t.vl.marks[id] = true } }
 		if hw.selection.focus != 0 { ui.table_select_id(t, hw.selection.focus) }
 	}
-	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.ctx_menu_any_open()
+	dialog := hw.palette.open || hw.sheet_open || hw.confirm_open || ui.menu_any_open()
 	keys: ui.Table_Events
 	if !dialog { keys = ui.table_keys(t) }
 	ui.next({width = ui.fill(), height = ui.fill()})
@@ -820,7 +824,7 @@ history_list :: proc(app: ^App, em: f32) {
 	if ev.activated || keys.activated { history_action(app, .Open) }
 	if ev.menu || keys.menu {
 		at := ev.menu ? ev.menu_at : keys.menu_at
-		ui.ctx_menu_open(hw.menu_key, at, from_keyboard = ev.keyboard || keys.keyboard)
+		ui.menu_open(HISTORY_MENU_ID, at, from_keyboard = ev.keyboard || keys.keyboard)
 	}
 }
 
@@ -919,7 +923,7 @@ history_details :: proc(hw: ^History_Window, e: History_Entry, em: f32) {
 	ui.hline(ui.fill())
 	lines := make([dynamic]string, context.temp_allocator)
 	append(&lines, history_name(e))
-	append(&lines, fmt.tprintf("%s, %s", HISTORY_KIND_TEXT[e.kind], history_time_text(hw, e.time_ms)))
+	append(&lines, fmt.tprintf("%s, %s", history_kind_text(e.kind), history_time_text(hw, e.time_ms)))
 	if s := history_size_text(e); s != "" { append(&lines, s) }
 	if e.path != "" { append(&lines, e.missing ? fmt.tprintf(i18n.tr("%s (missing)"), e.path) : e.path) }
 	if e.url != "" { append(&lines, e.url) }
@@ -955,7 +959,7 @@ history_keys :: proc(app: ^App) {
 	enabled := history_enabled(app)
 	for a in History_Action {
 		if hw.search_focused && a in HISTORY_FIELD_KEYS { continue }
-		if ui.command_pressed(HISTORY_ACTIONS[a], a in enabled) { history_action(app, a); return }
+		if ui.command_pressed(HISTORY_ACTIONS[a], a not_in enabled) { history_action(app, a); return }
 	}
 	if hw.settings_mode.open || app.settings.history_view != .Grid || len(hw.shown_ids) == 0 { return }
 	// the grid's moves: a line is `grid_columns` cells; Shift extends the selection (the move clamps to the ends)
@@ -996,12 +1000,12 @@ history_keys :: proc(app: ^App) {
 @(private = "file")
 history_menu :: proc(app: ^App, em: f32) {
 	hw := &app.history_window
-	if ui.ctx_menu(hw.menu_key, em * 17) {
+	if ui.menu(HISTORY_MENU_ID, em * 17) {
 		enabled := history_enabled(app)
 		for a in HISTORY_MENU {
 			if a in HISTORY_MENU_BREAKS { ui.menu_separator() }
 			c := HISTORY_ACTIONS[a]
-			if ui.menu_item(c.label, ui.chord_text(c.keys[0]), false, c.icon, a in enabled, icon_font = hw.icons).clicked { history_action(app, a) }
+			if ui.menu_item(i18n.tr(c.label), ui.chord_text(c.keys[0]), false, c.icon, a not_in enabled, icon_font = hw.icons).clicked { history_action(app, a) }
 		}
 	}
 }
@@ -1016,15 +1020,14 @@ history_dialogs :: proc(app: ^App) {
 	if hw.palette.open {
 		set := history_enabled(app)
 		mine := make([]bool, len(History_Action), context.temp_allocator)
-		for a in History_Action { mine[int(a)] = a in set }
-		theirs, theirs_enabled, names := settings_palette(app)
+		for a in History_Action { mine[int(a)] = a not_in set }
+		theirs, theirs_disabled, names := settings_palette(app)
 		// (the Workflows mode's own commands, last, while it is shown)
 		flows := hw.workflow_mode.open ? slice.enumerated_array(&WORKFLOW_ACTIONS) : nil
-		flows_enabled := make([]bool, len(flows), context.temp_allocator)
-		for &e in flows_enabled { e = true }
+		flows_disabled := make([]bool, len(flows), context.temp_allocator)
 		commands := slice.concatenate([][]ui.Command{history_commands, theirs, flows}, context.temp_allocator)
-		enabled := slice.concatenate([][]bool{mine, theirs_enabled, flows_enabled}, context.temp_allocator)
-		if i, _ := ui.palette(&hw.palette, commands, enabled); i >= 0 {
+		disabled := slice.concatenate([][]bool{mine, theirs_disabled, flows_disabled}, context.temp_allocator)
+		if i, _ := ui.palette(&hw.palette, commands, disabled); i >= 0 {
 			switch {
 			case i < len(History_Action):               history_action(app, History_Action(i))
 			case i < len(History_Action) + len(theirs): settings_palette_chosen(app, i - len(History_Action), names)

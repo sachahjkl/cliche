@@ -58,12 +58,11 @@ Workflow_Mode :: struct {
 
 	add:        ui.Command_Palette,   // the node kinds, searched
 	add_at:     [2]f32,               // where the node added goes (graph units)
-	add_from:   Maybe(ui.Graph_Port_Ref),   // the port a link was dropped from: the node added is linked to it
-	node_menu:  ui.Key,
+	add_from:   Maybe(flowgraph.Port_Ref),   // the port a link was dropped from: the node added is linked to it
 	menu_node:  u64,
 
 	renaming:   u64,                  // the workflow whose name is being typed (0: none)
-	rename:     ui.Text_Field,
+	rename:     ui.Line_Edit,
 	rename_focus: bool,               // its field takes the keyboard at its next build
 	confirm_open: bool,
 	delete_id:  u64,
@@ -145,7 +144,7 @@ workflow_show :: proc(app: ^App, id: u64) {
 	if m.shown == id { return }
 	m.shown = id
 	clear(&m.selection)
-	undo.reset(&m.history, flowgraph.graph_free)
+	undo.reset(&m.history, flowgraph.graph_destroy)
 	workflow_last_clear(app)
 	m.last_of = id
 	m.fit_due = true
@@ -164,11 +163,11 @@ workflow_mode_free :: proc(app: ^App) {
 	m := &app.history_window.workflow_mode
 	workflow_last_clear(app)
 	delete(m.last)
-	undo.destroy(&m.history, flowgraph.graph_free)
+	undo.destroy(&m.history, flowgraph.graph_destroy)
 	delete(m.selection)
 	ui.flow_nodes_destroy(&m.flow)
 	ui.palette_destroy(&m.add)
-	ui.field_destroy(&m.rename)
+	ui.line_edit_destroy(&m.rename)
 	ui.node_inspector_destroy(&m.inspector)
 	delete(m.status)
 	m^ = {}
@@ -332,7 +331,7 @@ workflow_bar :: proc(app: ^App, em: f32) {
 		if workflow_icon_button("fit", lucide.ZOOM_OUT, i18n.tr("Show the whole workflow (F)"), em) { workflow_action(app, .Fit) }
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({height = ui.px(math.round(em * 2))})
-		if ui.button_icon("###preview", lucide.PLAY, i18n.tr("Run on the last capture"), disabled = m.shown == 0).clicked { workflow_action(app, .Preview) }
+		if ui.button("preview", i18n.tr("Run on the last capture"), lucide.PLAY, {disabled = m.shown == 0}).clicked { workflow_action(app, .Preview) }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -404,7 +403,7 @@ workflow_graph_make :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) {
 	stamp := [3]u64{app.workflows.version, m.shown, m.last_version}
 	if stamp == m.made && len(m.flow.nodes) == len(wf.graph.nodes) { return }
 	m.made = stamp
-	ui.flow_nodes_make(&m.flow, &wf.graph, &app.catalog_shown, {user = app, look = workflow_node_look})
+	ui.flow_nodes_make(&m.flow, &wf.graph, &CATALOG, {user = app, look = workflow_node_look})
 }
 
 // What a node shows beyond its kind: what it does with its parameters (a Capture: the captures that run its workflow),
@@ -419,7 +418,7 @@ workflow_node_look :: proc(user: rawptr, n: ^flowgraph.Node, def: ^flowgraph.Nod
 	} else {
 		subtitle = node_summary(n)
 	}
-	c := group_color(CATALOG.nodes[n.kind].group)   // (the English group: `def` is the catalogue shown, in the language in use)
+	c := group_color(def.group)
 	l := m.last[n.id]
 	return {
 		subtitle = subtitle, color = draw.srgb(c.x, c.y, c.z), state = ui.flow_state(l.state), message = l.message,
@@ -485,8 +484,7 @@ workflow_graph_event :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, e: ui.Graph_
 			workflow_add_open(app, v.at, nil)
 		} else {
 			m.menu_node = v.node
-			if m.node_menu == 0 { m.node_menu = ui.key_from_string(0, "workflow_node_menu") }
-			ui.ctx_menu_open(m.node_menu, ui.mouse_pos(), search = false)
+			ui.menu_open(WORKFLOW_NODE_MENU_ID, ui.mouse_pos(), search = false)
 		}
 	case ui.Graph_Opened:
 		clear(&m.selection)
@@ -495,6 +493,9 @@ workflow_graph_event :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, e: ui.Graph_
 		workflow_add_open(app, v.at, v.from)
 	}
 }
+
+// The context menu of a node (its right click on the graph).
+WORKFLOW_NODE_MENU_ID :: "workflow_node_menu"
 
 // The centre of the graph's area, in graph units (where Shift+A adds).
 @(private = "file")
@@ -508,7 +509,7 @@ workflow_view_center :: proc(m: ^Workflow_Mode) -> [2]f32 {
 
 // The searchable list of node kinds, for a node at `at`, linked to `from` when a link was dropped there.
 @(private = "file")
-workflow_add_open :: proc(app: ^App, at: [2]f32, from: Maybe(ui.Graph_Port_Ref)) {
+workflow_add_open :: proc(app: ^App, at: [2]f32, from: Maybe(flowgraph.Port_Ref)) {
 	m := &app.history_window.workflow_mode
 	if workflows_find(&app.workflows, m.shown) == nil { return }
 	m.add_at, m.add_from = at, from
@@ -527,12 +528,12 @@ workflow_add_chosen :: proc(app: ^App, kind: int) {
 	id: u64
 	if from, has := m.add_from.?; has {
 		if from.side == .In { at.x -= 220 }   // (a node that feeds a port goes before it)
-		id = flowgraph.node_add_linked(&wf.graph, &CATALOG, kind, at, from.node, from.port, from.side == .Out)
+		id = flowgraph.node_add_linked(&wf.graph, &CATALOG, kind, at, from)
 	} else {
 		id = flowgraph.node_add(&wf.graph, &CATALOG, kind, at)
 	}
 	if id == 0 {
-		undo.drop_last(&m.history, flowgraph.graph_free)
+		undo.drop_last(&m.history, flowgraph.graph_destroy)
 		return
 	}
 	clear(&m.selection)
@@ -546,7 +547,7 @@ workflow_add_chosen :: proc(app: ^App, kind: int) {
 // The graph shown as it is, kept before a change.
 workflow_undo_push :: proc(app: ^App, wf: ^flowgraph.Graph_Entry) {
 	m := &app.history_window.workflow_mode
-	undo.push(&m.history, flowgraph.graph_clone(wf.graph), WORKFLOW_UNDO_MAX, flowgraph.graph_free)
+	undo.push(&m.history, flowgraph.graph_clone(wf.graph), WORKFLOW_UNDO_MAX, flowgraph.graph_destroy)
 }
 
 // The graph shown back as it was before the last change (`back`), or again as the last undo found it. Its name and its
@@ -574,13 +575,13 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
 	if m.add.open {
 		if wf := workflows_find(&app.workflows, m.shown); wf != nil {
-			commands, enabled := ui.flow_palette(&wf.graph, &app.catalog_shown, m.add_from)
-			if i, _ := ui.palette(&m.add, commands, enabled); i >= 0 { workflow_add_chosen(app, i) }
+			commands, disabled := ui.flow_palette(&wf.graph, &CATALOG, m.add_from)
+			if i, _ := ui.palette(&m.add, commands, disabled); i >= 0 { workflow_add_chosen(app, i) }
 		} else {
 			m.add.open = false
 		}
 	}
-	if m.node_menu != 0 { if ui.ctx_menu(m.node_menu) {
+	if ui.menu(WORKFLOW_NODE_MENU_ID) {
 		wf := workflows_find(&app.workflows, m.shown)
 		n := wf != nil ? flowgraph.graph_node(&wf.graph, m.menu_node) : nil
 		if n != nil {
@@ -589,24 +590,24 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 			id, kind := n.id, n.kind
 			def := &CATALOG.nodes[kind]
 			can_delete := flowgraph.graph_count(g, kind) > def.min_count
-			if ui.menu_item(i18n.tr("Duplicate"), icon = lucide.COPY, icon_font = app.history_window.icons, enabled = flowgraph.can_add(g, &CATALOG, kind)).clicked {
+			if ui.menu_item(i18n.tr("Duplicate"), icon = lucide.COPY, icon_font = app.history_window.icons, disabled = !flowgraph.can_add(g, &CATALOG, kind)).clicked {
 				workflow_undo_push(app, wf)
 				if copied := flowgraph.node_copy(g, &CATALOG, id, {30, 30}); copied != 0 {
 					clear(&m.selection)
 					append(&m.selection, copied)
 					workflows_changed(app, now = true)
 				} else {
-					undo.drop_last(&m.history, flowgraph.graph_free)
+					undo.drop_last(&m.history, flowgraph.graph_destroy)
 				}
 			}
-			if ui.menu_item(i18n.tr("Reset its settings"), icon = lucide.REFRESH_CW, icon_font = app.history_window.icons, enabled = len(def.params) > 0).clicked {
+			if ui.menu_item(i18n.tr("Reset its settings"), icon = lucide.REFRESH_CW, icon_font = app.history_window.icons, disabled = len(def.params) == 0).clicked {
 				workflow_undo_push(app, wf)
 				if reset := flowgraph.graph_node(g, id); reset != nil { flowgraph.node_params_default(&CATALOG, reset) }
 				m.inspector.node = 0
 				workflows_changed(app, now = true)
 			}
 			ui.menu_separator()
-			if ui.menu_item(i18n.tr("Delete"), "Delete", icon = lucide.TRASH_2, icon_font = app.history_window.icons, enabled = can_delete).clicked {
+			if ui.menu_item(i18n.tr("Delete"), "Delete", icon = lucide.TRASH_2, icon_font = app.history_window.icons, disabled = !can_delete).clicked {
 				workflow_undo_push(app, wf)
 				ids := [1]u64{id}
 				flowgraph.nodes_delete(g, &CATALOG, ids[:])
@@ -614,7 +615,7 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 				workflows_changed(app, now = true)
 			}
 		}
-	} }
+	}
 	if m.confirm_open {
 		wf := workflows_find(&app.workflows, m.delete_id)
 		title := wf != nil ? fmt.tprintf(i18n.tr("Delete the workflow %q?"), wf.name) : i18n.tr("Delete the workflow?")
@@ -659,12 +660,12 @@ workflow_rename_start :: proc(app: ^App, id: u64) {
 	wf := workflows_find(&app.workflows, id)
 	if wf == nil { return }
 	m.renaming, m.rename_focus = id, true
-	ui.field_set(&m.rename, wf.name)
-	ui.field_select_all(&m.rename)
+	ui.line_edit_set(&m.rename, wf.name)
+	ui.line_edit_select_all(&m.rename)
 }
 
 @(private = "file")
 workflow_icon_button :: proc(id, glyph, tip: string, em: f32, enabled := true) -> bool {
 	ui.next({width = ui.px(math.round(em * 2.1)), height = ui.px(math.round(em * 2.1)), font_size = em * 1.15})
-	return ui.icon_button(fmt.tprintf("wf_%s", id), glyph, tip = tip, disabled = !enabled).clicked && enabled
+	return ui.button(fmt.tprintf("wf_%s", id), icon = glyph, o = {tip = tip, disabled = !enabled}).clicked && enabled
 }

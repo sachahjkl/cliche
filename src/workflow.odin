@@ -41,7 +41,7 @@ Workflows :: struct {
 }
 
 workflows_free :: proc(ws: ^Workflows) {
-	flowgraph.set_free(&ws.set)
+	flowgraph.set_destroy(&ws.set)
 	ws^ = {}
 }
 

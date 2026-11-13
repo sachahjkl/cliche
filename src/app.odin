@@ -20,13 +20,11 @@ package cliche
 // Every other thread wakes it through app_wake: the waits end on a wake of any of the windows.
 
 import "core:log"
-import "core:slice"
 import "core:strings"
 import "core:sync"
 import capture "gt:capture"
 import config "gt:config"
 import crash "gt:crash"
-import flowgraph "gt:flowgraph"
 import "gt:host"
 import i18n "gt:i18n"
 import tk_log "gt:log"
@@ -75,7 +73,6 @@ App :: struct {
 	capture_record: bool,                                  // this capture is a recording's region (record_app.odin)
 	workflows:  Workflows,                                 // workflow.odin, workflow_store.odin
 	workflows_loaded: bool,
-	catalog_shown: flowgraph.Catalog,                      // CATALOG in the language in use, for the graph's widgets (catalog_shown_make)
 	workflows_problem: string,                             // why the file was not used (owned; "" none)
 	workflows_save_due: bool,                              // a change is not written yet
 	runs:       [dynamic]^Run,                             // the runs in flight (workflow_app.odin)
@@ -115,9 +112,6 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	// (here: the language is a setting, read above, and its unreadable lines go to the log, installed above; every text
 	// shown, the tray's menu and the default workflows' names included, is made below)
 	prefs_page.language_start(&app.prefs, PROGRAM_CATALOGUES)
-	prefs_translate(&app.prefs)
-	app.catalog_shown = catalog_shown_make()
-	tables_translate()
 	crash_settings_keep(&app.crash_settings, &app.prefs)
 	_ = crash.install({program = APP_NAME, version = APP_VERSION, log_tail = {tk_log.tail, logger.data}, settings = {crash_settings_text, &app.crash_settings}})
 	crash.begin_session()
@@ -144,7 +138,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	history_start(app)
 	workflows_start(app)
 	app.server = instance.serve_start(owner, app_message, app)
-	app.announcer = {mode = prefs_page.messages_mode(&app.prefs), window = app.anchor}
+	app.announcer = {mode = prefs_page.announce_mode(&app.prefs), window = app.anchor}
 	app_tray_open(app)
 	app_shortcuts_start(app)
 	app_integrate(app, force = true)
@@ -198,28 +192,8 @@ app_free :: proc(app: ^App) {
 	uploaders_result_free(&app.uploaders)
 	delete(app.default_folder)
 	settings_free(&app.settings)
-	catalog_shown_free(&app.catalog_shown)
 	config.prefs_destroy(&app.prefs)
 	delete(app.wakes)
-}
-
-// The tables of commands, pages, columns and kinds, in the language in use, once: the toolkit shows their words as they are, in many
-// places (the palettes, the sheets of keys, the tooltips, the settings' sidebar), and the language does not change while
-// cliche runs. The tests never come here: their tables stay English.
-@(private = "file")
-tables_translate :: proc() {
-	commands :: proc(list: []ui.Command) {
-		for &c in list { c.label, c.group = i18n.tr(c.label), i18n.tr(c.group) }
-	}
-	commands(slice.enumerated_array(&EDITOR_ACTIONS))
-	commands(slice.enumerated_array(&HISTORY_ACTIONS))
-	commands(slice.enumerated_array(&SETTINGS_ACTIONS))
-	commands(slice.enumerated_array(&WORKFLOW_ACTIONS))
-	for &p in SETTINGS_PAGES { p.title = i18n.tr(p.title) }
-	for &c in HISTORY_COLUMNS { c.title = i18n.tr(c.title) }
-	// (the history's search and its sort by kind read these words too: they find what the window shows)
-	for &k in HISTORY_KIND_TEXT { k = i18n.tr(k) }
-	for &f in HISTORY_FILTER_TEXT { f = i18n.tr(f) }
 }
 
 // An editor opened hidden before the first picture, when a screenshot's workflow opens one (Annotate): its window, its
@@ -753,7 +727,7 @@ app_prefs_changed :: proc(app: ^App) {
 	crash_settings_keep(&app.crash_settings, &app.prefs)
 	settings_free(&app.settings)
 	app.settings = prefs_read(&app.prefs)
-	app.announcer.mode = prefs_page.messages_mode(&app.prefs)
+	app.announcer.mode = prefs_page.announce_mode(&app.prefs)
 	app_shortcuts_follow_prefs(app)
 	app_integrate(app, force = false)
 	history_prefs_changed(app)

@@ -53,7 +53,7 @@ record_overlay_show :: proc(app: ^App, headless := false) -> bool {
 	if !ro.opened {
 		area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}
 		// (headless: offscreen, on the software renderer: clichetool shots)
-		o := host.Open{title = "cliche recording", size = {max(area[2], 1), max(area[3], 1)}, overlay = !headless, overlay_area = area, headless = headless}
+		o := host.Open_Options{title = "cliche recording", size = {max(area[2], 1), max(area[3], 1)}, overlay = !headless, overlay_area = area, headless = headless}
 		if !host.host_open(&ro.host, &app.shared, o, record_overlay_build, app) { return false }
 		ro.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).record_overlay.decision = .Cancel }
 		ro.opened = true
@@ -244,5 +244,5 @@ record_bar_running :: proc(app: ^App, em, side: f32) {
 @(private = "file")
 record_icon :: proc(id, glyph, tip: string, side: f32, enabled := true) -> bool {
 	ui.next({width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)})
-	return ui.icon_button(id, glyph, tip = tip, disabled = !enabled).clicked && enabled
+	return ui.button(id, icon = glyph, o = {tip = tip, disabled = !enabled}).clicked && enabled
 }

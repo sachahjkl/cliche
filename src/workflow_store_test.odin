@@ -142,7 +142,7 @@ the_defaults_bind_each_trigger_once :: proc(t: ^testing.T) {
 @(test)
 an_edit_keeps_the_graph_valid :: proc(t: ^testing.T) {
 	g: flowgraph.Graph
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	node :: proc(g: ^flowgraph.Graph, kind: Node_Kind) -> u64 { return flowgraph.node_add(g, &CATALOG, int(kind), {}) }
 	capture := node(&g, .Capture)
 	testing.expect_value(t, node(&g, .Capture), 0)   // (one Capture: its max_count)
@@ -183,7 +183,7 @@ the_catalog_follows_the_node_kinds :: proc(t: ^testing.T) {
 @(test)
 a_node_says_what_it_does :: proc(t: ^testing.T) {
 	g: flowgraph.Graph
-	defer flowgraph.graph_free(&g)
+	defer flowgraph.graph_destroy(&g)
 	check :: proc(t: ^testing.T, g: ^flowgraph.Graph, kind: Node_Kind, want: string, set: proc(n: ^flowgraph.Node) = nil, loc := #caller_location) {
 		n := add(g, kind)
 		if set != nil { set(n) }

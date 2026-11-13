@@ -279,7 +279,7 @@ result_free :: proc(r: ^Result) {
 }
 
 desktop_free :: proc(d: ^Result_Desktop) {
-	capture.frame_free(&d.frame)
+	capture.frame_destroy(&d.frame)
 	for o in d.outputs { delete(o.name) }
 	delete(d.outputs)
 	for wi in d.windows { delete(wi.title); delete(wi.app_id) }

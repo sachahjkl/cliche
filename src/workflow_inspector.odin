@@ -100,7 +100,7 @@ workflow_list_item_body :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) 
 		switch {
 		case r.committed || (!r.focused && !m.rename_focus && r.box != nil && ui.focus_key() != r.box.key):
 			// (Enter, or the keyboard gone elsewhere: the name typed is kept)
-			name := strings.trim_space(ui.field_string(&m.rename))
+			name := strings.trim_space(ui.line_edit_string(&m.rename))
 			if name != "" && name != wf.name {
 				delete(wf.name)
 				wf.name = strings.clone(name)
@@ -111,7 +111,7 @@ workflow_list_item_body :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) 
 			m.renaming = 0
 		}
 	} else {
-		sig := ui.nav_item("###wf_name", wf.name, "", 0, shown, em)
+		sig := ui.button("wf_name", wf.name, o = {face = shown ? .Toggled : .Ghost, width = ui.fill(), height = math.round(em * 2.1), left = true})
 		if sig.clicked { workflow_show(app, wf.id) }
 		if sig.double_clicked { workflow_rename_start(app, wf.id) }
 		if ui.hovered_for(sig) {
@@ -140,7 +140,7 @@ workflow_duplicate :: proc(app: ^App, id: u64) {
 @(private = "file")
 list_icon_button :: proc(id, glyph, tip: string, em: f32, enabled: bool) -> bool {
 	ui.next({width = ui.px(math.round(em * 1.9)), height = ui.px(math.round(em * 1.9)), font_size = em * 1.05})
-	return ui.icon_button(fmt.tprintf("wf_list_%s", id), glyph, tip = tip, disabled = !enabled).clicked && enabled
+	return ui.button(fmt.tprintf("wf_list_%s", id), icon = glyph, o = {tip = tip, disabled = !enabled}).clicked && enabled
 }
 
 ////////////////////////////////
@@ -166,14 +166,14 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 		workflow_triggers_edit(app, wf, em)
 		return
 	}
-	def := &app.catalog_shown.nodes[n.kind]
+	def := &CATALOG.nodes[n.kind]
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
 	if ui.row(id = "###wf_node_head") {
 		ui.spacer(ui.px(em * 0.8))
 		ui.icon(def.icon, em * 1.6)
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 1.1), text_pad = 0})
-		ui.label(fmt.tprintf("%s###wf_node_title", def.title))
+		ui.label(fmt.tprintf("%s###wf_node_title", i18n.tr(def.title)))
 	}
 	if ui.tags("weak") {
 		ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * 0.8})
@@ -196,7 +196,7 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 	if ui.row(id = "###wf_params_row") {
 		ui.spacer(ui.px(em * 0.8))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-		res = ui.node_inspector("###wf_params", &m.inspector, &app.catalog_shown, n, {
+		res = ui.node_inspector("###wf_params", &m.inspector, &CATALOG, n, {
 			user = app,
 			lists = proc(user: rawptr, n: ^flowgraph.Node, param: flowgraph.Param_Def) -> []string {
 				return (^App)(user).uploaders.names   // (the only List: the Upload node's host)
@@ -222,7 +222,7 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 	if ui.row(id = "###wf_reset_row") {
 		ui.spacer(ui.px(em * 0.8))
 		ui.next({height = ui.px(math.round(em * 1.9))})
-		if ui.button_icon("###wf_reset", lucide.REFRESH_CW, i18n.tr("Reset")).clicked {
+		if ui.button("wf_reset", i18n.tr("Reset"), lucide.REFRESH_CW).clicked {
 			workflow_undo_push(app, wf)
 			flowgraph.node_params_default(&CATALOG, n)
 			m.inspector.node = 0

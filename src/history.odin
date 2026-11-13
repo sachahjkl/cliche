@@ -40,11 +40,14 @@ HISTORY_KIND_NAMES := [History_Kind]string{
 	.Region = "region", .Screen = "screen", .Window = "window", .Video = "video", .Gif = "gif", .Qr = "qr", .Text = "text",
 }
 
-// The words the window shows for a kind (the Kind column, the search finds them too): in the language in use from the
-// start (tables_translate).
+// The words the window shows for a kind (the Kind column, the search finds them too), in English: history_kind_text
+// gives them in the language in use.
 HISTORY_KIND_TEXT := [History_Kind]string{
 	.Region = i18n.later("Region"), .Screen = i18n.later("Screen"), .Window = i18n.later("Window"), .Video = i18n.later("Video"), .Gif = "GIF", .Qr = i18n.later("QR code"), .Text = i18n.later("Text"),
 }
+
+// A kind's words in the language in use.
+history_kind_text :: proc(k: History_Kind) -> string { return i18n.tr(HISTORY_KIND_TEXT[k]) }
 
 // The window's filter by kind.
 History_Filter :: enum u8 { All, Screenshots, Recordings, Uploads, Text }
@@ -221,7 +224,7 @@ history_name :: proc(e: History_Entry) -> string {
 	if e.path != "" { return e.path[strings.last_index_any(e.path, "/\\") + 1:] }
 	if e.text != "" { return history_first_words(e.text, HISTORY_NAME_MAX) }
 	if e.url != "" { return e.url }
-	return HISTORY_KIND_TEXT[e.kind]
+	return history_kind_text(e.kind)
 }
 
 HISTORY_NAME_MAX :: 60
@@ -267,7 +270,7 @@ history_matches :: proc(e: History_Entry, query: string) -> bool {
 		if ascii.contains_fold(e.text, word) { continue }
 		if ascii.contains_fold(e.url, word) { continue }
 		if ascii.contains_fold(e.path, word) { continue }
-		if ascii.contains_fold(HISTORY_KIND_TEXT[e.kind], word) || ascii.contains_fold(HISTORY_KIND_NAMES[e.kind], word) { continue }
+		if ascii.contains_fold(history_kind_text(e.kind), word) || ascii.contains_fold(HISTORY_KIND_NAMES[e.kind], word) { continue }
 		return false
 	}
 	return true
@@ -299,7 +302,7 @@ history_shown :: proc(h: ^History, query: string, filter: History_Filter, column
 history_compare :: proc(x, y: History_Entry, column: History_Column) -> int {
 	switch column {
 	case .Name: return ascii.compare_fold(history_name(x), history_name(y))
-	case .Kind: return ascii.compare_fold(HISTORY_KIND_TEXT[x.kind], HISTORY_KIND_TEXT[y.kind])
+	case .Kind: return ascii.compare_fold(history_kind_text(x.kind), history_kind_text(y.kind))
 	case .Size:
 		if x.bytes != y.bytes { return x.bytes < y.bytes ? -1 : 1 }
 		ax, ay := x.size.x * x.size.y, y.size.x * y.size.y

@@ -108,14 +108,13 @@ settings_build :: proc(app: ^App, em: f32) {
 
 // The palette's part of the settings: cliche's actions the history lacks, then every preference (`names`: the
 // preferences' names, in their order after the actions).
-settings_palette :: proc(app: ^App) -> (commands: []ui.Command, enabled: []bool, names: []string) {
+settings_palette :: proc(app: ^App) -> (commands: []ui.Command, disabled: []bool, names: []string) {
 	actions := slice.enumerated_array(&SETTINGS_ACTIONS)
 	prefs, pref_names := prefs_page.palette_commands(&app.prefs, settings_options(app))
 	commands = slice.concatenate([][]ui.Command{actions, prefs}, context.temp_allocator)
-	enabled = make([]bool, len(commands), context.temp_allocator)
-	for a in Settings_Action { enabled[int(a)] = settings_action_enabled(app, a) }
-	for i in len(actions) ..< len(commands) { enabled[i] = true }
-	return commands, enabled, pref_names
+	disabled = make([]bool, len(commands), context.temp_allocator)
+	for a in Settings_Action { disabled[int(a)] = !settings_action_enabled(app, a) }
+	return commands, disabled, pref_names
 }
 
 // The palette's choice `i` in settings_palette's list: an action, or a preference shown alone on the settings.
@@ -228,9 +227,9 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 		ui.spacer(ui.px(em * 0.8))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###save_buttons") {
-			if foot_button(fmt.tprintf("%s###choose", i18n.tr("Choose a folder…")), em) { settings_action(app, .Choose_Folder) }
+			if foot_button("choose", i18n.tr("Choose a folder…"), em) { settings_action(app, .Choose_Folder) }
 			ui.spacer(ui.px(em * 0.5))
-			if foot_button(fmt.tprintf("%s###open", i18n.tr("Open the folder")), em) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
+			if foot_button("open", i18n.tr("Open the folder"), em) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
 		}
 	case "shortcut":
 		shortcuts_foot(app, em)
@@ -248,7 +247,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 		foot_text(i18n.tr("The desktop keeps cliche's shortcuts while cliche runs. It may ask you to confirm them, and you may change the keys in its own settings."), em)
 		if shortcuts.can_configure(app.shortcuts) {
 			ui.spacer(ui.px(em * 0.5))
-			if foot_button(fmt.tprintf("%s###system", i18n.tr("The system's shortcut settings…")), em) { settings_action(app, .System_Shortcuts) }
+			if foot_button("system", i18n.tr("The system's shortcut settings…"), em) { settings_action(app, .System_Shortcuts) }
 		}
 	case .Windows:
 		foot_text(i18n.tr("Windows gives these keys to cliche in every program. Keys that another program holds cannot be used."), em)
@@ -271,7 +270,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 			done := m.copied == SHORTCUT_COMMANDS[a]
 			// (one width for both words: the row does not move when it says Copied)
 			ui.next({font_size = math.round(em * 0.86)})
-			if ui.button_icon("###copy", done ? lucide.CHECK : lucide.COPY, done ? i18n.tr("Copied") : i18n.tr("Copy"), width = ui.px(em * 6.5)).clicked {
+			if ui.button("copy", done ? i18n.tr("Copied") : i18n.tr("Copy"), done ? lucide.CHECK : lucide.COPY, {width = ui.px(em * 6.5)}).clicked {
 				platform.clipboard_set(app.history_window.host.win, {text = SHORTCUT_COMMANDS[a]})
 				m.copied = SHORTCUT_COMMANDS[a]
 			}
@@ -298,9 +297,9 @@ upload_foot :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.5))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###upload_buttons") {
-		if foot_button(fmt.tprintf("%s###import", i18n.tr("Import a .sxcu file…")), em) { settings_action(app, .Import_Uploader) }
+		if foot_button("import", i18n.tr("Import a .sxcu file…"), em) { settings_action(app, .Import_Uploader) }
 		ui.spacer(ui.px(em * 0.5))
-		if foot_button(fmt.tprintf("%s###uploaders", i18n.tr("Open the uploaders' folder")), em) { settings_action(app, .Open_Uploaders) }
+		if foot_button("uploaders", i18n.tr("Open the uploaders' folder"), em) { settings_action(app, .Open_Uploaders) }
 	}
 }
 
@@ -324,7 +323,7 @@ labels_shown :: proc(out, english: []string) -> []string {
 
 // A button as wide as its words.
 @(private = "file")
-foot_button :: proc(label: string, em: f32) -> bool {
+foot_button :: proc(id, text: string, em: f32) -> bool {
 	ui.next({width = ui.text_size(em * 0.9), height = ui.px(math.round(em * 2)), radius = em * 0.4})
-	return ui.button(label).clicked
+	return ui.button(id, text).clicked
 }

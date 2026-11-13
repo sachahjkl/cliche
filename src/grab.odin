@@ -49,7 +49,7 @@ grab_window :: proc(s: ^capture.Session) -> Result_Shot {
 	if err != .Unsupported || !target.has_rect { return {error = flow_error_of(err)} }
 	d, derr := capture.desktop(s)
 	if derr != .None { return {error = flow_error_of(derr)} }
-	defer capture.frame_free(&d)
+	defer capture.frame_destroy(&d)
 	cut, ok := capture.crop(d, target.rect)
 	if !ok { return {error = .Empty} }
 	return {shot = shot_of_frame(&cut, .Window)}
@@ -64,7 +64,7 @@ shot_of_frame :: proc(f: ^capture.Frame, source: Source) -> Shot {
 		f.pixels = nil
 		return shot
 	}
-	defer capture.frame_free(f)
+	defer capture.frame_destroy(f)
 	rgba := make([]u8, w * h * 4)
 	for y in 0 ..< h {
 		copy(rgba[y * w * 4:][:w * 4], f.pixels[y * int(f.stride):][:w * 4])

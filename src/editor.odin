@@ -146,7 +146,7 @@ Editor :: struct {
 	load_work:   ^Editor_Load_Work,   // a file being read (editor_open_file)
 	load_problem: string,             // why the file could not be shown (static text; "" none)
 
-	field:        ui.Text_Field,   // the text being typed
+	field:        ui.Line_Edit,   // the text being typed
 	field_typing: u32,             // the model's Typing count the field was filled for
 	field_rect:   Edit_Box,        // where the field was last built, window pixels
 	field_shown:  bool,
@@ -418,7 +418,7 @@ editor_free :: proc(ed: ^Editor) {
 	editor_load_stop(ed)
 	editor_picture_drop(ed)
 	ui.palette_destroy(&ed.palette)
-	ui.field_destroy(&ed.field)
+	ui.line_edit_destroy(&ed.field)
 }
 
 // The window hidden, the picture and its shapes let go: editors_sweep frees it, or keeps it for the next picture.
@@ -536,7 +536,7 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 	if !ed.has_picture {
 		return events
 	}
-	blocked := ed.palette.open || ed.sheet_open || ed.asking || ed.exporting || ui.ctx_menu_any_open()
+	blocked := ed.palette.open || ed.sheet_open || ed.asking || ed.exporting || ui.menu_any_open()
 	_, typing := m.mode.(Edit_Typing)
 	for e in events {
 		#partial switch e.kind {
@@ -758,7 +758,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 		editor_nudge_keys(ed)
 		for a in Editor_Action {
 			if a == .Nudge { continue }
-			if ui.command_pressed(EDITOR_ACTIONS[a], editor_action_enabled(ed, a)) { editor_action(ed, a); break }
+			if ui.command_pressed(EDITOR_ACTIONS[a], !editor_action_enabled(ed, a)) { editor_action(ed, a); break }
 		}
 	}
 
@@ -822,22 +822,22 @@ editor_text_field :: proc(ed: ^Editor, em: f32) {
 	fresh := ed.field_typing != m.typing
 	if fresh {
 		ed.field_typing = m.typing
-		ui.field_set(&ed.field, sh.text)
-		ui.field_select_all(&ed.field)
+		ui.line_edit_set(&ed.field, sh.text)
+		ui.line_edit_select_all(&ed.field)
 	}
 	size := max(edit_text_px(&m.doc, sh) * m.view.zoom, em * 0.8)
 	at := edit_to_window(m.view, sh.a)
 	pad := math.round(em * 0.3)
-	text_w := font.text_width(&app.shared.fonts, app.shared.font, size, ui.field_string(&ed.field))
+	text_w := font.text_width(&app.shared.fonts, app.shared.font, size, ui.line_edit_string(&ed.field))
 	w := max(text_w + 2 * pad + size, em * 8)
 	hgt := math.round(font.metrics(&app.shared.fonts, app.shared.font, size).line_height + 2 * pad)
 	ed.field_rect = {at - pad, at - pad + {w, hgt}}
 	ui.next({fixed_x = at.x - pad, fixed_y = at.y - pad, width = ui.px(w), height = ui.px(hgt), font_size = size, text_pad = pad, fg = edit_color(sh.style.color)})
-	res := ui.line_edit("###edit_text", &ed.field, placeholder = i18n.tr("Text"), menu = false)
+	res := ui.line_edit("###edit_text", &ed.field, {placeholder = i18n.tr("Text"), own_menu = true})
 	if fresh || !ed.field_shown { ui.set_focus(res.box.key) }
 	ed.field_shown = true
 	// (what was typed in the frame of Enter is kept with it)
-	if res.changed { edit_step(m, Edit_Typed{text = ui.field_string(&ed.field)}) }
+	if res.changed { edit_step(m, Edit_Typed{text = ui.line_edit_string(&ed.field)}) }
 	if res.committed {
 		edit_step(m, Edit_Type_End{keep = true})
 	} else if res.cancelled {
@@ -866,10 +866,10 @@ editor_bar :: proc(ed: ^Editor, em: f32) {
 		ui.spacer(ui.px(em * 0.5))
 		// (Cancel ends the workflow's step as given up: what hangs on its "cancelled" runs, what needs its picture does not)
 		ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
-		if ui.button(fmt.tprintf("%s###cancel", i18n.tr("Cancel")), tip = ui.command_tip(EDITOR_ACTIONS[.Close])).clicked { editor_action(ed, .Close) }
+		if ui.button("cancel", i18n.tr("Cancel"), o = {tip = ui.command_tip(EDITOR_ACTIONS[.Close])}).clicked { editor_action(ed, .Close) }
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
-		if ui.button(fmt.tprintf("%s###done", i18n.tr("Done")), intent = .Primary, tip = ui.command_tip(EDITOR_ACTIONS[.Done])).clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
+		if ui.button("done", i18n.tr("Done"), o = {intent = .Primary, tip = ui.command_tip(EDITOR_ACTIONS[.Done])}).clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
 		ui.spacer(ui.px(em * 0.5))
 	}
 }
@@ -891,7 +891,7 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 	if .Width in props {
 		// (a slider for the feel, its field for the exact width)
 		ui.next({width = ui.px(math.round(em * 13)), height = ui.px(math.round(side * 0.85))})
-		ui.number("###width", &style.width, lo = f32(EDIT_WIDTH_MIN), hi = f32(EDIT_WIDTH_MAX), step = 1, unit = "px", track = true)
+		ui.number("###width", &style.width, lo = f32(EDIT_WIDTH_MIN), hi = f32(EDIT_WIDTH_MAX), step = 1, unit = "px", slider = true)
 		ui.spacer(ui.px(em * 0.5))
 	}
 	if .Text_Size in props {
@@ -909,7 +909,7 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 		ui.label(fmt.tprintf("%s###shadow_label", i18n.tr("Shadow")))
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.px(math.round(em * 12)), height = ui.px(math.round(side * 0.85))})
-		ui.number("###shadow", &style.shadow, lo = f32(0), hi = f32(EDIT_SHADOW_MAX), step = 1, unit = "px", track = true)
+		ui.number("###shadow", &style.shadow, lo = f32(0), hi = f32(EDIT_SHADOW_MAX), step = 1, unit = "px", slider = true)
 		ui.spacer(ui.px(em * 0.5))
 	}
 	if .Fill in props {
@@ -923,7 +923,7 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 @(private = "file")
 bar_icon :: proc(id: string, c: ui.Command, side: f32, active, enabled: bool) -> bool {
 	ui.next({width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)})
-	return ui.icon_button(id, c.icon, tip = ui.command_tip(c), face = active ? .Toggled : .Ghost, intent = active ? .Primary : .Neutral, disabled = !enabled).clicked && enabled
+	return ui.button(id, icon = c.icon, o = {tip = ui.command_tip(c), face = active ? .Toggled : .Ghost, intent = active ? .Primary : .Neutral, disabled = !enabled}).clicked && enabled
 }
 
 @(private = "file")
@@ -964,9 +964,9 @@ editor_dialogs :: proc(ed: ^Editor) {
 	all := slice.enumerated_array(&EDITOR_ACTIONS)
 	if ed.palette.open {
 		listed := all[:len(all) - 1]   // (Nudge: its keys are the arrows)
-		enabled := make([]bool, len(listed), context.temp_allocator)
-		for i in 0 ..< len(listed) { enabled[i] = editor_action_enabled(ed, Editor_Action(i)) }
-		if i, _ := ui.palette(&ed.palette, listed, enabled); i >= 0 { editor_action(ed, Editor_Action(i)) }
+		disabled := make([]bool, len(listed), context.temp_allocator)
+		for i in 0 ..< len(listed) { disabled[i] = !editor_action_enabled(ed, Editor_Action(i)) }
+		if i, _ := ui.palette(&ed.palette, listed, disabled); i >= 0 { editor_action(ed, Editor_Action(i)) }
 	}
 	ui.shortcuts_sheet("keys", all, &ed.sheet_open, i18n.tr("The editor's keys"))
 	switch ui.confirm("drop", &ed.asking, {title = i18n.tr("Close the editor and drop the changes?"), note = i18n.tr("The annotations on this picture are lost. Nothing is copied or saved."), act = i18n.tr("Drop the changes")}) {

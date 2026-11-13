@@ -29,7 +29,7 @@ Licence_View :: struct {
 	asked:   bool,             // the first read was asked
 	read:    bool,             // a status has come
 	busy:    bool,             // a task on the store is on its way
-	key:     ui.Text_Field,    // the key being pasted
+	key:     ui.Line_Edit,    // the key being pasted
 	problem: string,           // why the last install failed (owned; "": none)
 }
 
@@ -56,8 +56,8 @@ licence_destroy :: proc(app: ^App) {
 	l := &app.licence
 	licence.status_destroy(&l.status, runtime.heap_allocator())
 	licence.store_destroy(&l.store)
-	ui.field_wipe(&l.key)
-	ui.field_destroy(&l.key)
+	ui.line_edit_wipe(&l.key)
+	ui.line_edit_destroy(&l.key)
 	delete(l.problem)
 	l^ = {}
 }
@@ -93,7 +93,7 @@ licence_run :: proc(app: ^App, act: Licence_Do, text: string) {
 		} else {
 			#partial switch j.act {
 			case .Install, .Install_File:
-				ui.field_wipe(&l.key)
+				ui.line_edit_wipe(&l.key)
 				app_announce(app, .Good, i18n.tr("Licence registered: thank you"))
 			case .Remove:
 				app_announce(app, .Good, i18n.tr("Licence removed"))
@@ -148,7 +148,7 @@ licence_section :: proc(app: ^App, em: f32) {
 		ui.paragraph(fmt.tprintf("%s###licence_state", fmt.tprintf(i18n.tr("Registered to %s (%s). Thank you for supporting cliche."), lic.name, licence.edition_title(cliche_licence.PRODUCT, lic.edition))))
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.text_size(em * 0.6), height = ui.px(math.round(em * 1.9))})
-		if ui.button(fmt.tprintf("%s###licence_remove", i18n.tr("Remove the licence")), intent = .Danger, face = .Ghost, disabled = l.busy).clicked {
+		if ui.button("licence_remove", i18n.tr("Remove the licence"), o = {intent = .Danger, face = .Ghost, disabled = l.busy}).clicked {
 			licence_run(app, .Remove, "")
 		}
 	case:
@@ -162,21 +162,21 @@ licence_section :: proc(app: ^App, em: f32) {
 			}
 		}
 		ui.spacer(ui.px(em * 0.3))
-		if ui.hint_action("###licence_buy", i18n.tr("Support cliche: buy a licence"), intent = .Primary).clicked { ui.open(PRICING_URL, .Url) }
+		if ui.button("licence_buy", i18n.tr("Support cliche: buy a licence"), o = {face = .Link, intent = .Primary}).clicked { ui.open(PRICING_URL, .Url) }
 		ui.spacer(ui.px(em * 0.6))
 		h := ui.px(math.round(em * 1.9))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(id = "###licence_row") {
 			ui.next({width = ui.fill(), height = h})
-			res := ui.line_edit("###licence_key", &l.key, i18n.tr("Paste a licence key"))
-			key := strings.trim_space(ui.field_string(&l.key))
+			res := ui.line_edit("###licence_key", &l.key, {placeholder = i18n.tr("Paste a licence key")})
+			key := strings.trim_space(ui.line_edit_string(&l.key))
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.text_size(em * 0.6), height = h})
-			register := ui.button(fmt.tprintf("%s###licence_register", i18n.tr("Register")), intent = .Primary, disabled = l.busy || key == "")
+			register := ui.button("licence_register", i18n.tr("Register"), o = {intent = .Primary, disabled = l.busy || key == ""})
 			if (register.clicked || res.committed) && key != "" && !l.busy { licence_run(app, .Install, key) }
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.text_size(em * 0.6), height = h})
-			if ui.button(fmt.tprintf("%s###licence_file", i18n.tr("Choose a file…")), disabled = l.busy).clicked { licence_choose_file(app) }
+			if ui.button("licence_file", i18n.tr("Choose a file…"), o = {disabled = l.busy}).clicked { licence_choose_file(app) }
 		}
 	}
 	if l.problem != "" {

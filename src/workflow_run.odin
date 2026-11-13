@@ -71,12 +71,12 @@ Run_Start :: struct {
 // to run: every node is Skipped.
 run_start :: proc(run: ^Run, g: flowgraph.Graph, shot: Shot, start: Run_Start) {
 	run^ = {workflow = start.workflow, source = start.source, preview = start.preview, annotated = start.annotated}
-	flowgraph.run_start(&run.flow, g, &CATALOG, {id = start.id, dry = start.preview})
+	flowgraph.run_init(&run.flow, g, &CATALOG, {id = start.id, dry = start.preview})
 	run.picture = run_value(PORT_IMAGE, {shot = shot, origin = .Capture})
 }
 
 run_free :: proc(run: ^Run) {
-	flowgraph.run_free(&run.flow)
+	flowgraph.run_destroy(&run.flow)
 	flowgraph.value_release(&run.picture)
 	run^ = {}
 }

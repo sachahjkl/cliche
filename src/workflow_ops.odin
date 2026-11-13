@@ -56,7 +56,7 @@ thumbnail_work :: proc(j: ^Job_Thumbnail) -> (out: Result_Thumbnail) {
 }
 
 job_node_free :: proc(j: ^Job_Node) {
-	flowgraph.node_params_free(&j.n)
+	flowgraph.node_params_destroy(&j.n)
 	flowgraph.value_release(&j.input)
 	node_defaults_free(&j.defaults)
 }
