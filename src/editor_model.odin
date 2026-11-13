@@ -59,7 +59,7 @@ EDIT_PROPS := [Edit_Kind]Edit_Props{
 Edit_Style :: struct {
 	color:     u32,   // 0xRRGGBB, sRGB
 	width:     f32,
-	shadow:    bool,
+	shadow:    f32,   // the shadow's softness, logical pixels (its blur; it falls a little less far): 0 none
 	fill:      bool,
 	text_size: f32,
 }
@@ -69,8 +69,9 @@ EDIT_COLORS := [?]u32{0xE53935, 0xFB8C00, 0xFDD835, 0x43A047, 0x1E88E5, 0x8E24AA
 EDIT_WIDTH_MIN :: 1    // a stroke's width, logical pixels: the slider's ends
 EDIT_WIDTH_MAX :: 40
 EDIT_TEXT_SIZES := [?]f32{16, 24, 32, 48}
+EDIT_SHADOW_MAX :: 20   // the shadow's slider's end, logical pixels
 
-EDIT_STYLE_DEFAULT :: Edit_Style{color = 0xE53935, width = 4, shadow = true, fill = false, text_size = 24}
+EDIT_STYLE_DEFAULT :: Edit_Style{color = 0xE53935, width = 4, shadow = 3, fill = false, text_size = 24}
 EDIT_HIGHLIGHT_COLOR :: 0xFDD835   // (the yellow swatch)
 EDIT_HIGHLIGHT_ALPHA :: 0.4
 
@@ -177,7 +178,7 @@ edit_model_init :: proc(m: ^Edit_Model, size: [2]int, scale: f32, measure: Edit_
 	m.tool = .Arrow
 	for t in Edit_Tool { m.styles[t] = EDIT_STYLE_DEFAULT }
 	m.styles[.Highlighter] = {color = EDIT_HIGHLIGHT_COLOR, width = EDIT_STYLE_DEFAULT.width, text_size = EDIT_STYLE_DEFAULT.text_size}
-	m.styles[.Pixelate].shadow = false
+	m.styles[.Pixelate].shadow = 0
 }
 
 edit_model_destroy :: proc(m: ^Edit_Model) {

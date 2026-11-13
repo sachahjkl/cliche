@@ -19,8 +19,7 @@ import "gt:render"
 
 EDIT_TILE          :: 4096   // the side of an offscreen target of the export, at most
 EDIT_PIXELATE_CELL :: 12     // logical pixels
-EDIT_SHADOW_OFFSET :: 2      // logical pixels, down and right
-EDIT_SHADOW_SIGMA  :: 2.5    // logical pixels
+EDIT_SHADOW_FALL   :: 0.8    // how far the shadow falls down and right, per pixel of its softness (Edit_Style.shadow)
 EDIT_SHADOW_COLOR  :: draw.Color{0, 0, 0, 0.6}
 
 // The mean colour of each cell of the picture (sRGB, row by row; owned).
@@ -107,14 +106,15 @@ edit_paint :: proc(dc: ^draw.Context, p: ^Edit_Paint) {
 
 // A shape, with its shadow under it: the toolkit's drop shadow of a layer holding the shape alone.
 edit_paint_shape :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
-	if !s.style.shadow || .Shadow not_in EDIT_PROPS[s.kind] {
+	if s.style.shadow <= 0 || .Shadow not_in EDIT_PROPS[s.kind] {
 		paint_body(dc, p, s)
 		return
 	}
 	k := p.doc.scale * p.zoom
-	filters := [1]draw.Filter{draw.filter_drop_shadow(Edit_Vec{1, 1} * (EDIT_SHADOW_OFFSET * k), EDIT_SHADOW_SIGMA * k, EDIT_SHADOW_COLOR)}
-	// (as far as the stroke, an arrow's head or a text's descent can reach)
-	reach := edit_stroke_px(p.doc, s) * 4 + edit_text_px(p.doc, s) * 0.5
+	soft := s.style.shadow * k
+	filters := [1]draw.Filter{draw.filter_drop_shadow(Edit_Vec{1, 1} * (soft * EDIT_SHADOW_FALL), soft, EDIT_SHADOW_COLOR)}
+	// (as far as the stroke, an arrow's head, a text's descent or the shadow's blur can reach)
+	reach := edit_stroke_px(p.doc, s) * 4 + edit_text_px(p.doc, s) * 0.5 + s.style.shadow * p.doc.scale * 4
 	bounds := target_box(p, edit_box_pad(edit_shape_box(p.doc, s), reach))
 	if draw.push_effects(dc, bounds, {alpha = 1, filters = filters[:]}) { paint_body(dc, p, s) }
 	draw.pop_layer(dc)

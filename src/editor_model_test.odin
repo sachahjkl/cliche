@@ -285,7 +285,7 @@ the_choices_come_back :: proc(t: ^testing.T) {
 	edit_model_init(&a, {100, 100}, 1, measure_fixed, nil)
 	defer edit_model_destroy(&a)
 	a.tool = .Rectangle
-	a.styles[.Rectangle] = {color = 0x1E88E5, width = 7.5, shadow = false, fill = true, text_size = 24}
+	a.styles[.Rectangle] = {color = 0x1E88E5, width = 7.5, shadow = 6, fill = true, text_size = 24}
 	tool, styles := edit_choices_text(&a)
 	b: Edit_Model
 	edit_model_init(&b, {100, 100}, 1, measure_fixed, nil)

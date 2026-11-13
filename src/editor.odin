@@ -141,6 +141,7 @@ Editor :: struct {
 	palette:     ui.Command_Palette,
 	sheet_open:  bool,
 	width_field: ui.Slider_Field,   // the bar's width: its slider's field
+	shadow_field: ui.Slider_Field,  // the bar's shadow: its slider's field
 	asking:      bool,       // the question before the changes are dropped
 	close_due:   bool,       // closed in a frame: acted on after it (editor_after_frame)
 	done_due:    bool,       // Done with nothing changed, in a frame: acted on after it (what follows may open a window)
@@ -422,6 +423,7 @@ editor_free :: proc(ed: ^Editor) {
 	ui.palette_destroy(&ed.palette)
 	ui.field_destroy(&ed.field)
 	ui.slider_field_destroy(&ed.width_field)
+	ui.slider_field_destroy(&ed.shadow_field)
 }
 
 // The window hidden, the picture and its shapes let go: editors_sweep frees it, or keeps it for the next picture.
@@ -911,9 +913,13 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 		ui.spacer(ui.px(em * 0.5))
 	}
 	if .Shadow in props {
-		ui.next({height = ui.px(side)})
-		ui.toggle("###shadow", "Shadow", &style.shadow)
+		// (its softness: 0, none)
+		ui.next({height = ui.px(side), text_pad = 0})
+		ui.label("Shadow###shadow_label")
 		ui.spacer(ui.px(em * 0.4))
+		ui.next({width = ui.px(math.round(em * 12)), height = ui.px(math.round(side * 0.85))})
+		ui.slider_field("###shadow", &ed.shadow_field, &style.shadow, 0, EDIT_SHADOW_MAX, 1, unit = "px")
+		ui.spacer(ui.px(em * 0.5))
 	}
 	if .Fill in props {
 		ui.next({height = ui.px(side)})
@@ -1062,7 +1068,7 @@ editor_copied :: proc(app: ^App, r: Result_Copy_Encoded) {
 
 ////////////////////////////////
 // The last choices: the tool and each tool's style, kept in the preferences (editor.tool, editor.styles) when an editor's
-// picture goes, and given to the next editor. A style reads "<tool> <rrggbb> <width> <shadow> <fill> <text size>", one per
+// picture goes, and given to the next editor. A style reads "<tool> <rrggbb> <width> <shadow's softness> <fill> <text size>", one per
 // tool, separated by ";".
 
 // The model given the choices kept; what is not there, or not read, stays the default.
@@ -1086,7 +1092,7 @@ edit_choices_text :: proc(m: ^Edit_Model) -> (tool, styles: string) {
 	for t in Edit_Tool {
 		s := m.styles[t]
 		if t != .Select { strings.write_string(&b, ";") }
-		fmt.sbprintf(&b, "%v %06x %g %d %d %g", t, s.color, s.width, s.shadow ? 1 : 0, s.fill ? 1 : 0, s.text_size)
+		fmt.sbprintf(&b, "%v %06x %g %g %d %g", t, s.color, s.width, s.shadow, s.fill ? 1 : 0, s.text_size)
 	}
 	return fmt.tprintf("%v", m.tool), strings.to_string(b)
 }
@@ -1101,9 +1107,10 @@ edit_choices_read :: proc(m: ^Edit_Model, tool, styles: string) {
 		t, known := edit_tool_named(f[0])
 		color, c_ok := strconv.parse_u64_of_base(f[1], 16)
 		width, w_ok := strconv.parse_f32(f[2])
+		shadow, sh_ok := strconv.parse_f32(f[3])
 		size, s_ok := strconv.parse_f32(f[5])
-		if !known || !c_ok || !w_ok || !s_ok || color > 0xFFFFFF || size <= 0 { continue }
-		m.styles[t] = {color = u32(color), width = clamp(width, EDIT_WIDTH_MIN, EDIT_WIDTH_MAX), shadow = f[3] == "1", fill = f[4] == "1", text_size = size}
+		if !known || !c_ok || !w_ok || !sh_ok || !s_ok || color > 0xFFFFFF || size <= 0 { continue }
+		m.styles[t] = {color = u32(color), width = clamp(width, EDIT_WIDTH_MIN, EDIT_WIDTH_MAX), shadow = clamp(shadow, 0, EDIT_SHADOW_MAX), fill = f[4] == "1", text_size = size}
 	}
 }
 
