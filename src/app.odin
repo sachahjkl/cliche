@@ -450,7 +450,7 @@ app_region_confirmed :: proc(app: ^App, r: Rect) {
 	if !app_step(app, Flow_Confirmed{}) { return }
 	overlay_hide(app)
 	// (the desktop stays until the cut comes back: the worker reads it)
-	worker_send(&app.worker, Job_Crop{app.desktop.frame, r})
+	worker_send(&app.worker, Job_Crop{app.desktop.parts, r})
 }
 
 app_region_cancelled :: proc(app: ^App) {

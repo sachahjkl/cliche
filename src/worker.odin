@@ -16,7 +16,7 @@ import "gt:platform"
 
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
 Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
-Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
+Job_Crop      :: struct { parts: []capture.Frame, rect: Rect }   // `parts` stay the interface's: they are only read
 Job_Save      :: struct { editor: u64, shot: Shot, folder, pattern: string }   // an editor's Ctrl+S (Editor.id); owned by the job
 Job_Copy_Encode :: struct { editor: u64, shot: Shot }         // an editor's Ctrl+C (Editor.id): its PNG for the clipboard, made here (owned)
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences, the workflows); owned
@@ -34,10 +34,11 @@ Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Copy_Enc
 // The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
 
-// The desktop for a region: its picture (RGBA after the worker's swap), the outputs and the windows (owned).
+// The desktop for a region: each output's picture at its own scale (capture.desktop_parts; RGBA after the worker's
+// swap), the outputs and the windows (owned).
 Result_Desktop :: struct {
 	error:      capture.Error,
-	frame:      capture.Frame,
+	parts:      []capture.Frame,
 	outputs:    []capture.Output,
 	windows:    []capture.Window,
 	have_rects: bool,
@@ -179,7 +180,7 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		case .Window: worker_post(w, grab_window(w.session))
 		}
 	case Job_Crop:
-		out, ok := capture.crop(v.frame, v.rect)
+		out, ok := capture.crop_parts(v.parts, v.rect)   // (inside one output: at its own scale)
 		if !ok { worker_post(w, Result_Shot{error = .Empty}); return }
 		worker_post(w, Result_Shot{shot = shot_of_frame(&out, .Region)})
 	case Job_Save:
@@ -295,7 +296,7 @@ result_free :: proc(r: ^Result) {
 }
 
 desktop_free :: proc(d: ^Result_Desktop) {
-	capture.frame_free(&d.frame)
+	capture.frames_free(d.parts)
 	for o in d.outputs { delete(o.name) }
 	delete(d.outputs)
 	for wi in d.windows { delete(wi.title); delete(wi.app_id) }

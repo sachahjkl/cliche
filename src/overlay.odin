@@ -21,6 +21,7 @@ package cliche
 
 import "core:fmt"
 import "core:math"
+import capture "gt:capture"
 import "gt:draw"
 import "gt:font"
 import "gt:host"
@@ -40,8 +41,9 @@ Overlay :: struct {
 	host:     host.Host,
 	opened:   bool,
 	visible:  bool,
-	tex:      render.Texture,   // the frozen desktop (RGBA), uploaded at each show
+	tex:      render.Texture,   // the frozen picture of the output it covers (RGBA), uploaded at each show
 	tex_size: [2]int,
+	place:    Frame_Place,      // where the texture's picture is on the desktop
 	out:      Rect,             // the output the window covers, logical
 	sel:      Selection,
 	pointer:  Point,            // logical, on the desktop
@@ -81,22 +83,11 @@ overlay_show :: proc(app: ^App) -> bool {
 		o.host.after_input = 2
 		app_wake_add(app, o.host.win)
 	}
-	f := app.desktop.frame
-	r := &app.shared.r
-	if o.tex != 0 && o.tex_size != {int(f.width), int(f.height)} {
-		render.destroy_texture(r, o.tex)
-		o.tex = 0
-	}
-	if o.tex == 0 {
-		o.tex = render.create_texture_rgba(r, int(f.width), int(f.height), mips = false)
-		o.tex_size = {int(f.width), int(f.height)}
-	}
-	if o.tex == 0 { return false }
-	render.update_texture_rgba(r, o.tex, 0, 0, int(f.width), int(f.height), f.pixels, int(f.stride))
 	o.decision = .None
 	o.has_hover = false
 	o.has_pointer = false
 	if !o.layer { o.out = overlay_output(app) }
+	if !overlay_upload(app) { return false }
 	selection_reset(&o.sel, o.out)
 	token := app_take_token(app)
 	defer delete(token)
@@ -161,12 +152,49 @@ overlay_pointer_output :: proc(app: ^App) -> Rect {
 	return outs[0].rect
 }
 
+// The frozen picture of the output the window covers, as a texture: that output's own part (capture.desktop_parts), at its
+// own scale, so a screen at a lower scale than another is shown pixel for pixel, not enlarged by the composed desktop and
+// shrunk again. A part that does not hold the output (none says where it is): the parts composed.
+@(private = "file")
+overlay_upload :: proc(app: ^App) -> bool {
+	o := &app.overlay
+	parts := app.desktop.parts
+	if len(parts) == 0 { return false }
+	f: capture.Frame
+	composed := false
+	if i := capture.part_holding(parts, o.out); i >= 0 {
+		f = parts[i]
+	} else {
+		ok: bool
+		f, ok = capture.compose(parts)
+		if !ok { return false }
+		composed = true
+	}
+	defer if composed { capture.frame_free(&f) }
+	r := &app.shared.r
+	if o.tex != 0 && o.tex_size != {int(f.width), int(f.height)} {
+		render.destroy_texture(r, o.tex)
+		o.tex = 0
+	}
+	if o.tex == 0 {
+		o.tex = render.create_texture_rgba(r, int(f.width), int(f.height), mips = false)
+		o.tex_size = {int(f.width), int(f.height)}
+	}
+	if o.tex == 0 { return false }
+	render.update_texture_rgba(r, o.tex, 0, 0, int(f.width), int(f.height), f.pixels, int(f.stride))
+	o.place = {f.origin, f.scale}
+	return true
+}
+
 // The output the window covers: from its size (logical) and the pointer, as output_for_window decides.
 @(private = "file")
 overlay_output :: proc(app: ^App) -> Rect {
 	o := &app.overlay
 	outs := app.desktop.outputs
-	if len(outs) == 0 { return {app.desktop.frame.origin.x, app.desktop.frame.origin.y, 0, 0} }
+	if len(outs) == 0 {
+		parts := app.desktop.parts
+		return len(parts) > 0 ? {parts[0].origin.x, parts[0].origin.y, 0, 0} : {}
+	}
 	// (the compositor's word first: two monitors of the same size cannot be told apart by the window's)
 	if name := platform.window_output_name(o.host.win); name != "" {
 		for out in outs { if out.name == name { return out.rect } }
@@ -294,7 +322,7 @@ overlay_build :: proc(h: ^host.Host, size: ui.Vec2) {
 	app := (^App)(h.user)
 	o := &app.overlay
 	d := ui.frame_new(Overlay_Draw)
-	d^ = {tex = o.tex, frame = {app.desktop.frame.origin, app.desktop.frame.scale}, out = o.out, win_scale = overlay_scale(o), dim = app.settings.dim,
+	d^ = {tex = o.tex, frame = o.place, out = o.out, win_scale = overlay_scale(o), dim = app.settings.dim,
 		pointer = o.pointer, magnifier = app.settings.magnifier && o.has_pointer, font = app.shared.font, font_size = ui.font_size()}
 	switch {
 	case o.sel.has_rect:  d.lit, d.has_lit = o.sel.rect, true
