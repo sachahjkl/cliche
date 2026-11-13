@@ -38,8 +38,9 @@ shots_run :: proc(folder: string, which: string) -> int {
 	case "history":      return shots_history(app, folder)
 	case "workflows":    return shots_workflows(app, folder)
 	case "record":       return shots_record(app, folder)
+	case "motion":       return shots_motion(app, folder)
 	}
-	fmt.eprintfln("shots: no window %q (settings, editor, history, workflows, record)", which)
+	fmt.eprintfln("shots: no window %q (settings, editor, history, workflows, record, motion)", which)
 	return 2
 }
 
@@ -164,6 +165,33 @@ shots_workflows :: proc(app: ^App, folder: string) -> int {
 	m.last_version += 1
 	ok := shots_write(app, &hw.host, folder, "workflows", frames = 10)   // (the graph is fitted once laid out)
 	return ok ? 0 : 1
+}
+
+// What moves, frame by frame, in the Workflows mode (motion-<step>-<nn>.png, a frame each 16 ms): a workflow's rename
+// started, then another workflow shown (its triggers' switches change). For an eye on an animation, not in the defaults.
+@(private = "file")
+shots_motion :: proc(app: ^App, folder: string) -> int {
+	if !history_window_open(app, headless = true) { return 1 }
+	hw := &app.history_window
+	app.workflows = workflows_default()
+	defer { history_window_free(app); host.host_close(&hw.host); workflows_free(&app.workflows) }
+	workflow_mode_enter(app)
+	for _ in 0 ..< 10 { hw.host.settle = 1; host.host_frame(&hw.host); time.sleep(16 * time.Millisecond) }
+	frames :: proc(app: ^App, folder, step: string, n: int) -> bool {
+		hw := &app.history_window
+		for i in 0 ..< n {
+			if !shots_write(app, &hw.host, folder, fmt.tprintf("motion-%s-%02d", step, i), frames = 0) { return false }
+			time.sleep(16 * time.Millisecond)
+		}
+		return true
+	}
+	first := app.workflows.list[0].id
+	workflow_rename_start(app, first)
+	if !frames(app, folder, "rename", 12) { return 1 }
+	hw.workflow_mode.renaming = 0
+	workflow_show(app, app.workflows.list[1].id)
+	if !frames(app, folder, "switch", 16) { return 1 }
+	return 0
 }
 
 // A few frames of `h`, then the next one captured and written as <folder>/<name>.png.

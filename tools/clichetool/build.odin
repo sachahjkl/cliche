@@ -183,12 +183,14 @@ check_root_make :: proc(real: string) -> bool {
 // The settings' pages, the editor, the history and the workflows, drawn offscreen by a build of the program with CLICHE_SHOTS (src/shots.odin): no window opens.
 run_shots :: proc(args: []string) -> int {
 	folder := len(args) > 0 ? args[0] : "build/shots"
+	// (the windows named after the folder, else the defaults: "motion", frame by frame, only when named)
+	windows := len(args) > 1 ? args[1:] : []string{"settings", "editor", "history", "workflows", "record"}
 	if !build_text() { return 1 }
 	_ = os.make_directory_all(folder)
 	out := fmt.tprintf("build/cliche-shots%s", ODIN_OS == .Windows ? ".exe" : "")
 	if !toolbox.run(odin_cmd("build", "src", {fmt.tprintf("-out:%s", out), "-debug", "-o:none", fmt.tprintf("-define:CLICHE_SHOTS=%s", folder)}), {echo = true}) { return 1 }
 	// (one window a run: a headless renderer has only its first one)
-	for window in ([]string{"settings", "editor", "history", "workflows", "record"}) {
+	for window in windows {
 		if !toolbox.run({out, window}, {echo = true}) { return 1 }
 	}
 	return 0
