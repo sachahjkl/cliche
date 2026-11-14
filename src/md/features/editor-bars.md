@@ -33,6 +33,8 @@ under, once per picture. ShareX's editor has the same split.
 - **Cancel and Done never wrap away from each other.** They are the pinned group at the end of the bar under. In a
   narrow window the actions wrap before them.
 - **The bar under has no separate zoom bar.** The zoom is the first item of the bar under, as in ShareX.
+- **Both bars are centred** (`align = .Center`; the toolkit's default is the start). The picture is centred in the
+  editor, and the bars that frame it are centred with it; each wrapped line is centred too.
 
 ## Subtle points
 

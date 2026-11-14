@@ -1616,7 +1616,7 @@ editor_tools_bar :: proc(ed: ^Editor, em: f32) {
 	if ui.row(id = "###tools_row") {
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill()})
-		if ui.toolbar("editor_tools", {overflow = .Wrap}) {
+		if ui.toolbar("editor_tools", {overflow = .Wrap, align = .Center}) {
 			if ui.toolbar_group("tools", {title = i18n.tr("Tools")}) {
 				for t in Edit_Tool {
 					a := Editor_Action(int(Editor_Action.Tool_Select) + int(t))
@@ -1641,7 +1641,7 @@ editor_actions_bar :: proc(ed: ^Editor, em: f32) {
 	if ui.row(id = "###actions_row") {
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill()})
-		if ui.toolbar("editor_actions", {overflow = .Wrap}) {
+		if ui.toolbar("editor_actions", {overflow = .Wrap, align = .Center}) {
 			if ui.toolbar_group("zoom", {title = i18n.tr("Zoom")}) {
 				// (its words are the zoom in percent; its menu, built outside the bar: editor_zoom_menu)
 				ui.toolbar_tool("zoom", {label = fmt.tprintf("%d %%", int(math.round(ed.model.view.zoom * 100))), words = true, tip = i18n.tr("Zoom"), menu = EDITOR_ZOOM_MENU, menu_search = false})
