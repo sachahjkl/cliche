@@ -501,7 +501,7 @@ UPLOADER_EXTENSION :: ".sxcu"
 
 // <config dir>/cliche/uploaders.
 uploaders_folder :: proc(allocator := context.temp_allocator) -> string {
-	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/uploaders"}, allocator)
+	return path_join(platform.user_dir(.Config, APP_NAME, context.temp_allocator), "uploaders", allocator)
 }
 
 // The built-in uploader and shorteners, then those of the folder, sorted by file name. problems: one line per file that cannot be used
@@ -523,7 +523,7 @@ uploaders_load :: proc(allocator := context.allocator) -> (list: []Uploader, pro
 		slice.sort_by(entries, proc(a, b: os.File_Info) -> bool { return a.name < b.name })
 		for e in entries {
 			if e.type == .Directory || !strings.has_suffix(ascii.lower(e.name, context.temp_allocator), UPLOADER_EXTENSION) { continue }
-			path := strings.concatenate({folder, "/", e.name}, context.temp_allocator)
+			path := path_join(folder, e.name)
 			data, read_err := os.read_entire_file(path, context.temp_allocator)
 			if read_err != nil { append(&bad, fmt.aprintf(i18n.tr("%s: cannot be read"), e.name, allocator = allocator)); continue }
 			u, problem := uploader_parse(data, path, allocator)
@@ -556,7 +556,7 @@ uploader_import :: proc(path: string, allocator := context.allocator) -> (name: 
 	stem := file_name_safe(u.name)
 	for n in 1 ..= NAME_TRIES {
 		file := n == 1 ? strings.concatenate({stem, UPLOADER_EXTENSION}, context.temp_allocator) : fmt.tprintf("%s (%d)%s", stem, n, UPLOADER_EXTENSION)
-		target := strings.concatenate({folder, "/", file}, context.temp_allocator)
+		target := path_join(folder, file)
 		if os.exists(target) { continue }
 		if !fsx.write_atomic(target, data) { return "", strings.clone(i18n.tr("the file cannot be written in the uploaders' folder"), allocator) }
 		return strings.clone(u.name, allocator), ""

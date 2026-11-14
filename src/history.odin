@@ -1,7 +1,7 @@
 package cliche
 
 // The history: one entry per outcome (a screenshot, a recording, a QR code or a text read), the newest last. The model
-// is pure (adding with the cap, the search, the filter, the sort, the selection): the tests drive it without a window.
+// is pure (adding with the cap, the search, the filter, the sort; the selection is the toolkit's Item_Selection, history_view.odin): the tests drive it without a window.
 //
 // Two copies of it exist. The interface's thread keeps one for the window (history_view.odin); the worker keeps the
 // other, reads the file into it at the start and writes the file after each change. Both apply the same procedures to
@@ -349,103 +349,6 @@ history_compare :: proc(x, y: History_Entry, column: History_Column) -> int {
 }
 
 ////////////////////////////////
-// The selection of the grid (the list's is its table's, copied in and out: history_view.odin)
-
-History_Selection :: struct {
-	marked: map[u64]struct{},   // the entries selected
-	focus:  u64,                // the entry the keys move from (0: none); selected unless a Ctrl click took it out
-	anchor: u64,                // where a Shift click's or a Shift move's range starts
-	version: u64,               // raised at each change: what is made from the selection is made again
-}
-
-// How a click selects: alone, Ctrl (one more or one less), Shift (the range from the anchor).
-History_Click :: enum u8 { Alone, Toggle, Range }
-
-history_selection_destroy :: proc(s: ^History_Selection) {
-	delete(s.marked)
-	s^ = {}
-}
-
-history_selection_clear :: proc(s: ^History_Selection) {
-	clear(&s.marked)
-	s.focus, s.anchor = 0, 0
-	s.version += 1
-}
-
-// Selects `id` alone.
-history_select_one :: proc(s: ^History_Selection, id: u64) {
-	clear(&s.marked)
-	if id != 0 { s.marked[id] = {} }
-	s.focus, s.anchor = id, id
-	s.version += 1
-}
-
-// A click on the entry `id` of `shown` (the ids in the order shown).
-history_selection_click :: proc(s: ^History_Selection, shown: []u64, id: u64, how: History_Click) {
-	switch how {
-	case .Alone:
-		history_select_one(s, id)
-	case .Toggle:
-		if id in s.marked { delete_key(&s.marked, id) } else { s.marked[id] = {} }
-		s.focus, s.anchor = id, id
-		s.version += 1
-	case .Range:
-		from, anchored := slice.linear_search(shown, s.anchor != 0 ? s.anchor : id)
-		at, found := slice.linear_search(shown, id)
-		if !found { return }
-		if !anchored { from = at }
-		clear(&s.marked)
-		for k in min(from, at) ..= max(from, at) { s.marked[shown[k]] = {} }
-		s.focus = id
-		if s.anchor == 0 { s.anchor = id }
-		s.version += 1
-	}
-}
-
-// A move of the keys: `to` is the place in `shown` the focus goes to (clamped); `extend` (Shift) selects the range from
-// the anchor, else the entry alone. Returns the place, -1 when nothing is shown.
-history_selection_move :: proc(s: ^History_Selection, shown: []u64, to: int, extend: bool) -> int {
-	if len(shown) == 0 { return -1 }
-	at := clamp(to, 0, len(shown) - 1)
-	history_selection_click(s, shown, shown[at], extend ? .Range : .Alone)
-	return at
-}
-
-// The place of the focus in `shown` (-1: none, or not shown).
-history_selection_place :: proc(s: ^History_Selection, shown: []u64) -> int {
-	if s.focus == 0 { return -1 }
-	at, found := slice.linear_search(shown, s.focus)
-	return found ? at : -1
-}
-
-history_selection_all :: proc(s: ^History_Selection, shown: []u64) {
-	for id in shown { s.marked[id] = {} }
-	if s.focus == 0 && len(shown) > 0 { s.focus, s.anchor = shown[0], shown[0] }
-	s.version += 1
-}
-
-// Forgets what is no longer shown (a filter, a removal).
-history_selection_prune :: proc(s: ^History_Selection, shown: []u64) {
-	if len(s.marked) == 0 && s.focus == 0 { return }
-	live := make(map[u64]struct{}, len(shown), context.temp_allocator)
-	for id in shown { live[id] = {} }
-	gone := make([dynamic]u64, context.temp_allocator)
-	for id in s.marked { if id not_in live { append(&gone, id) } }
-	for id in gone { delete_key(&s.marked, id) }
-	if s.focus not_in live { s.focus = 0 }
-	if s.anchor not_in live { s.anchor = 0 }
-	s.version += 1
-}
-
-// The ids selected, in the order shown.
-history_selection_ids :: proc(s: ^History_Selection, shown: []u64, allocator := context.temp_allocator) -> []u64 {
-	out := make([dynamic]u64, 0, len(s.marked), allocator)
-	if len(s.marked) == 0 { return out[:] }
-	for id in shown { if id in s.marked { append(&out, id) } }
-	return out[:]
-}
-
-////////////////////////////////
 // The file
 
 // The entries as the file's text: the header, then a line per entry, oldest first.
@@ -513,7 +416,8 @@ history_parse_line :: proc(line: string, allocator := context.allocator) -> (e: 
 	e.size.y = strconv.parse_int(fields[4]) or_return
 	e.bytes = strconv.parse_i64(fields[5]) or_return
 	e.length_ms = strconv.parse_i64(fields[6]) or_return
-	e.path = history_unescape(fields[7], allocator)
+	// (a file written before the paths had the system's separator holds "C:\Users\x\Pictures/cliche/..." on Windows)
+	e.path = path_native(history_unescape(fields[7], context.temp_allocator), allocator)
 	e.url = history_unescape(fields[8], allocator)
 	e.text = history_unescape(fields[9], allocator)
 	return e, true
@@ -755,5 +659,5 @@ history_offset_minutes :: proc() -> int {
 history_file :: proc(allocator := context.allocator) -> string {
 	dir := platform.user_dir(.State, APP_NAME, context.temp_allocator)
 	if dir == "" { return "" }
-	return strings.concatenate({dir, "/history"}, allocator)
+	return path_join(dir, "history", allocator)
 }

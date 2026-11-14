@@ -12,8 +12,9 @@ package cliche
 // opened or deleted. A thumbnail is a texture only while its entry is in view: the grid is a virtual list of lines of
 // cells, and the textures of the entries not built in the last frames are freed after each frame.
 //
-// The selection of the grid is the model's (History_Selection); the list's is its table's (ui.Table, with marks). One
-// is copied into the other when the view changes, so the actions read one selection.
+// One selection for the grid and the list: the toolkit's Item_Selection, multi (src/md/features/history-selection.md).
+// It is the list's table's (Table.vl.selection); the grid calls the same model with its rows and its moves by columns.
+// The acts on entries take every entry selected; those that show or open one picture take the cursor's.
 
 import "core:fmt"
 import "core:log"
@@ -122,12 +123,15 @@ History_Window :: struct {
 	shown_ids:   [dynamic]u64,
 	shown_version: u64,           // history.version the lists were made at
 	shown_due:   bool,            // the search, the filter or the sort changed
-	selection:   History_Selection,
+	// the selection's rows changed, or are another view's: settled where they are fresh (history_rows_settle)
+	rows_due:    bool,            // the rows changed: the ids gone leave the selection
+	cursor_due:  bool,            // the cursor goes back to `cursor_id` in the new rows
+	cursor_id:   u64,
+	select_due:  u64,             // the entry selected alone once it is shown (a new one, the tray's; 0: none)
 
-	table:       ui.Table,
+	table:       ui.Table,        // the list; its List_State's selection is the window's (history_selection)
 	table_data:  ui.Table_Data,
 	table_due:   bool,            // the table's rows are made again at its next build
-	table_give:  bool,            // the grid's selection goes to the table at its next build
 	mode_built:  History_View_Mode,
 
 	grid:        ui.Virtual_List,
@@ -148,7 +152,7 @@ History_Window :: struct {
 	preview_size: [2]int,
 
 	enabled:     History_Actions,   // history_enabled's, as of `enabled_stamp`
-	enabled_stamp: [3]u64,
+	enabled_stamp: [4]u64,
 	enabled_made: bool,
 
 	settings_mode: Settings_Mode,   // settings_view.odin
@@ -188,18 +192,32 @@ HISTORY_ACTIONS := [History_Action]ui.Command{
 	.List           = {label = i18n.later("Show a list"), group = i18n.later("View"), keys = {{.N2, {.Ctrl}}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
 	.Open_Folder    = {label = i18n.later("Open the save folder"), group = i18n.later("View"), icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
 	.Capture_Region = {label = i18n.later("Capture a region"), group = i18n.later("Window"), icon = lucide.IMAGE, tags = {"screenshot", "new"}},
-	.Workflows      = {label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}},
-	.Settings       = {label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}},
-	.Palette        = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
-	.Keys           = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
-	.Close          = {label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"hide"}},
-	.Quit           = {label = i18n.later("Quit cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}}, icon = lucide.POWER, tags = {"exit", "stop"}},
+	.Workflows      = {label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}, scope = .Window},
+	.Settings       = {label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}, scope = .Window},
+	.Palette        = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}, scope = .Window},
+	.Keys           = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
+	.Close          = {label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"hide"}, scope = .Window},
+	.Quit           = {label = i18n.later("Quit cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}}, icon = lucide.POWER, tags = {"exit", "stop"}, scope = .Window},
 }
 
 History_Actions :: bit_set[History_Action]
 
 // The actions whose keys a text field keeps while it has the keyboard (Enter, Space, Ctrl+C, Delete, Ctrl+A...).
 HISTORY_FIELD_KEYS :: History_Actions{.Open, .Open_Url, .Copy_Picture, .Copy_Path, .Delete_File, .Remove, .Preview, .Select_All}
+
+// The window's modes (the history, its settings, its workflows: one window).
+History_Mode :: enum u8 { History, Settings, Workflows }
+
+// The page's actions whose keys the window reads in `mode` (history_keys); `typing`: a field of the mode has the keyboard
+// (a preference's, a workflow's name). The history's actions mean nothing on the settings or the workflows. The window's
+// own commands (scope .Window: the palette, the keys, the settings, the workflows, close, quit) are not among them:
+// history_window_keys reads them in every mode, whatever has the keyboard.
+history_keys_read :: proc(mode: History_Mode, typing: bool) -> History_Actions {
+	if mode != .History || typing { return {} }
+	read: History_Actions
+	for a in History_Action { if HISTORY_ACTIONS[a].scope != .Window { read += {a} } }
+	return read
+}
 
 // The context menu, in its order; a separator before each of HISTORY_MENU_BREAKS.
 @(rodata)
@@ -254,11 +272,7 @@ history_combined :: proc(app: ^App, r: Result_Combined) {
 		return
 	}
 	id := history_note(app, {kind = .Picture, path = r.path, size = r.size, bytes = r.bytes})
-	if id != 0 && hw.visible {
-		history_select_one(&hw.selection, id)
-		hw.table_give = true
-		hw.grid_reveal = true
-	}
+	if id != 0 && hw.visible { hw.select_due = id }
 	app_announce(app, .Good, i18n.tr("Pictures combined"), r.path, history_window_of(app))
 }
 
@@ -332,11 +346,7 @@ history_window_show :: proc(app: ^App, select: u64 = 0) {
 		// (a file deleted elsewhere since: its entry shows as missing)
 		worker_send(&app.worker, Job_History(History_Check{}))
 	}
-	if select != 0 {
-		history_select_one(&hw.selection, select)
-		hw.table_give = true
-		hw.grid_reveal = true
-	}
+	if select != 0 { hw.select_due = select }
 	platform.raise_window_token(hw.host.win, token)
 	hw.host.settle = max(hw.host.settle, 3)
 }
@@ -344,7 +354,7 @@ history_window_show :: proc(app: ^App, select: u64 = 0) {
 // Opens the window (hidden). `headless`: offscreen, on the software renderer (shots.odin).
 history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw := &app.history_window
-	if !host.host_open(&hw.host, &app.shared, {title = "cliche", size = HISTORY_WINDOW_SIZE, headless = headless}, history_build, app) {
+	if !host.host_open(&hw.host, &app.shared, {title = "cliche", size = HISTORY_WINDOW_SIZE, headless = headless, integrated_title = !app.settings.system_title}, history_build, app) {
 		log.error("the main window cannot open")
 		return false
 	}
@@ -485,8 +495,7 @@ history_window_free :: proc(app: ^App) {
 	ui.line_edit_destroy(&hw.search)
 	ui.table_destroy(&hw.table)
 	ui.table_data_destroy(&hw.table_data)
-	ui.vlist_destroy(&hw.grid)
-	history_selection_destroy(&hw.selection)
+	ui.vlist_destroy(&hw.grid)   // (the selection is the table's: table_destroy frees it)
 	history_destroy(&hw.history)
 	delete(hw.query)
 	delete(hw.shown)
@@ -525,10 +534,14 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	// (the user's own themes: read again when their file changed; every window shows the new list at its next frame)
 	if prefs_page.themes_file_poll(&app.themes_file, &hw.host.state) { hw.host.settle = max(hw.host.settle, 2) }
 	if hw.mode_built != app.settings.history_view {
-		// (the selection goes to the view shown now)
-		if app.settings.history_view == .List { hw.table_give = true } else { hw.grid_reveal = true }
+		// (the selection is the same; the cursor goes to its entry in the other view's rows, brought into view)
+		hw.cursor_id, hw.cursor_due = history_cursor(app), true
 		hw.mode_built = app.settings.history_view
+		hw.table_due = true
+		history_reveal(hw)
 	}
+	// (the grid's rows are the entries shown, fresh now; the list's are its table's, fresh once it is applied)
+	if hw.mode_built == .Grid { history_rows_settle(app) }
 
 	// (asked outside a build, cliche --setup: the setup's view opens in this window, in its build)
 	if hw.setup_due {
@@ -542,22 +555,29 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	settings := hw.settings_mode.open
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###history") {   // (the theme's surface: the host only clears to black)
+		// (cliche's title bar across the whole window, over the views docked at its edges)
+		window_title_bar(h, "cliche", em)
 		// (the views docked at the window's edges, and the floating ones, are built first: their keys are theirs first)
 		if ui.views_frame(&app.views) {
 			dialog := history_views_open(app) || ui.menu_any_open()
+			// (the window's own commands first, in every mode, whatever has the keyboard, over the window's views too (a
+			// question, the sheet, the palette); not while a menu is open: its keys, Escape and the letters that search
+			// it, are its own until it closes)
+			if !ui.menu_any_open() { history_window_keys(app) }
 			if !dialog && workflows {
 				workflow_keys(app)
-				// (the window's own commands; the history's other keys mean nothing here)
-				if !hw.workflow_mode.typing { history_keys(app) }
 			} else if !dialog && settings {
 				settings_keys(app)
-				// (the window's own commands; the history's other keys mean nothing on the settings)
-				if !prefs_page.editing(&hw.settings_mode.page) { history_keys(app) }
 			} else if !dialog {
+				// (the toolkit's rule first: several entries selected, the cursor's alone; then the search's, then the window's)
 				if ui.key_press(.Escape) {
-					if hw.search_focused && len(hw.search.buf) > 0 { ui.line_edit_set(&hw.search, ""); hw.shown_due = true } else { hw.hide_due = true }
+					switch {
+					case ui.item_selection_escape(history_selection(hw), history_rows(app)):
+					case hw.search_focused && len(hw.search.buf) > 0: ui.line_edit_set(&hw.search, ""); hw.shown_due = true
+					case: hw.hide_due = true
+					}
 				}
-				history_keys(app)
+				history_keys(app, .History, false)
 				ui.type_to_field(hw.search_key)
 			}
 			switch {
@@ -604,6 +624,18 @@ history_views_register :: proc(app: ^App) {
 	})
 }
 
+// The palette's button at the right end of a mode's bar (the settings', the workflows'), as in the history's toolbar.
+history_palette_button :: proc(app: ^App, em: f32) {
+	if history_icon_button("palette", lucide.COMMAND, ui.key_tip(i18n.tr("Command palette"), {.K, {.Ctrl}}), em) { history_action(app, .Palette) }
+	ui.spacer(ui.px(em * 0.6))
+}
+
+// The palette's table as it is now, made again if what it lists changed (the tests read it).
+history_palette_commands :: proc(app: ^App) -> []ui.Command {
+	history_palette_keep(app)
+	return app.history_window.palette_table.commands
+}
+
 // The history's palette, on what can act now (Ctrl+K, the toolbar's button).
 history_palette_show :: proc(app: ^App) {
 	history_palette_give(app, force = true)
@@ -617,6 +649,8 @@ history_refresh :: proc(app: ^App) {
 	query := strings.trim_space(ui.line_edit_string(&hw.search))
 	if query != hw.query { hw.shown_due = true }
 	if !hw.shown_due && hw.shown_version == hw.history.version { return }
+	// (the cursor is an index: its entry, taken before the rows change, finds its place in the new ones)
+	if !hw.cursor_due { hw.cursor_id, hw.cursor_due = history_cursor(app), true }
 	delete(hw.query)
 	hw.query = strings.clone(query)
 	delete(hw.shown)
@@ -628,8 +662,59 @@ history_refresh :: proc(app: ^App) {
 	hw.shown_due = false
 	hw.table_due = true
 	hw.grid_columns = 0   // (the grid's lines are made again)
-	history_selection_prune(&hw.selection, hw.shown_ids[:])
+	hw.rows_due = true
 }
+
+// The window's selection, the grid's and the list's: the list's table's (its List_State's).
+history_selection :: proc(hw: ^History_Window) -> ^ui.Item_Selection { return &hw.table.vl.selection }
+
+// The rows the selection is over, in the view built: the list's table's ids (its order), else the entries shown.
+history_rows :: proc(app: ^App) -> ui.Item_Rows {
+	hw := &app.history_window
+	if hw.mode_built == .List && len(hw.table.ids) == len(hw.shown_ids) { return {count = len(hw.table.ids), ids = hw.table.ids[:]} }
+	return {count = len(hw.shown_ids), ids = hw.shown_ids[:]}
+}
+
+// The entry of the cursor (0: none): what the acts on one picture take (preview, edit, pin, copy the picture).
+history_cursor :: proc(app: ^App) -> u64 {
+	sel := history_selection(&app.history_window)
+	rows := history_rows(app)
+	return sel.sel >= 0 && sel.sel < rows.count ? ui.item_rows_id(rows, sel.sel) : 0
+}
+
+// The rows are fresh (the entries shown made again, the table applied, the other view's): the entries gone leave the
+// selection, the cursor goes back to its entry, an entry asked for is selected alone. Only when one of them is due.
+history_rows_settle :: proc(app: ^App) {
+	hw := &app.history_window
+	if !hw.rows_due && !hw.cursor_due && hw.select_due == 0 { return }
+	sel := history_selection(hw)
+	rows := history_rows(app)
+	if hw.rows_due {
+		ui.item_selection_keep(sel, rows)
+		hw.rows_due = false
+	}
+	if hw.cursor_due {
+		hw.cursor_due = false
+		sel.sel = hw.cursor_id != 0 ? ui.item_rows_find(rows, hw.cursor_id) : -1
+	}
+	if hw.select_due != 0 {
+		if at := ui.item_rows_find(rows, hw.select_due); at >= 0 {
+			ui.item_selection_one(sel, rows, at)
+			history_reveal(hw)
+		}
+		hw.select_due = 0
+	}
+	sel.version += 1   // (what is made from the selection is made again: the acts that can act, the preview)
+}
+
+// The cursor brought into view at the next build, in the grid and in the list.
+history_reveal :: proc(hw: ^History_Window) {
+	hw.grid_reveal = true
+	hw.table.vl.reveal = HISTORY_REVEAL_FRAMES
+}
+
+// Frames the list keeps scrolling its cursor's row into view.
+HISTORY_REVEAL_FRAMES :: 3
 
 @(private = "file")
 history_toolbar :: proc(app: ^App, em: f32) {
@@ -756,13 +841,14 @@ history_footer :: proc(app: ^App, em: f32) {
 			if prefs_page.update_badge(app.updates.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.spacer(ui.px(em * 0.6)) }
 		}
 		if ui.tags("weak") {
-			n := len(hw.selection.marked)
+			n := len(history_selection(hw).selected)
 			count := len(hw.shown_ids) == len(hw.history.entries) ? fmt.tprintf(i18n.tr(len(hw.history.entries), "%d captures", "%d captures"), len(hw.history.entries)) : fmt.tprintf(i18n.tr(len(hw.shown_ids), "%d of %d captures", "%d of %d captures"), len(hw.shown_ids), len(hw.history.entries))
 			if n > 1 { count = fmt.tprintf(i18n.tr("%s, %d selected"), count, n) }
 			ui.next({width = ui.text_size(), height = ui.pct(1), text_pad = 0})
 			ui.label(fmt.tprintf("%s###count", count))
 			ui.spacer(ui.px(em * 1.2))
-			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
+			// (content: a message, a link uploaded or an error said there, to copy)
+			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0, flags = {.Selectable}})
 			ui.label(fmt.tprintf("%s###status", ui.text_shown(hw.status)))
 		}
 	}
@@ -788,7 +874,7 @@ history_grid :: proc(app: ^App, em: f32) {
 	if columns != hw.grid_columns || len(hw.grid_rows) == 0 { history_grid_lines(hw, columns) }
 	if hw.grid_reveal {
 		hw.grid_reveal = false
-		if at := history_selection_place(&hw.selection, hw.shown_ids[:]); at >= 0 { ui.list_select(&hw.grid, at / columns) }
+		if at := history_selection(hw).sel; at >= 0 && at < len(hw.shown_ids) { ui.list_select(&hw.grid, at / columns) }
 	}
 	n := len(hw.shown_ids)
 	ui.next({width = ui.fill(), height = ui.fill()})
@@ -825,7 +911,9 @@ history_grid_lines :: proc(hw: ^History_Window, columns: int) {
 history_cell :: proc(app: ^App, i: int, cell, em: f32) {
 	hw := &app.history_window
 	e := hw.history.entries[hw.shown[i]]
-	selected := e.id in hw.selection.marked
+	sel := history_selection(hw)
+	rows := history_rows(app)
+	selected := ui.item_selection_has(sel, rows, i)
 	focused := !ui.inactive()
 	ui.next({width = ui.px(cell), height = ui.pct(1), axis = .Y, radius = em * 0.4})
 	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within}
@@ -844,15 +932,12 @@ history_cell :: proc(app: ^App, i: int, cell, em: f32) {
 			ui.label(fmt.tprintf("%s###when", e.missing ? i18n.tr("File missing") : history_time_text(hw, e.time_ms)))
 		}
 	}
-	if sig.pressed {
-		how := History_Click.Alone
-		if .Ctrl in sig.mods { how = .Toggle } else if .Shift in sig.mods { how = .Range }
-		history_selection_click(&hw.selection, hw.shown_ids[:], e.id, how)
-		hw.table_give = true
-	}
+	// (the toolkit's rules: alone, Ctrl toggles, Shift the range from the anchor, Ctrl+Shift the range added)
+	if sig.pressed { ui.item_selection_click(sel, rows, i, sig.mods) }
 	if sig.double_clicked { history_action(app, .Open) }
 	if sig.right_clicked {
-		if e.id not_in hw.selection.marked { history_select_one(&hw.selection, e.id); hw.table_give = true }
+		// (outside the selection: the cell alone; on it: the selection stays, the menu acts on it)
+		ui.item_selection_context(sel, rows, i)
 		ui.menu_open(HISTORY_MENU_ID, ui.mouse_pos())
 	}
 }
@@ -863,7 +948,8 @@ history_cell_picture :: proc(app: ^App, e: History_Entry, cell, em: f32) {
 	if e.kind == .Qr || e.kind == .Text {
 		ui.next({width = ui.px(cell), height = ui.px(cell), radius = em * 0.3, font_size = math.round(em * 0.85), text_pad = em * 0.5})
 		if ui.tags("weak") {
-			ui.build_box({.Draw_Text, .Text_Wrap, .Clip}, fmt.tprintf("%s###text", ui.text_shown(history_first_words(e.text, 160))))
+			// (content: a press picks the cell and a double click opens it, as before; a drag selects the words)
+			ui.build_box({.Draw_Text, .Text_Wrap, .Clip, .Selectable}, fmt.tprintf("%s###text", ui.text_shown(history_first_words(e.text, 160))))
 		}
 		return
 	}
@@ -956,12 +1042,8 @@ history_list :: proc(app: ^App, em: f32) {
 		ui.table_apply(t, &hw.table_data, "")
 		t.highlight = hw.query
 	}
-	if hw.table_give {
-		hw.table_give = false
-		ui.list_marks_clear(&t.vl)
-		if len(hw.selection.marked) > 1 { for id in hw.selection.marked { t.vl.marks[id] = true } }
-		if hw.selection.focus != 0 { ui.table_select_id(t, hw.selection.focus) }
-	}
+	// (the table's ids are fresh: the list's rows; its selection is the window's, the grid's too)
+	history_rows_settle(app)
 	dialog := history_views_open(app) || ui.menu_any_open()
 	keys: ui.Table_Events
 	if !dialog { keys = ui.table_keys(t) }
@@ -975,27 +1057,11 @@ history_list :: proc(app: ^App, em: f32) {
 		}
 		hw.shown_due = true
 	}
-	if t.vl.changed || t.vl.marks_changed || keys != {} || ev.menu { history_take_table_selection(app) }
 	if ev.activated || keys.activated { history_action(app, .Open) }
 	if ev.menu || keys.menu {
 		at := ev.menu ? ev.menu_at : keys.menu_at
 		ui.menu_open(HISTORY_MENU_ID, at, from_keyboard = ev.keyboard || keys.keyboard)
 	}
-}
-
-// The table's selection, copied into the model's (the actions read that one).
-@(private = "file")
-history_take_table_selection :: proc(app: ^App) {
-	hw := &app.history_window
-	t := &hw.table
-	clear(&hw.selection.marked)
-	for id, on in t.vl.marks { if on { hw.selection.marked[id] = {} } }
-	focus: u64
-	if t.vl.sel >= 0 && t.vl.sel < len(t.ids) { focus = t.ids[t.vl.sel] }
-	if len(hw.selection.marked) == 0 && focus != 0 { hw.selection.marked[focus] = {} }
-	hw.selection.focus = focus
-	if hw.selection.anchor == 0 { hw.selection.anchor = focus }
-	hw.selection.version += 1
 }
 
 // The kind's icon before a row's name.
@@ -1040,7 +1106,7 @@ history_preview_view :: proc(v: ^ui.View, app: ^App) {
 	em := ui.font_size()
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(id = "###preview_pane") {
-		e := history_find(&hw.history, hw.selection.focus)
+		e := history_find(&hw.history, history_cursor(app))
 		if e == nil {
 			ui.empty_state("no_preview", {icon = lucide.EYE, title = i18n.tr("Nothing selected"), note = i18n.tr("Select a capture to see it here.")})
 			return
@@ -1112,48 +1178,70 @@ history_preview_drop :: proc(app: ^App) {
 ////////////////////////////////
 // Keys, menu, palette, actions
 
+// The keys of the window's own commands (scope .Window), in every mode: the toolkit takes them whatever has the focus.
 @(private = "file")
-history_keys :: proc(app: ^App) {
-	hw := &app.history_window
+history_window_keys :: proc(app: ^App) {
 	enabled := history_enabled(app)
 	for a in History_Action {
-		if hw.search_focused && a in HISTORY_FIELD_KEYS { continue }
+		if HISTORY_ACTIONS[a].scope != .Window { continue }
 		if ui.command_pressed(HISTORY_ACTIONS[a], a not_in enabled) { history_action(app, a); return }
 	}
-	if hw.settings_mode.open || app.settings.history_view != .Grid || len(hw.shown_ids) == 0 { return }
-	// the grid's moves: a line is `grid_columns` cells; Shift extends the selection (the move clamps to the ends)
-	columns := max(hw.grid_columns, 1)
-	page := columns * max(hw.grid.page_rows - 1, 1)
-	extends := [2]bool{false, true}
-	for extend in extends {
-		mods: platform.Modifiers = extend ? {.Shift} : {}
-		// (the step first: the focus's place is looked for only when a key moves it)
-		step, moved := 0, true
-		switch {
-		case !hw.search_focused && ui.key_press(.Left, mods):  step = -1
-		case !hw.search_focused && ui.key_press(.Right, mods): step = 1
-		case !hw.search_focused && ui.key_press(.Home, mods):  step = min(int)
-		case !hw.search_focused && ui.key_press(.End, mods):   step = max(int)
-		case ui.key_press(.Up, mods):        step = -columns
-		case ui.key_press(.Down, mods):      step = columns
-		case ui.key_press(.Page_Up, mods):   step = -page
-		case ui.key_press(.Page_Down, mods): step = page
-		case: moved = false
-		}
-		if !moved { continue }
-		at := history_selection_place(&hw.selection, hw.shown_ids[:])
-		to := 0
-		switch {
-		case at < 0:          to = 0   // (nothing selected: the first entry)
-		case step == min(int): to = 0
-		case step == max(int): to = len(hw.shown_ids) - 1
-		case:                 to = at + step
-		}
-		history_selection_move(&hw.selection, hw.shown_ids[:], to, extend)
-		hw.grid_reveal = true
-		hw.table_give = true
+}
+
+@(private = "file")
+history_keys :: proc(app: ^App, mode: History_Mode, typing: bool) {
+	hw := &app.history_window
+	enabled := history_enabled(app)
+	read := history_keys_read(mode, typing)
+	for a in History_Action {
+		if a not_in read { continue }
+		if mode == .History && hw.search_focused && a in HISTORY_FIELD_KEYS { continue }
+		if ui.command_pressed(HISTORY_ACTIONS[a], a not_in enabled) { history_action(app, a); return }
+	}
+	// (the grid's moves are the history's alone: the arrows are the settings' and the graph's elsewhere)
+	if mode != .History || app.settings.history_view != .Grid || len(hw.shown_ids) == 0 { return }
+	// the grid's moves: the key gives the cell the cursor goes to (a line is `grid_columns` cells), the toolkit's model
+	// what its modifiers do (alone: the cell alone; Shift: the range from the anchor; Ctrl+Shift: the range added; Ctrl:
+	// the cursor alone moves). The search keeps Left, Right, Home and End while it has the keyboard.
+	sel := history_selection(hw)
+	rows := history_rows(app)
+	if ui.key_press(.Space, {.Ctrl}) && sel.sel >= 0 {
+		ui.item_selection_toggle(sel, rows, sel.sel)
 		return
 	}
+	columns := max(hw.grid_columns, 1)
+	page := columns * max(hw.grid.page_rows - 1, 1)
+	@(static, rodata) all_mods := [4]platform.Modifiers{{}, {.Shift}, {.Ctrl}, {.Ctrl, .Shift}}
+	@(static, rodata) keys := [8]platform.Key{.Left, .Right, .Home, .End, .Up, .Down, .Page_Up, .Page_Down}
+	for mods in all_mods {
+		for k in keys {
+			if hw.search_focused && (k == .Left || k == .Right || k == .Home || k == .End) { continue }
+			if !ui.key_press(k, mods) { continue }
+			to := history_grid_target(sel.sel, rows.count, columns, page, k)
+			ui.item_selection_move(sel, rows, to, mods)
+			history_reveal(hw)
+			return
+		}
+	}
+}
+
+// The cell a key of the grid takes the cursor to: Left and Right a cell, Up and Down a line of `columns`, Page Up and
+// Page Down `page` cells, Home and End the ends; clamped to the `count` cells. With no cursor, the first cell.
+history_grid_target :: proc(at, count, columns, page: int, key: platform.Key) -> int {
+	if count <= 0 { return -1 }
+	if at < 0 || at >= count { return 0 }
+	to := at
+	#partial switch key {
+	case .Left:      to = at - 1
+	case .Right:     to = at + 1
+	case .Up:        to = at - columns
+	case .Down:      to = at + columns
+	case .Page_Up:   to = at - page
+	case .Page_Down: to = at + page
+	case .Home:      to = 0
+	case .End:       to = count - 1
+	}
+	return clamp(to, 0, count - 1)
 }
 
 @(private = "file")
@@ -1284,20 +1372,29 @@ history_delete_ask :: proc(app: ^App, ids: []u64) {
 	ui.confirm_open(HISTORY_DELETE_VIEW, {title = title, note = i18n.tr("The files go from the disk, not to the trash. Their lines stay in the history, marked missing."), lines = names[:], act = i18n.tr("Delete")})
 }
 
-// The entries the actions act on: the selection, in the order shown.
-@(private = "file")
+// The entries the acts on entries take (open, copy the paths, upload, combine, delete, remove...): every one selected, in
+// the order shown; with none selected, the cursor's (temp memory).
 history_selected :: proc(app: ^App) -> []u64 {
 	hw := &app.history_window
-	return history_selection_ids(&hw.selection, hw.shown_ids[:])
+	ids := ui.item_selection_ids(history_selection(hw), history_rows(app))
+	if len(ids) == 0 {
+		if cursor := history_cursor(app); cursor != 0 {
+			one := make([]u64, 1, context.temp_allocator)
+			one[0] = cursor
+			return one
+		}
+	}
+	return ids
 }
 
 // The actions that can act now. Made again only when the entries, the selection or the view changed: it passes over
 // the selection, which Ctrl+A makes as large as the history.
-@(private = "file")
 history_enabled :: proc(app: ^App) -> History_Actions {
 	hw := &app.history_window
 	settings := hw.settings_mode.open || hw.workflow_mode.open
-	stamp := [3]u64{hw.history.version, hw.selection.version, u64(app.settings.history_view) + u64(len(hw.shown_ids)) << 8 + u64(settings) << 62}
+	sel := history_selection(hw)
+	// (the cursor too: Ctrl+arrows move it alone, and the acts on one picture follow it)
+	stamp := [4]u64{hw.history.version, sel.version, u64(app.settings.history_view) + u64(len(hw.shown_ids)) << 8 + u64(settings) << 62, u64(sel.sel + 1)}
 	if stamp == hw.enabled_stamp && hw.enabled_made { return hw.enabled }
 	hw.enabled_stamp, hw.enabled_made = stamp, true
 	// (on the settings: what concerns the window alone; the history's actions wait for it)
@@ -1309,9 +1406,10 @@ history_enabled :: proc(app: ^App) -> History_Actions {
 	out := window + {.Preview, .Search, .Period}
 	if app.settings.history_view == .Grid { out += {.List} } else { out += {.Grid} }
 	if len(hw.shown_ids) > 0 { out += {.Select_All} }
-	if len(hw.selection.marked) > 0 { out += {.Remove} }
+	acted := history_selected(app)
+	if len(acted) > 0 { out += {.Remove} }
 	pictures := 0
-	for id in hw.selection.marked {
+	for id in acted {
 		e := history_find(&hw.history, id)
 		if e == nil { continue }
 		if e.path != "" { out += {.Copy_Path} }
@@ -1322,7 +1420,8 @@ history_enabled :: proc(app: ^App) -> History_Actions {
 		if history_is_picture(e^) && !e.missing { pictures += 1 }
 	}
 	if pictures >= 2 { out += {.Combine_Side, .Combine_Stack} }
-	if e := history_find(&hw.history, hw.selection.focus); e != nil && history_is_picture(e^) && !e.missing { out += {.Copy_Picture, .Edit, .Pin} }
+	// (one picture: the cursor's)
+	if e := history_find(&hw.history, history_cursor(app)); e != nil && history_is_picture(e^) && !e.missing { out += {.Copy_Picture, .Edit, .Pin} }
 	hw.enabled = out
 	return out
 }
@@ -1337,7 +1436,7 @@ history_action :: proc(app: ^App, a: History_Action) {
 	hw := &app.history_window
 	if a not_in history_enabled(app) { return }
 	ids := history_selected(app)
-	focus := history_find(&hw.history, hw.selection.focus)
+	focus := history_find(&hw.history, history_cursor(app))
 	switch a {
 	case .Open:
 		opened := 0
@@ -1409,12 +1508,11 @@ history_action :: proc(app: ^App, a: History_Action) {
 			ui.view_open(&app.views, PREVIEW_VIEW, app, owner = &hw.host.state)
 		}
 	case .Select_All:
-		if app.settings.history_view == .List {
-			ui.list_mark_all(&hw.table.vl)
-			history_take_table_selection(app)
-		} else {
-			history_selection_all(&hw.selection, hw.shown_ids[:])
-		}
+		// (one model for the grid and the list: every entry shown; the cursor stays where it is, else the first)
+		sel := history_selection(hw)
+		rows := history_rows(app)
+		ui.item_selection_all(sel, rows)
+		if sel.sel < 0 && rows.count > 0 { sel.sel = 0 }
 	case .Search:
 		if hw.search_key != 0 { ui.set_focus(hw.search_key) }
 	case .Grid:

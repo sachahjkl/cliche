@@ -82,6 +82,7 @@ TRAY_CLICK_NAMES := [Tray_Click]string{.Region = "region", .Screen = "screen", .
 Settings :: struct {
 	menu, autostart:    bool,
 	update_auto:        bool,   // update.auto: the installed copy updates itself (updates.odin)
+	system_title:       bool,   // window.system_title: the system's title bar on cliche's windows, else cliche's own
 	tray_click:         Tray_Click,
 	appearance:         prefs_page.Appearance,   // appearance.theme, mode, finish, font_size (theme owned)
 	record_fps, gif_fps, gif_width, record_max_s: int,
@@ -105,12 +106,12 @@ Settings :: struct {
 }
 
 prefs_file :: proc(allocator := context.temp_allocator) -> string {
-	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/prefs"}, allocator)
+	return path_join(platform.user_dir(.Config, APP_NAME, context.temp_allocator), "prefs", allocator)
 }
 
 // The user's own themes, beside the preferences (prefs_page.Themes_File).
 themes_file :: proc(allocator := context.temp_allocator) -> string {
-	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/themes.txt"}, allocator)
+	return path_join(platform.user_dir(.Config, APP_NAME, context.temp_allocator), "themes.txt", allocator)
 }
 
 // The registry with the user's file and `args`' --pref read in. Returns the arguments that are not preferences.
@@ -127,14 +128,11 @@ prefs_open :: proc(p: ^config.Prefs, args: []string) -> (rest: [dynamic]string, 
 STANDARD_SETS :: prefs_page.STANDARD_ALL
 
 // The toolkit's standard preferences, then cliche's own. Its identity alone differs from the toolkit's defaults: its
-// theme and its name.
+// theme and its name (its windows draw their own title bar, as every program of the toolkit: window.system_title off).
 prefs_register :: proc(p: ^config.Prefs) {
 	d := prefs_page.STANDARD_DEFAULTS
 	d.theme, d.app_name = "cliche", APP_NAME
-	d.system_title = true
 	prefs_page.standard_register(p, STANDARD_SETS, d)
-	// (cliche's windows have the system's title bar and draw none of their own: a switch that changes nothing is not shown)
-	if r := config.ref_of(p, prefs_page.SYSTEM_TITLE_PREF); r != config.NO_REF { config.entry(p, r).def.hidden = true }
 	config.register(p, PREF_DEFS[:])
 }
 
@@ -142,6 +140,7 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.menu = config.bool_of(p, "general.menu")
 	s.autostart = config.bool_of(p, "general.autostart")
 	s.update_auto = config.bool_of(p, prefs_page.UPDATE_AUTO_PREF)
+	s.system_title = config.bool_of(p, prefs_page.SYSTEM_TITLE_PREF)
 	click := config.string_of(p, "general.tray_click")
 	for name, c in TRAY_CLICK_NAMES { if name == click { s.tray_click = c } }
 	s.appearance = prefs_page.appearance_read(p, allocator)
@@ -183,11 +182,11 @@ save_folder_default :: proc(allocator := context.allocator) -> string {
 	pictures := platform.known_folder_path(.Pictures, context.temp_allocator)
 	if pictures == "" {
 		home := platform.known_folder_path(.Home, context.temp_allocator)
-		pictures = strings.concatenate({home, "/Pictures"}, context.temp_allocator)
+		pictures = path_join(home, "Pictures")
 	}
-	shots := strings.concatenate({pictures, "/Screenshots"}, context.temp_allocator)
+	shots := path_join(pictures, "Screenshots")
 	if folder_exists(shots) { return strings.clone(shots, allocator) }
-	return strings.concatenate({pictures, "/", APP_NAME}, allocator)
+	return path_join(pictures, APP_NAME, allocator)
 }
 
 folder_exists :: proc(path: string) -> bool { return os.is_dir(path) }

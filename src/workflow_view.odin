@@ -348,7 +348,8 @@ workflow_bar :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({height = ui.px(math.round(em * 2))})
 		if ui.button("preview", i18n.tr("Run on the last capture"), lucide.PLAY, {disabled = m.shown == 0}).clicked { workflow_action(app, .Preview) }
-		ui.spacer(ui.px(em * 0.6))
+		ui.spacer(ui.px(em * 0.3))
+		history_palette_button(app, em)
 	}
 }
 
@@ -363,7 +364,7 @@ workflow_footer :: proc(app: ^App, em: f32) {
 		if app.workflows_problem != "" { text = app.workflows_problem }
 		tag := app.workflows_problem != "" ? "bad" : "weak"
 		if ui.tags(tag) {
-			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
+			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0, flags = {.Selectable}})   // (content: a run's message, a problem)
 			ui.label(fmt.tprintf("%s###workflow_status", ui.text_shown(text)))
 		}
 	}

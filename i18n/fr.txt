@@ -1329,6 +1329,9 @@ fr Moyenne
 en Large
 fr Grande
 
+en This desktop draws no title bar for cliche's windows (GNOME): cliche keeps its own.
+fr Ce bureau ne dessine pas de barre de titre pour les fenêtres de cliche (GNOME) : cliche garde la sienne.
+
 en For example: %s
 fr Par exemple : %s
 

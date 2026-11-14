@@ -134,7 +134,7 @@ workflow_list_item_body :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) 
 		}
 	}
 	if ui.tags("weak") {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.4)), font_size = math.round(em * 0.8), text_pad = em * 0.6})
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.4)), font_size = math.round(em * 0.8), text_pad = em * 0.6, flags = {.Selectable}})
 		ui.label(fmt.tprintf("%s###wf_triggers", workflow_triggers_text(wf)))
 	}
 	ui.spacer(ui.px(em * 0.3))

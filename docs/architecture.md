@@ -118,6 +118,9 @@ The dialogs and the history's preview are gui_toolkit's views (`src/views.odin`;
 views are instances named by the editor. One backend opens the views' windows for every window
 (`host.view_windows(&app.shared)`), and each window's palette lists the moves of its own views.
 
+The history window and each editor draw cliche's own title bar (`src/title_bar.odin`, `src/md/features/title-bar.md`)
+unless `window.system_title` asks for the system's; the pins and the overlays have none.
+
 The editor's two bars are the toolkit's tool bar in its Wrap mode (`ui.toolbar`; `src/md/features/editor-bars.md`).
 
 ## Shortcuts

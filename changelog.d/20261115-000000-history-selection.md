@@ -1,0 +1,3 @@
+type: Added
+
+**Several captures selected, as in a file manager, in the grid and in the list**: Ctrl+click adds or takes one, Shift+click selects a range (a second one nearer the first makes it smaller), Ctrl+Shift+click adds a range; the arrows with Shift, Ctrl+Shift or Ctrl do the same from the keyboard, by lines in the grid; Ctrl+Space toggles the capture under the cursor and Ctrl+A selects all. The selection stays when you switch between the grid and the list. Open, copy the paths, upload, combine, delete and remove act on every capture selected; the preview, edit, pin and copy the picture on the one under the cursor. Escape with several selected keeps the cursor's alone.

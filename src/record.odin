@@ -503,7 +503,7 @@ record_paths :: proc(job: ^Record_Job) -> (final, part: string, ok: bool) {
 	if os.make_directory_all(folder) != nil && !folder_exists(folder) { return }
 	name := record_name(job.pattern, stamp_now(), job.kind, job.format, context.temp_allocator)
 	for n in 1 ..= NAME_TRIES {
-		try := strings.concatenate({folder, "/", name_numbered(name, n, context.temp_allocator)}, context.temp_allocator)
+		try := path_join(folder, name_numbered(name, n, context.temp_allocator))
 		try_part := strings.concatenate({try, ".part"}, context.temp_allocator)
 		if os.exists(try) || os.exists(try_part) { continue }
 		return strings.clone(try), strings.clone(try_part), true

@@ -135,9 +135,9 @@ EDITOR_ACTIONS := [Editor_Action]ui.Command{
 	.Pin              = {label = i18n.later("Pin the picture to the screen"), group = i18n.later("Picture"), keys = {{.T, {.Ctrl}}}, icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep", "window"}},
 	.Print            = {label = i18n.later("Print the picture"), group = i18n.later("Picture"), keys = {{.P, {.Ctrl}}}, icon = lucide.PRINTER, tags = {"paper", "printer", "page"}},
 	.Done             = {label = i18n.later("Done: the workflow goes on"), group = i18n.later("Picture"), keys = {{.Return, {}}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
-	.Close            = {label = i18n.later("Close the editor"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}},
-	.Palette          = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
-	.Keys             = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}},
+	.Close            = {label = i18n.later("Close the editor"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}, scope = .Window},
+	.Palette          = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}, scope = .Window},
+	.Keys             = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
 	.Nudge            = {label = i18n.later("Move the selection a pixel (arrows; with Shift, ten)"), group = i18n.later("Edit"), keys = {{.Left, {}}, {.Left, {.Shift}}}, icon = lucide.MOUSE_POINTER_2, tags = {"nudge"}},
 }
 
@@ -438,7 +438,7 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 	ed := new(Editor)
 	app.editor_next_id += 1
 	ed.app, ed.id = app, app.editor_next_id
-	if !host.host_open(&ed.host, &app.shared, {title = i18n.tr("cliche editor"), size = EDITOR_SIZE, headless = headless}, editor_build, ed) {
+	if !host.host_open(&ed.host, &app.shared, {title = i18n.tr("cliche editor"), size = EDITOR_SIZE, headless = headless, integrated_title = !app.settings.system_title}, editor_build, ed) {
 		log.error("the editor's window cannot open")
 		free(ed)
 		return nil
@@ -1481,6 +1481,14 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	if ed.color_target != .None && ed.color_shape != m.doc.selected { ed.color_target = .None }
 	ed.color_built = {}
 
+	// (the window's commands first: the palette, the keys, close, whatever has the keyboard (a shape's text, the colour's
+	// field), during an export and over a dialog too; not while a menu is open: its keys are its own until it closes)
+	if !ui.menu_any_open() {
+		for a in Editor_Action {
+			if EDITOR_ACTIONS[a].scope != .Window { continue }
+			if ui.command_pressed(EDITOR_ACTIONS[a], !editor_action_enabled(ed, a)) { editor_action(ed, a); break }
+		}
+	}
 	// (while a text is typed, its field has the keys: no command takes a letter from it; nor while the colour popover
 	// is open: its field takes a colour's letters)
 	_, typing := m.mode.(Edit_Typing)
@@ -1491,7 +1499,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 		}
 		editor_nudge_keys(ed)
 		for a in Editor_Action {
-			if a == .Nudge { continue }
+			if a == .Nudge || EDITOR_ACTIONS[a].scope == .Window { continue }
 			if ui.command_pressed(EDITOR_ACTIONS[a], !editor_action_enabled(ed, a)) { editor_action(ed, a); break }
 		}
 	}
@@ -1499,6 +1507,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	canvas: ui.Rect
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###editor") {   // (the theme's surface: the host only clears to black)
+		window_title_bar(&ed.host, i18n.tr("cliche editor"), em)
 		editor_tools_bar(ed, em)
 		ui.next({width = ui.fill(), height = ui.fill(), cursor = ed.hover, bg = ui.color("well")})
 		b := ui.build_box({.Clickable, .Clip, .Draw_Background}, "###canvas")
@@ -1525,13 +1534,18 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 @(private = "file")
 editor_waiting :: proc(ed: ^Editor, em: f32) {
 	if ui.key_press(.Escape) || ui.command_pressed(EDITOR_ACTIONS[.Close]) { ed.close_due = true }
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, cross = .Center})
-	if ui.column(id = "###waiting") {
-		ui.spacer(ui.pct(0.4))
-		text := ed.load_problem != "" ? ed.load_problem : i18n.tr("Reading the picture…")
-		if ui.tags(ed.load_problem != "" ? "bad" : "weak") {
-			ui.next({width = ui.text_size(em), height = ui.px(em * 2)})
-			ui.label(fmt.tprintf("%s###waiting_text", text))
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+	if ui.column(flags = {.Draw_Background}, id = "###editor_waiting") {
+		// (its title bar while it waits too: the window moves and closes as always)
+		window_title_bar(&ed.host, i18n.tr("cliche editor"), em)
+		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, cross = .Center})
+		if ui.column(id = "###waiting") {
+			ui.spacer(ui.pct(0.4))
+			text := ed.load_problem != "" ? ed.load_problem : i18n.tr("Reading the picture…")
+			if ui.tags(ed.load_problem != "" ? "bad" : "weak") {
+				ui.next({width = ui.text_size(em), height = ui.px(em * 2)})
+				ui.label(fmt.tprintf("%s###waiting_text", text))
+			}
 		}
 	}
 }

@@ -1,6 +1,6 @@
 # The editor's two bars
 
-The editor has a bar above the picture and a bar under it. Each is the toolkit's tool bar in its Wrap mode
+The editor has a bar above the picture and a bar under it, both under the window's title bar (`title-bar.md`). Each is the toolkit's tool bar in its Wrap mode
 (`ui.toolbar(id, {overflow = .Wrap})`; the toolkit's `src/md/features/toolbar.md`). Code: `editor_tools_bar` and
 `editor_actions_bar` in `src/editor.odin`.
 

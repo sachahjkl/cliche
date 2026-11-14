@@ -162,7 +162,45 @@ the_file_reads_back_what_it_wrote :: proc(t: ^testing.T) {
 		delete(back)
 	}
 	testing.expect_value(t, len(back), len(h.entries))
-	for e, i in back { testing.expect_value(t, e, h.entries[i]) }
+	for e, i in back {
+		want := h.entries[i]
+		want.path = path_native(want.path, context.temp_allocator)   // (Windows reads "/p/x" back as "\p\x")
+		testing.expect_value(t, e, want)
+	}
+}
+
+// A file written when the paths were "<folder>" + "/" + name: on Windows each reads back with "\" only, so copying it
+// gives a path the system and the person take; on Linux a "\" is a letter of a name and stays.
+@(test)
+a_mixed_path_of_the_file_reads_in_the_systems_form :: proc(t: ^testing.T) {
+	// (the file writes "\" as "\\")
+	text := HISTORY_HEADER + "\n1\t10\tvideo\t0\t0\t0\t0\t" + `C:\\Users\\sacha\\Pictures/cliche/cliche-20261114-175520.mp4` + "\t\t\n"
+	back := history_parse(text)
+	defer {
+		for &e in back { history_entry_free(&e) }
+		delete(back)
+	}
+	testing.expect_value(t, len(back), 1)
+	when ODIN_OS == .Windows {
+		testing.expect_value(t, back[0].path, `C:\Users\sacha\Pictures\cliche\cliche-20261114-175520.mp4`)
+	} else {
+		testing.expect_value(t, back[0].path, `C:\Users\sacha\Pictures/cliche/cliche-20261114-175520.mp4`)
+	}
+	testing.expect_value(t, path_native("", context.temp_allocator), "")
+}
+
+// A capture's path has the system's separator only, whatever the folder ends with or holds.
+@(test)
+a_capture_path_has_the_systems_separator :: proc(t: ^testing.T) {
+	when ODIN_OS == .Windows {
+		testing.expect_value(t, path_join(`C:\Users\sacha\Pictures`, "cliche"), `C:\Users\sacha\Pictures\cliche`)
+		testing.expect_value(t, path_join(`C:\Users\sacha\Pictures\cliche\`, "a.mp4"), `C:\Users\sacha\Pictures\cliche\a.mp4`)
+		testing.expect_value(t, path_join("C:/Users/sacha/shots", "a.png"), `C:\Users\sacha\shots\a.png`)
+	} else {
+		testing.expect_value(t, path_join("/home/sacha/Pictures", "cliche"), "/home/sacha/Pictures/cliche")
+		testing.expect_value(t, path_join("/home/sacha/Pictures/cliche/", "a.mp4"), "/home/sacha/Pictures/cliche/a.mp4")
+		testing.expect_value(t, path_join("/home/sacha/a\\b", "c.png"), "/home/sacha/a\\b/c.png")
+	}
 }
 
 @(test)
@@ -179,7 +217,7 @@ lines_that_do_not_read_are_skipped :: proc(t: ^testing.T) {
 		delete(back)
 	}
 	testing.expect_value(t, len(back), 2)
-	testing.expect_value(t, back[0].path, "/a.png")
+	testing.expect_value(t, back[0].path, path_native("/a.png", context.temp_allocator))
 	testing.expect_value(t, back[0].size, [2]int{1, 2})
 	testing.expect_value(t, back[1].text, "hello")
 	other := history_parse("something else\n1\t10\tregion\t0\t0\t0\t0\t\t\t\n")
@@ -215,44 +253,6 @@ missing_files_are_marked :: proc(t: ^testing.T) {
 	testing.expect(t, h.version != v)
 	history_set_missing(&h, {})
 	testing.expect(t, !history_find(&h, 2).missing)
-}
-
-@(test)
-clicks_select_one_more_or_a_range :: proc(t: ^testing.T) {
-	s: History_Selection
-	defer history_selection_destroy(&s)
-	shown := []u64{10, 20, 30, 40, 50}
-	history_selection_click(&s, shown, 20, .Alone)
-	testing.expect(t, slice_is(history_selection_ids(&s, shown), {20}))
-	history_selection_click(&s, shown, 40, .Toggle)
-	testing.expect(t, slice_is(history_selection_ids(&s, shown), {20, 40}))
-	history_selection_click(&s, shown, 20, .Toggle)
-	testing.expect(t, slice_is(history_selection_ids(&s, shown), {40}))
-	// (a range from the last click: 20, unmarked, is where it starts)
-	history_selection_click(&s, shown, 50, .Range)
-	testing.expect(t, slice_is(history_selection_ids(&s, shown), {20, 30, 40, 50}))
-	history_selection_click(&s, shown, 10, .Range)
-	testing.expect(t, slice_is(history_selection_ids(&s, shown), {10, 20}))
-	testing.expect_value(t, history_selection_place(&s, shown), 0)
-}
-
-@(test)
-keys_move_and_extend_the_selection :: proc(t: ^testing.T) {
-	s: History_Selection
-	defer history_selection_destroy(&s)
-	shown := []u64{10, 20, 30, 40, 50}
-	testing.expect_value(t, history_selection_move(&s, shown, 1, false), 1)
-	testing.expect_value(t, history_selection_move(&s, shown, 3, true), 3)
-	testing.expect(t, slice_is(history_selection_ids(&s, shown), {20, 30, 40}))
-	testing.expect_value(t, history_selection_move(&s, shown, 99, false), 4)
-	testing.expect(t, slice_is(history_selection_ids(&s, shown), {50}))
-	testing.expect_value(t, history_selection_move(&s, {}, 0, false), -1)
-	history_selection_all(&s, shown)
-	testing.expect_value(t, len(history_selection_ids(&s, shown)), 5)
-	// (a filter hides some: they leave the selection)
-	history_selection_prune(&s, {10, 30})
-	testing.expect(t, slice_is(history_selection_ids(&s, {10, 30}), {10, 30}))
-	testing.expect_value(t, s.focus, 0)
 }
 
 @(private = "file")

@@ -865,6 +865,7 @@ app_prefs_changed :: proc(app: ^App) {
 	app.announcer.mode = prefs_page.announce_mode(&app.prefs)
 	app_shortcuts_follow_prefs(app)
 	app_integrate(app, force = false)
+	app_title_follow(app)
 	updates_auto(app)
 	history_prefs_changed(app)
 }

@@ -108,7 +108,13 @@ settings_keys :: proc(app: ^App) {
 settings_build :: proc(app: ^App, em: f32) {
 	m := &app.history_window.settings_mode
 	o := settings_options(app)
-	if prefs_page.back_bar(&m.page, o, i18n.tr("Settings"), i18n.tr("Back to the history (Escape)"), em) { settings_leave(app) }
+	// (the back bar, then the window's palette at its right end, as in the history's toolbar: it lists the settings too)
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+	if ui.row(id = "###settings_bar") {
+		ui.next({width = ui.fill()})
+		if prefs_page.back_bar(&m.page, o, i18n.tr("Settings"), i18n.tr("Back to the history (Escape)"), em) { settings_leave(app) }
+		history_palette_button(app, em)
+	}
 	ui.next({width = ui.fill(), height = ui.fill()})
 	prefs_page.build(&m.page, &app.prefs, o)
 }
@@ -181,6 +187,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		themes_light = app.history_window.theme_shown.light,
 		shortcut_prefs = slice.enumerated_array(&SHORTCUT_PAGE_PREFS),
 		status = settings_status,
+		problem = settings_problem,
 		page_foot = settings_page_foot,
 		pages = SETTINGS_PAGES[:], icon_font = app.history_window.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = prefs_file(),
@@ -220,6 +227,17 @@ settings_choices :: proc(user: rawptr, name: string) -> (labels, values: []strin
 		return labels_shown(shown[:], l[:]), v[:]
 	}
 	return
+}
+
+// What cliche has to say under a line: a title bar the desktop does not draw.
+@(private = "file")
+settings_problem :: proc(user: rawptr, name: string) -> string {
+	app := (^App)(user)
+	w := app.history_window.host.win
+	if name == prefs_page.SYSTEM_TITLE_PREF && app.settings.system_title && w != nil && !platform.system_title_available(w) {
+		return i18n.tr("This desktop draws no title bar for cliche's windows (GNOME): cliche keeps its own.")
+	}
+	return ""
 }
 
 // What a line says of its preference's state: the name the next file gets, the folder used. (The shortcuts' lines are
@@ -286,7 +304,8 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 		if ui.row(id = fmt.tprintf("###cmd%d", int(a))) {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
 			ui.label(fmt.tprintf("%s###what", i18n.tr(SHORTCUT_TEXT[a])))
-			ui.next({width = ui.text_size(em * 0.8), height = ui.pct(1), font = ui.mono_font(), text_pad = 0})
+			// (content: the command to paste in the desktop's shortcuts, Copy beside it)
+			ui.next({width = ui.text_size(em * 0.8), height = ui.pct(1), font = ui.mono_font(), text_pad = 0, flags = {.Selectable}})
 			if ui.tags("weak") { ui.label(fmt.tprintf("%s###cmd", SHORTCUT_COMMANDS[a])) }
 			ui.spacer(ui.px(em * 0.6))
 			done := m.copied == SHORTCUT_COMMANDS[a]

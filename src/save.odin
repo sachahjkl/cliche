@@ -6,6 +6,7 @@ package cliche
 // (save_encode, every format of Save_Format).
 
 import "core:os"
+import "core:path/filepath"
 import "core:strings"
 import "core:time"
 import "core:time/timezone"
@@ -42,7 +43,7 @@ save_file :: proc(file: []u8, folder_pref, name: string) -> (path: string, err: 
 	folder := folder_pref != "" ? strings.clone(folder_pref, context.temp_allocator) : save_folder_default(context.temp_allocator)
 	if os.make_directory_all(folder) != nil && !folder_exists(folder) { return "", .Not_Saved }
 	for n in 1 ..= NAME_TRIES {
-		try := strings.concatenate({folder, "/", name_numbered(name, n, context.temp_allocator)}, context.temp_allocator)
+		try := path_join(folder, name_numbered(name, n, context.temp_allocator))
 		if os.exists(try) { continue }
 		if !fsx.write_atomic(try, file, flush = true) { return "", .Not_Saved }
 		return strings.clone(try), .None
@@ -140,6 +141,23 @@ stamp_now :: proc() -> Stamp {
 		hour = int(dt.time.hour), minute = int(dt.time.minute), second = int(dt.time.second),
 		milli = int(dt.time.nano / 1_000_000),
 	}
+}
+
+// `name` in `folder`, with the system's separator only. The person sees, copies and opens these
+// paths, and a folder the system or the person gave may hold either separator: filepath.join cleans them all to the
+// system's ("\" on Windows), where "folder" + "/" + name gave "C:\Users\x\Pictures/cliche/shot.png".
+path_join :: proc(folder, name: string, allocator := context.temp_allocator) -> string {
+	p, _ := filepath.join({folder, name}, allocator)
+	return p
+}
+
+// A path kept from before (the history's file) in the system's form: on Windows its "/" become "\"; on Linux it
+// stays as it is ("\" is a letter of a name there, so filepath.replace_separators, which turns both, is not used).
+// "" stays "" (filepath.clean makes it ".").
+path_native :: proc(p: string, allocator := context.allocator) -> string {
+	if p == "" { return strings.clone("", allocator) }
+	out, _ := filepath.clean(p, allocator)
+	return out
 }
 
 // Writes `data` to `path` whole, its folder made first.
