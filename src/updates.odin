@@ -70,10 +70,8 @@ updates_follow :: proc(app: ^App) {
 	if st.serial != u.serial {
 		u.serial = st.serial
 		if app.history_window.visible { app.history_window.host.settle = max(app.history_window.host.settle, 3) }   // (the settings show the state)
-		// (said when asked, or when there is something to know and the window is there: not each check that found nothing)
-		if st.asked || (app.history_window.visible && (st.phase == .Installed || st.phase == .Available)) {
-			app_announce(app, st.failed ? .Bad : .Good, update.status_words(st))
-		}
+		// (the history's footer shows the phase with its badge: a toast says only what the badge cannot, once)
+		if words, bad := update.notice(st); words != "" { app_announce(app, bad ? .Bad : .Good, words) }
 		// (the installed copy: its manifest and Settings > Apps say the new version)
 		if st.phase == .Installed { worker_send(&app.worker, Job_Setup_Updated{version = strings.clone(st.version)}) }
 	}

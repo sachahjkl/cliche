@@ -721,6 +721,11 @@ history_footer :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(id = "###footer") {
 		ui.spacer(ui.px(em * 0.8))
+		// (an update on offer, coming or in place: the one place that shows it, as in every program of the toolkit)
+		if app.updates.updater != nil {
+			ui.next({height = ui.px(math.round(em * 1.5))})
+			if prefs_page.update_badge(app.updates.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.spacer(ui.px(em * 0.6)) }
+		}
 		if ui.tags("weak") {
 			n := len(hw.selection.marked)
 			count := len(hw.shown_ids) == len(hw.history.entries) ? fmt.tprintf(i18n.tr(len(hw.history.entries), "%d captures", "%d captures"), len(hw.history.entries)) : fmt.tprintf(i18n.tr(len(hw.shown_ids), "%d of %d captures", "%d of %d captures"), len(hw.shown_ids), len(hw.history.entries))
