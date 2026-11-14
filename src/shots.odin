@@ -126,7 +126,7 @@ shots_editor :: proc(app: ^App, folder: string) -> int {
 	edit_add(m, {kind = .Step, a = {140, 165}, b = {140, 165}, number = 1, style = st})
 	edit_add(m, {kind = .Step, a = {790, 320}, b = {790, 320}, number = 2, style = st})
 	edit_add(m, {kind = .Pixelate, a = {1010, 395}, b = {1190, 432}, style = m.styles[.Pixelate]})
-	m.doc.selected = 0   // (the arrow: its properties in the bar)
+	edit_select(m, 0)   // (the arrow: its properties in the bar)
 	// (the mosaic is made by a task: frames until it is there, bounded, or the pixelated box is a grey block)
 	deadline := time.tick_add(time.tick_now(), SHOTS_MOSAIC_WAIT)
 	for editor_filters_pending(ed) {

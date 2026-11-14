@@ -23,8 +23,11 @@ package cliche
 // shape opens its menu (delete, duplicate, its place among the others).
 //
 // What reads every pixel runs on the chores: each mosaic (Pixelate) and blurred copy (Blur) the shapes or the tool need,
-// once per picture and size (Editor_Filter); the decoding of a picture pasted. Ctrl+V asks the clipboard without waiting
-// (platform.clipboard_request): a picture first, else a text (Editor_Paste, one state machine).
+// once per picture and size (Editor_Filter); the decoding of a picture pasted or inserted; the picture made again
+// through the document's operations (turned, mirrored, resized, margins, a band cut out: Editor_Picture_Work), and the
+// auto crop's search for plain edges. Ctrl+V asks the clipboard without waiting (platform.clipboard_request): a picture
+// first, else a text (Editor_Paste, one state machine, which also reads the file of Ctrl+I and the last screenshot of
+// Ctrl+Shift+I). A smart eraser's colour is read on this thread: the edge of its box, not its inside.
 //
 // Done hands the flattened picture back to the run that asked for it (workflow_editor_done); a picture of the history
 // runs the workflow of "Capture a region and edit". Cancel, or a close without Done, cancels the run's Annotate step
@@ -64,9 +67,11 @@ EDITOR_CROP_DIM :: 0.55     // how dark the picture is outside the crop
 // The actions of the bar, the keys, the palette and the sheet. The tools come first, in Edit_Tool's order. Nudge is
 // last: the sheet lists it, the palette does not (the arrow keys are its own).
 Editor_Action :: enum u8 {
-	Tool_Select, Tool_Rectangle, Tool_Ellipse, Tool_Arrow, Tool_Line, Tool_Pen, Tool_Text, Tool_Highlighter,
-	Tool_Pixelate, Tool_Blur, Tool_Step, Tool_Crop,
-	Undo, Redo, Paste, Delete, Delete_All, Duplicate, Bring_To_Front, Bring_Forward, Send_Backward, Send_To_Back, Remove_Crop,
+	Tool_Select, Tool_Rectangle, Tool_Ellipse, Tool_Arrow, Tool_Line, Tool_Pen, Tool_Text, Tool_Balloon, Tool_Highlighter,
+	Tool_Pixelate, Tool_Blur, Tool_Eraser, Tool_Magnify, Tool_Step, Tool_Crop, Tool_Cut_Out,
+	Undo, Redo, Paste, Select_All, Delete, Delete_All, Duplicate, Bring_To_Front, Bring_Forward, Send_Backward, Send_To_Back, Remove_Crop,
+	Insert_File, Insert_Last, Insert_Cursor,
+	Rotate_Right, Rotate_Left, Rotate_Half, Flip_Across, Flip_Down, Resize, Canvas, Auto_Crop,
 	Zoom_In, Zoom_Out, Zoom_Fit, Zoom_Actual,
 	Copy, Save, Save_As, Upload, Pin, Print, Done,
 	Close, Palette, Keys,
@@ -84,16 +89,21 @@ EDITOR_ACTIONS := [Editor_Action]ui.Command{
 	.Tool_Ellipse     = {label = i18n.later("Ellipse"), group = i18n.later("Tools"), keys = {{.E, {}}}, icon = lucide.CIRCLE, tags = {"circle", "oval", "round"}},
 	.Tool_Arrow       = {label = i18n.later("Arrow"), group = i18n.later("Tools"), keys = {{.A, {}}}, icon = lucide.ARROW_UP_RIGHT, tags = {"point", "show"}},
 	.Tool_Line        = {label = i18n.later("Line"), group = i18n.later("Tools"), keys = {{.L, {}}}, icon = lucide.SLASH, tags = {"straight", "rule"}},
-	.Tool_Pen         = {label = i18n.later("Pen"), group = i18n.later("Tools"), keys = {{.P, {}}}, icon = lucide.PENCIL, tags = {"freehand", "draw", "brush"}},
+	.Tool_Pen         = {label = i18n.later("Pen"), group = i18n.later("Tools"), keys = {{.P, {}}}, icon = lucide.PENCIL, tags = {"freehand", "draw", "brush", "freehand arrow"}},
 	.Tool_Text        = {label = i18n.later("Text"), group = i18n.later("Tools"), keys = {{.T, {}}}, icon = lucide.TYPE, tags = {"label", "write", "words"}},
+	.Tool_Balloon     = {label = i18n.later("Speech balloon"), group = i18n.later("Tools"), keys = {{.Q, {}}}, icon = lucide.MESSAGE_SQUARE_TEXT, tags = {"bubble", "callout", "comment", "say", "quote"}},
 	.Tool_Highlighter = {label = i18n.later("Highlighter"), group = i18n.later("Tools"), keys = {{.H, {}}}, icon = lucide.HIGHLIGHTER, tags = {"marker", "yellow", "emphasis"}},
 	.Tool_Pixelate    = {label = i18n.later("Pixelate"), group = i18n.later("Tools"), keys = {{.B, {}}}, icon = lucide.LAYOUT_GRID, tags = {"hide", "censor", "mosaic", "redact"}},
 	.Tool_Blur        = {label = i18n.later("Blur"), group = i18n.later("Tools"), keys = {{.G, {}}}, icon = lucide.DROPLETS, tags = {"hide", "censor", "gaussian", "soft", "redact"}},
+	.Tool_Eraser      = {label = i18n.later("Smart eraser"), group = i18n.later("Tools"), keys = {{.X, {}}}, icon = lucide.ERASER, tags = {"hide", "remove", "fill", "background", "redact"}},
+	.Tool_Magnify     = {label = i18n.later("Magnifier"), group = i18n.later("Tools"), keys = {{.M, {}}}, icon = lucide.SEARCH, tags = {"zoom", "loupe", "enlarge", "detail"}},
 	.Tool_Step        = {label = i18n.later("Step number"), group = i18n.later("Tools"), keys = {{.N, {}}}, icon = lucide.LIST_ORDERED, tags = {"counter", "badge", "numbered"}},
 	.Tool_Crop        = {label = i18n.later("Crop"), group = i18n.later("Tools"), keys = {{.C, {}}}, icon = lucide.CROP, tags = {"cut", "trim"}},
+	.Tool_Cut_Out     = {label = i18n.later("Cut out a band"), group = i18n.later("Tools"), keys = {{.K, {}}}, icon = lucide.SCISSORS, tags = {"remove", "strip", "join", "rows", "columns"}},
 	.Undo             = {label = i18n.later("Undo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl}}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
 	.Redo             = {label = i18n.later("Redo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again", "forward"}},
 	.Paste            = {label = i18n.later("Paste a picture or a text"), group = i18n.later("Edit"), keys = {{.V, {.Ctrl}}, {.Insert, {.Shift}}}, icon = lucide.CLIPBOARD_PASTE, tags = {"clipboard", "image", "insert"}},
+	.Select_All       = {label = i18n.later("Select every annotation"), group = i18n.later("Edit"), keys = {{.A, {.Ctrl}}}, icon = lucide.BOX_SELECT, tags = {"all", "everything", "pick"}},
 	.Delete           = {label = i18n.later("Delete the selection"), group = i18n.later("Edit"), keys = {{.Delete, {}}, {.Backspace, {}}}, icon = lucide.TRASH_2, tags = {"remove", "erase"}},
 	.Delete_All       = {label = i18n.later("Delete every annotation"), group = i18n.later("Edit"), keys = {{.Delete, {.Ctrl, .Shift}}}, icon = lucide.BRUSH_CLEANING, tags = {"clear", "remove", "all", "erase"}},
 	.Duplicate        = {label = i18n.later("Duplicate the selection"), group = i18n.later("Edit"), keys = {{.D, {.Ctrl}}}, icon = lucide.COPY, tags = {"clone", "copy"}},
@@ -102,6 +112,17 @@ EDITOR_ACTIONS := [Editor_Action]ui.Command{
 	.Send_Backward    = {label = i18n.later("Send backward"), group = i18n.later("Edit"), keys = {{.Page_Down, {}}}, icon = lucide.ARROW_DOWN, tags = {"order", "lower", "down"}},
 	.Send_To_Back     = {label = i18n.later("Send to back"), group = i18n.later("Edit"), keys = {{.End, {}}}, icon = lucide.SEND_TO_BACK, tags = {"order", "bottom", "lower", "below"}},
 	.Remove_Crop      = {label = i18n.later("Remove the crop"), group = i18n.later("Edit"), icon = lucide.CROP, tags = {"uncrop", "whole", "reset"}},
+	.Insert_File      = {label = i18n.later("Insert a picture from a file…"), group = i18n.later("Insert"), keys = {{.I, {.Ctrl}}}, icon = lucide.IMAGE_PLUS, tags = {"image", "open", "add", "logo"}},
+	.Insert_Last      = {label = i18n.later("Insert the last screenshot"), group = i18n.later("Insert"), keys = {{.I, {.Ctrl, .Shift}}}, icon = lucide.HISTORY, tags = {"image", "screen", "capture", "history", "add"}},
+	.Insert_Cursor    = {label = i18n.later("Insert a mouse pointer"), group = i18n.later("Insert"), icon = lucide.MOUSE_POINTER, tags = {"cursor", "arrow", "click", "add"}},
+	.Rotate_Right     = {label = i18n.later("Turn the picture right"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl}}}, icon = lucide.ROTATE_CW, tags = {"rotate", "clockwise", "90"}},
+	.Rotate_Left      = {label = i18n.later("Turn the picture left"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl, .Shift}}}, icon = lucide.ROTATE_CCW, tags = {"rotate", "counterclockwise", "90"}},
+	.Rotate_Half      = {label = i18n.later("Turn the picture upside down"), group = i18n.later("Picture"), icon = lucide.REFRESH_CW, tags = {"rotate", "180", "half"}},
+	.Flip_Across      = {label = i18n.later("Mirror the picture left to right"), group = i18n.later("Picture"), icon = lucide.FLIP_HORIZONTAL, tags = {"flip", "horizontal", "mirror"}},
+	.Flip_Down        = {label = i18n.later("Mirror the picture top to bottom"), group = i18n.later("Picture"), icon = lucide.FLIP_VERTICAL, tags = {"flip", "vertical", "mirror"}},
+	.Resize           = {label = i18n.later("Resize the picture…"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl, .Alt}}}, icon = lucide.SCALING, tags = {"scale", "size", "smaller", "larger", "width", "height"}},
+	.Canvas           = {label = i18n.later("Add margins to the picture…"), group = i18n.later("Picture"), keys = {{.M, {.Ctrl, .Alt}}}, icon = lucide.FRAME, tags = {"canvas", "pad", "border", "space", "expand"}},
+	.Auto_Crop        = {label = i18n.later("Trim the picture's plain edges"), group = i18n.later("Picture"), keys = {{.X, {.Ctrl, .Shift}}}, icon = lucide.SHRINK, tags = {"auto crop", "trim", "border", "whitespace"}},
 	.Zoom_In          = {label = i18n.later("Zoom in"), group = i18n.later("View"), keys = {{.Equal, {.Ctrl}}, {.Num_Add, {.Ctrl}}}, icon = lucide.ZOOM_IN, tags = {"larger", "magnify"}},
 	.Zoom_Out         = {label = i18n.later("Zoom out"), group = i18n.later("View"), keys = {{.Minus, {.Ctrl}}, {.Num_Subtract, {.Ctrl}}}, icon = lucide.ZOOM_OUT, tags = {"smaller"}},
 	.Zoom_Fit         = {label = i18n.later("Fit the picture to the window"), group = i18n.later("View"), keys = {{.N0, {.Ctrl}}}, icon = lucide.MAXIMIZE, tags = {"zoom", "whole", "reset"}},
@@ -159,16 +180,46 @@ Editor_Decode_Work :: struct {
 	app:   ^App,
 }
 
-// The paste (Ctrl+V): one state machine.
+// The paste (Ctrl+V) and the pictures inserted from a file or from the history: one state machine.
 //
 //   Idle --Ctrl+V--> Asking (a picture) --a picture--> Decoding --its pixels--> Idle (the picture added)
 //   Asking (a picture) --none--> Asking (a text) --a text--> Idle (the text added); --none--> Idle (said)
+//   Idle --a file chosen (Ctrl+I), the last screenshot (Ctrl+Shift+I)--> Reading --its pixels--> Idle (the picture added)
 //
-// A new Ctrl+V starts again (the answer to an older ask has another id: it is let go); the picture going stops it.
+// A new Ctrl+V or insert starts again (the answer to an older ask has another id: it is let go); the picture going
+// stops it.
 Editor_Paste_Idle     :: struct {}
 Editor_Paste_Asking   :: struct { id: u64, format: platform.Clipboard_Format, at: Edit_Vec }   // at: picture pixels
 Editor_Paste_Decoding :: struct { work: ^Editor_Decode_Work, at: Edit_Vec }
-Editor_Paste :: union #no_nil { Editor_Paste_Idle, Editor_Paste_Asking, Editor_Paste_Decoding }
+Editor_Paste_Reading  :: struct { work: ^Editor_Load_Work, at: Edit_Vec }
+Editor_Paste :: union #no_nil { Editor_Paste_Idle, Editor_Paste_Asking, Editor_Paste_Decoding, Editor_Paste_Reading }
+
+// The picture made from the one taken through the document's operations (turned, resized...), or the box of its plain
+// edges (auto crop), by a task of the chores: each reads every pixel. The task owns this until `ended`; the editor waits
+// for it before the pixels it reads go.
+Editor_Picture_Work :: struct {
+	trim:     bool,         // the box of the plain edges; else the picture through `ops`
+	rgba:     []u8,         // read only: the picture taken (to make), the picture now (to trim)
+	size:     [2]int,
+	ops:      []Edit_Op,    // owned
+	serial:   u64,          // the picture it read (Editor.picture_serial): a trim of another is let go
+	out:      []u8,         // owned: the picture made
+	out_size: [2]int,
+	box:      Edit_Box,     // the trim's
+	found:    bool,
+	ended:    sync.One_Shot_Event,
+	app:      ^App,
+}
+
+// What the dialog of the picture's size or margins holds while it is open.
+Editor_Size_Dialog :: struct {
+	open:    bool,
+	margins: bool,     // the margins' dialog; else the size's
+	width, height: int,
+	keep_ratio: bool,
+	sides:   [4]int,   // the margins: left, top, right, bottom
+	color:   u32,      // the margins' colour, 0xAARRGGBB
+}
 
 // Which colour the colour popover changes.
 Editor_Color_Target :: enum u8 { None, Stroke, Fill }
@@ -214,6 +265,17 @@ Editor :: struct {
 	images:      [dynamic]Edit_Image,   // the pictures pasted (their textures), for the picture's life
 	image_next:  u32,
 	paste:       Editor_Paste,
+	insert_serial: u64,               // the file dialog's ask its answer must name (Ctrl+I)
+
+	// the picture through the document's operations: its pixels (owned; nil while there are none: the shot's), the
+	// operations it was made with, the task making the next one, the task trimming it (auto crop)
+	picture:      []u8,
+	picture_size: [2]int,
+	picture_ops:  [dynamic]Edit_Op,
+	picture_serial: u64,              // counts the pictures shown (a trim names the one it read)
+	picture_work: ^Editor_Picture_Work,
+	trim_work:    ^Editor_Picture_Work,
+	size_dialog:  Editor_Size_Dialog,
 	load_work:   ^Editor_Load_Work,   // a file being read (editor_open_file)
 	load_problem: string,             // why the file could not be shown (static text; "" none)
 	export_wait: bool,                // an export asked while a filter was made: it starts once they are (export_wait_for)
@@ -282,9 +344,10 @@ editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
 	render.update_texture_rgba(r, ed.tex, 0, 0, w, h, shot.rgba)
 	timing_mark("picture uploaded")
 	ed.shot, ed.has_picture = shot, true
-	edit_model_init(&ed.model, shot.size, scale, editor_measure, ed)
+	edit_model_init(&ed.model, shot.size, scale, editor_measure, ed, editor_sample)
 	editor_choices_load(app, &ed.model)
 	ed.field_typing = 0
+	ed.size_dialog.open = false
 	ed.asking, ed.close_due, ed.done_due, ed.exporting, ed.export_wait = false, false, false, false, false
 	ed.filters_revision = 0
 	ed.color_target = .None
@@ -404,10 +467,13 @@ editor_after_frame :: proc(ed: ^Editor) {
 	editor_load_take(ed)
 	editor_drops_open(ed)
 	if ed.has_picture {
+		// (the picture first: the filters read the one it gives)
+		editor_picture_follow(ed)
+		editor_trim_take(ed)
 		editor_filters_want(ed)
 		editor_filters_take(ed)
 		editor_paste_take(ed)
-		if ed.export_wait && !editor_filters_busy(ed) {
+		if ed.export_wait && !editor_filters_busy(ed) && !editor_picture_pending(ed) {
 			ed.export_wait = false
 			editor_export_start(ed, ed.export_wait_for)
 		}
@@ -418,6 +484,7 @@ editor_after_frame :: proc(ed: ^Editor) {
 		ed.done_due = false
 		editor_filters_stop(ed)
 		editor_paste_stop(ed)
+		editor_picture_stop(ed)
 		shot := ed.shot
 		ed.shot, ed.has_picture = {}, false
 		editor_choices_keep(ed.app, &ed.model)
@@ -536,6 +603,7 @@ editor_free :: proc(ed: ^Editor) {
 	delete(ed.mosaics)
 	delete(ed.blurs)
 	delete(ed.images)
+	delete(ed.picture_ops)
 }
 
 // The window hidden, the picture and its shapes let go: editors_sweep frees it, or keeps it for the next picture.
@@ -558,6 +626,8 @@ editor_picture_drop :: proc(ed: ^Editor) {
 	if ed.has_picture { editor_choices_keep(ed.app, &ed.model) }
 	editor_filters_stop(ed)
 	editor_paste_stop(ed)
+	editor_picture_stop(ed)
+	ed.size_dialog.open = false
 	editor_save_as_stop(ed)
 	edit_export_free(&ed.export)
 	ed.exporting, ed.export_wait = false, false
@@ -575,6 +645,163 @@ editor_measure :: proc(user: rawptr, text: string, size: f32, bold: bool) -> Edi
 	face := bold && ed.font_bold != 0 ? ed.font_bold : app.shared.font
 	m := font.metrics(&app.shared.fonts, face, size)
 	return {font.text_width(&app.shared.fonts, face, size, text), m.line_height}
+}
+
+// The colour around a box of the picture shown (the model's sample, for a smart eraser). On this thread: it reads the
+// box's edge, a few thousand pixels at most, once per gesture.
+@(private = "file")
+editor_sample :: proc(user: rawptr, box: Edit_Box) -> u32 {
+	ed := (^Editor)(user)
+	rgba, size := editor_pixels(ed)
+	return edit_edge_color(rgba, size, box)
+}
+
+// The pixels of the picture shown: the one taken, or the one its operations made.
+@(private = "file")
+editor_pixels :: proc(ed: ^Editor) -> (rgba: []u8, size: [2]int) {
+	if ed.picture != nil { return ed.picture, ed.picture_size }
+	return ed.shot.rgba, ed.shot.size
+}
+
+////////////////////////////////
+// The picture's operations and the auto crop: tasks of the chores (Editor_Picture_Work)
+
+// The document's operations differ from those of the picture shown: the picture is made again, from the one taken,
+// by a task (one at a time: one done for operations since changed is let go, and the next starts). With none, the one
+// taken is shown again at once.
+@(private = "file")
+editor_picture_follow :: proc(ed: ^Editor) {
+	ops := ed.model.doc.ops[:]
+	if work := ed.picture_work; work != nil {
+		if sync.atomic_load(&work.ended.state) == 0 { return }
+		ed.picture_work = nil
+		if slice.equal(work.ops, ops) && len(work.out) > 0 {
+			editor_picture_show(ed, work.out, work.out_size, ops)
+			work.out = nil
+		} else if slice.equal(work.ops, ops) {
+			// (no picture made, which the model's checks keep from happening: the one shown stays, not made again and again)
+			clear(&ed.picture_ops)
+			append(&ed.picture_ops, ..ops)
+		}
+		editor_picture_work_free(work)
+	}
+	if slice.equal(ed.picture_ops[:], ops) { return }
+	if len(ops) == 0 {
+		editor_picture_show(ed, nil, ed.shot.size, ops)
+		return
+	}
+	work := new(Editor_Picture_Work)
+	work^ = {rgba = ed.shot.rgba, size = ed.shot.size, ops = slice.clone(ops), app = ed.app}
+	run :: proc(data: rawptr) {
+		work := (^Editor_Picture_Work)(data)
+		work.out, work.out_size = edit_picture_make(work.rgba, work.size, work.ops)
+		app := work.app   // (read first: once ended, the editor may free the work)
+		sync.one_shot_event_signal(&work.ended)
+		app_wake(app)
+	}
+	if !tasks.add(ui.chores(), run, work) {
+		editor_picture_work_free(work)
+		return
+	}
+	ed.picture_work = work
+	ed.host.settle = max(ed.host.settle, 2)
+}
+
+// `pixels` (taken; nil: the picture taken) shown, made with `ops`: its texture, and the filters made again from it.
+@(private = "file")
+editor_picture_show :: proc(ed: ^Editor, pixels: []u8, size: [2]int, ops: []Edit_Op) {
+	// (what reads the picture shown stops first: its pixels go)
+	editor_trim_stop(ed)
+	editor_filters_reset(ed)
+	delete(ed.picture)
+	ed.picture, ed.picture_size = pixels, size
+	clear(&ed.picture_ops)
+	append(&ed.picture_ops, ..ops)
+	ed.picture_serial += 1
+	rgba, _ := editor_pixels(ed)
+	r := &ed.app.shared.r
+	if ed.tex != 0 && ed.tex_size != size {
+		render.destroy_texture(r, ed.tex)
+		ed.tex = 0
+	}
+	if ed.tex == 0 {
+		ed.tex = render.create_texture_rgba(r, size.x, size.y, mips = true)
+		ed.tex_size = size
+	}
+	if ed.tex != 0 { render.update_texture_rgba(r, ed.tex, 0, 0, size.x, size.y, rgba) }
+	ed.host.settle = max(ed.host.settle, 2)
+}
+
+// Whether the picture shown is not yet the document's (an export waits for it).
+@(private = "file")
+editor_picture_pending :: proc(ed: ^Editor) -> bool {
+	return ed.picture_work != nil || !slice.equal(ed.picture_ops[:], ed.model.doc.ops[:])
+}
+
+// Auto crop: the plain edges of the picture shown found by a task; its answer crops (one undo step).
+@(private = "file")
+editor_trim_begin :: proc(ed: ^Editor) {
+	if ed.trim_work != nil || editor_picture_pending(ed) { return }
+	rgba, size := editor_pixels(ed)
+	work := new(Editor_Picture_Work)
+	work^ = {trim = true, rgba = rgba, size = size, serial = ed.picture_serial, app = ed.app}
+	run :: proc(data: rawptr) {
+		work := (^Editor_Picture_Work)(data)
+		work.box, work.found = edit_trim_box(work.rgba, work.size)
+		app := work.app
+		sync.one_shot_event_signal(&work.ended)
+		app_wake(app)
+	}
+	if !tasks.add(ui.chores(), run, work) {
+		editor_picture_work_free(work)
+		return
+	}
+	ed.trim_work = work
+}
+
+@(private = "file")
+editor_trim_take :: proc(ed: ^Editor) {
+	work := ed.trim_work
+	if work == nil || sync.atomic_load(&work.ended.state) == 0 { return }
+	ed.trim_work = nil
+	defer editor_picture_work_free(work)
+	if work.serial != ed.picture_serial { return }   // (another picture since: its edges are not these)
+	if !work.found || !edit_crop_set(&ed.model, work.box) {
+		app_announce(ed.app, .Info, i18n.tr("Nothing to trim"), i18n.tr("The picture has no plain edges."), &ed.host)
+		return
+	}
+	ed.host.settle = max(ed.host.settle, 2)
+}
+
+// Before the pixels a trim reads go: it is waited for (one pass over the picture) and let go.
+@(private = "file")
+editor_trim_stop :: proc(ed: ^Editor) {
+	work := ed.trim_work
+	if work == nil { return }
+	ed.trim_work = nil
+	sync.one_shot_event_wait(&work.ended)
+	editor_picture_work_free(work)
+}
+
+// The picture goes: the tasks that read it are waited for, the picture made is freed.
+@(private = "file")
+editor_picture_stop :: proc(ed: ^Editor) {
+	editor_trim_stop(ed)
+	if work := ed.picture_work; work != nil {
+		ed.picture_work = nil
+		sync.one_shot_event_wait(&work.ended)
+		editor_picture_work_free(work)
+	}
+	delete(ed.picture)
+	ed.picture, ed.picture_size = nil, {}
+	clear(&ed.picture_ops)
+}
+
+@(private = "file")
+editor_picture_work_free :: proc(work: ^Editor_Picture_Work) {
+	delete(work.ops)
+	delete(work.out)
+	free(work)
 }
 
 ////////////////////////////////
@@ -604,7 +831,8 @@ editor_filters_want :: proc(ed: ^Editor) {
 editor_filter_ask :: proc(ed: ^Editor, kind: Editor_Filter_Kind, amount: int) {
 	for f in ed.filters { if f.kind == kind && f.amount == amount { return } }
 	work := new(Editor_Filter_Work)
-	work^ = {rgba = ed.shot.rgba, size = ed.shot.size, kind = kind, amount = amount, app = ed.app}
+	rgba, size := editor_pixels(ed)
+	work^ = {rgba = rgba, size = size, kind = kind, amount = amount, app = ed.app}
 	run :: proc(data: rawptr) {
 		work := (^Editor_Filter_Work)(data)
 		switch work.kind {
@@ -662,10 +890,19 @@ editor_filters_pending :: proc(ed: ^Editor) -> bool {
 	return editor_filters_busy(ed)
 }
 
-// Before the picture goes: the tasks read it. Told to stop, each ends within a row of cells, and is waited for. What
-// was made goes with it, and the pasted pictures' textures (no shape of another picture names them).
+// Before the picture goes: the tasks read it. What was made goes with it, and the pasted pictures' textures (no shape
+// of another picture names them).
 @(private = "file")
 editor_filters_stop :: proc(ed: ^Editor) {
+	editor_filters_reset(ed)
+	for img in ed.images { render.destroy_texture(&ed.app.shared.r, img.tex) }
+	clear(&ed.images)
+}
+
+// The filters of the picture shown let go (it goes, or its operations made another): the tasks that read it, told to
+// stop, each end within a row of cells, and are waited for. The next frame asks again for what the shapes need.
+@(private = "file")
+editor_filters_reset :: proc(ed: ^Editor) {
 	for f in ed.filters {
 		work := f.work
 		if work == nil { continue }
@@ -680,8 +917,6 @@ editor_filters_stop :: proc(ed: ^Editor) {
 	clear(&ed.mosaics)
 	for b in ed.blurs { render.destroy_texture(&ed.app.shared.r, b.tex) }
 	clear(&ed.blurs)
-	for img in ed.images { render.destroy_texture(&ed.app.shared.r, img.tex) }
-	clear(&ed.images)
 	ed.filters_revision = 0
 }
 
@@ -745,35 +980,107 @@ editor_paste_nothing :: proc(ed: ^Editor) {
 	app_announce(ed.app, .Info, i18n.tr("Nothing to paste"), i18n.tr("The clipboard holds no picture and no text."), &ed.host)
 }
 
-// The picture pasted, once decoded: a texture of its own, and a shape on the picture.
+// The picture pasted or read, once decoded: a texture of its own, and a shape on the picture.
 @(private = "file")
 editor_paste_take :: proc(ed: ^Editor) {
-	s, decoding := ed.paste.(Editor_Paste_Decoding)
-	if !decoding || sync.atomic_load(&s.work.state) != .Done { return }
-	ed.paste = Editor_Paste_Idle{}
-	work := s.work
-	defer editor_decode_free(work)
-	if !work.ok {
-		app_announce(ed.app, .Bad, i18n.tr("The clipboard's picture cannot be read"), "", &ed.host)
-		return
+	#partial switch s in ed.paste {
+	case Editor_Paste_Decoding:
+		if sync.atomic_load(&s.work.state) != .Done { return }
+		ed.paste = Editor_Paste_Idle{}
+		work := s.work
+		defer editor_decode_free(work)
+		if !work.ok {
+			app_announce(ed.app, .Bad, i18n.tr("The clipboard's picture cannot be read"), "", &ed.host)
+			return
+		}
+		editor_image_add(ed, work.rgba, work.size, s.at)
+	case Editor_Paste_Reading:
+		if sync.atomic_load(&s.work.state) != .Done { return }
+		ed.paste = Editor_Paste_Idle{}
+		work := s.work
+		defer editor_load_free(work)
+		if !work.ok {
+			app_announce(ed.app, .Bad, i18n.tr("The picture cannot be read: it is not a PNG, JPEG, WebP or BMP file, or it is gone."), "", &ed.host)
+			return
+		}
+		editor_image_add(ed, work.rgba, work.size, s.at)
 	}
+}
+
+// Pixels (not kept) on the picture: a texture of their own, and a shape centred on `at` (picture pixels).
+@(private = "file")
+editor_image_add :: proc(ed: ^Editor, rgba: []u8, size: [2]int, at: Edit_Vec) {
 	r := &ed.app.shared.r
-	tex := render.create_texture_rgba(r, work.size.x, work.size.y, mips = true)
+	tex := render.create_texture_rgba(r, size.x, size.y, mips = true)
 	if tex == 0 { return }
-	render.update_texture_rgba(r, tex, 0, 0, work.size.x, work.size.y, work.rgba)
+	render.update_texture_rgba(r, tex, 0, 0, size.x, size.y, rgba)
 	ed.image_next += 1
-	append(&ed.images, Edit_Image{id = ed.image_next, tex = tex, size = work.size})
-	edit_paste_image(&ed.model, ed.image_next, work.size, s.at)
+	append(&ed.images, Edit_Image{id = ed.image_next, tex = tex, size = size})
+	edit_paste_image(&ed.model, ed.image_next, size, at)
 	ed.host.settle = max(ed.host.settle, 2)
 }
 
-// The paste let go (the picture goes, or a new Ctrl+V): a decoding task is given up, without a wait.
+// The paste let go (the picture goes, or a new Ctrl+V): a decoding or reading task is given up, without a wait.
 @(private = "file")
 editor_paste_stop :: proc(ed: ^Editor) {
-	if s, decoding := ed.paste.(Editor_Paste_Decoding); decoding {
+	#partial switch s in ed.paste {
+	case Editor_Paste_Decoding:
 		if _, given_up := sync.atomic_compare_exchange_strong(&s.work.state, .Running, .Given_Up); !given_up { editor_decode_free(s.work) }
+	case Editor_Paste_Reading:
+		if _, given_up := sync.atomic_compare_exchange_strong(&s.work.state, .Running, .Given_Up); !given_up { editor_load_free(s.work) }
 	}
 	ed.paste = Editor_Paste_Idle{}
+}
+
+// Where an inserted picture, pointer or emoji lands: under the pointer when it is on the canvas, else at its centre.
+@(private = "file")
+editor_insert_at :: proc(ed: ^Editor) -> Edit_Vec {
+	m := &ed.model
+	if ed.has_pointer && edit_box_contains(m.view.canvas, ed.pointer) { return edit_to_picture(m.view, ed.pointer) }
+	return edit_view_centre(m)
+}
+
+// The picture file at `path` (not kept) read and decoded by a task of the chores, then put on the picture at `at`.
+@(private = "file")
+editor_insert_path :: proc(ed: ^Editor, path: string, at: Edit_Vec) {
+	editor_paste_stop(ed)
+	work := new(Editor_Load_Work)
+	work^ = {path = strings.clone(path), app = ed.app}
+	if !tasks.add(ui.chores(), editor_load_run, work) {
+		editor_load_free(work)
+		return
+	}
+	ed.paste = Editor_Paste_Reading{work = work, at = at}
+}
+
+// Ctrl+I: the system's dialog for a picture file (on the chores: it waits for the person); the file chosen is read.
+// An answer for an older ask, or for a picture gone since, is let go.
+@(private = "file")
+editor_insert_file :: proc(ed: ^Editor) {
+	Ask :: struct { app: ^App, editor, serial: u64, at: Edit_Vec }
+	ed.insert_serial += 1
+	patterns := []string{"*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp"}
+	filters := []platform.File_Filter{{i18n.tr("Pictures"), patterns}}
+	ask := new_clone(Ask{ed.app, ed.id, ed.insert_serial, editor_insert_at(ed)})
+	ui.file_dialog(&ed.host.state, .Open, {title = i18n.tr("Insert a picture"), filters = filters, remember_id = "cliche-insert"}, proc(r: platform.Dialog_Result, user: rawptr) {
+		ask := (^Ask)(user)
+		defer free(ask)
+		ed := editor_find(ask.app, ask.editor)
+		if ed == nil || !ed.has_picture || ed.insert_serial != ask.serial { return }
+		if r.status == .Chosen && len(r.paths) > 0 { editor_insert_path(ed, r.paths[0], ask.at) }
+	}, ask)
+}
+
+// Ctrl+Shift+I: the newest screenshot of the history whose file is there, read and put on the picture.
+@(private = "file")
+editor_insert_last :: proc(ed: ^Editor) {
+	h := &ed.app.history_window.history
+	#reverse for e in h.entries {
+		if !history_kind_picture(e.kind) || e.path == "" || e.missing { continue }
+		editor_insert_path(ed, e.path, editor_insert_at(ed))
+		return
+	}
+	app_announce(ed.app, .Info, i18n.tr("No screenshot"), i18n.tr("The history has no screenshot with its file."), &ed.host)
 }
 
 @(private = "file")
@@ -827,7 +1134,7 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 	if !ed.has_picture {
 		return events
 	}
-	blocked := ed.palette.open || ed.sheet.open || ed.asking || ed.exporting || ed.export_wait || ui.menu_any_open()
+	blocked := ed.palette.open || ed.sheet.open || ed.asking || ed.size_dialog.open || ed.exporting || ed.export_wait || ui.menu_any_open()
 	_, typing := m.mode.(Edit_Typing)
 	for e in events {
 		#partial switch e.kind {
@@ -933,7 +1240,7 @@ editor_hover :: proc(ed: ^Editor) {
 	case Edit_Panning:  ed.hover = .Grabbing; return
 	case Edit_Moving:   ed.hover = .Move; return
 	case Edit_Resizing: ed.hover = handle_cursor(s.handle); return
-	case Edit_Drawing, Edit_Cropping: ed.hover = .Crosshair; return
+	case Edit_Drawing, Edit_Cropping, Edit_Cutting, Edit_Selecting: ed.hover = .Crosshair; return
 	case Edit_Typing:   ed.hover = .Text; return
 	case Edit_Idle:
 	}
@@ -942,16 +1249,26 @@ editor_hover :: proc(ed: ^Editor) {
 	case !ed.has_pointer:                   ed.hover = .Arrow; return
 	}
 	p := edit_to_picture(m.view, ed.pointer)
-	if m.tool != .Crop {
+	if m.tool == .Crop {
+		at, has := edit_crop_handles(&m.doc)
+		tolerance := EDIT_HANDLE_PX / m.view.zoom
+		for h in Edit_Handle {
+			if h in has && abs(p.x - at[h].x) <= tolerance && abs(p.y - at[h].y) <= tolerance { ed.hover = handle_cursor(h); return }
+		}
+	} else if m.tool != .Cut_Out {
 		if h := edit_handle_hit(&m.doc, p, EDIT_HANDLE_PX / m.view.zoom); h != .None { ed.hover = handle_cursor(h); return }
 		hit := edit_hit(&m.doc, p, EDIT_HIT_PX / m.view.zoom)
-		if hit >= 0 && (m.tool == .Select || hit == m.doc.selected) { ed.hover = .Move; return }
-		if hit >= 0 && m.doc.shapes[hit].kind == .Text && m.tool == .Text { ed.hover = .Text; return }
+		if hit >= 0 && (m.tool == .Select || m.doc.shapes[hit].picked) { ed.hover = .Move; return }
+		if hit >= 0 {
+			k := m.doc.shapes[hit].kind
+			if (k == .Text || k == .Balloon) && m.tool == edit_kind_tool(k) { ed.hover = .Text; return }
+		}
 	}
 	switch m.tool {
 	case .Select: ed.hover = .Arrow
 	case .Text:   ed.hover = .Text
-	case .Rectangle, .Ellipse, .Arrow, .Line, .Pen, .Highlighter, .Pixelate, .Blur, .Step, .Crop: ed.hover = .Crosshair
+	case .Rectangle, .Ellipse, .Arrow, .Line, .Pen, .Balloon, .Highlighter, .Pixelate, .Blur, .Eraser, .Magnify, .Step, .Crop, .Cut_Out:
+		ed.hover = .Crosshair
 	}
 }
 
@@ -962,7 +1279,7 @@ handle_cursor :: proc(h: Edit_Handle) -> platform.Cursor {
 	case .Top_Right, .Bottom_Left: return .Resize_NESW
 	case .Top, .Bottom:            return .Resize_V
 	case .Left, .Right:            return .Resize_H
-	case .Start, .End:             return .Crosshair
+	case .Start, .End, .Tail:      return .Crosshair
 	case .None:
 	}
 	return .Arrow
@@ -978,7 +1295,11 @@ editor_action_enabled :: proc(ed: ^Editor, a: Editor_Action) -> bool {
 	#partial switch a {
 	case .Undo:                         return edit_can_undo(m)
 	case .Redo:                         return edit_can_redo(m)
-	case .Paste:                        return edit_idle(m)
+	case .Paste, .Insert_File, .Insert_Last, .Insert_Cursor: return edit_idle(m)
+	case .Select_All:                   return edit_idle(m) && len(m.doc.shapes) > 0
+	case .Rotate_Right, .Rotate_Left, .Rotate_Half, .Flip_Across, .Flip_Down, .Resize, .Canvas:
+		return edit_idle(m)
+	case .Auto_Crop:                    return edit_idle(m) && ed.trim_work == nil && !editor_picture_pending(ed)
 	case .Delete, .Duplicate, .Nudge:   return edit_idle(m) && edit_has_selection(m)
 	case .Delete_All:                   return edit_idle(m) && len(m.doc.shapes) > 0
 	case .Bring_To_Front, .Bring_Forward, .Send_Backward, .Send_To_Back:
@@ -995,12 +1316,24 @@ editor_action_enabled :: proc(ed: ^Editor, a: Editor_Action) -> bool {
 editor_action :: proc(ed: ^Editor, a: Editor_Action) {
 	m := &ed.model
 	switch a {
-	case .Tool_Select, .Tool_Rectangle, .Tool_Ellipse, .Tool_Arrow, .Tool_Line, .Tool_Pen, .Tool_Text, .Tool_Highlighter,
-	     .Tool_Pixelate, .Tool_Blur, .Tool_Step, .Tool_Crop:
+	case .Tool_Select, .Tool_Rectangle, .Tool_Ellipse, .Tool_Arrow, .Tool_Line, .Tool_Pen, .Tool_Text, .Tool_Balloon, .Tool_Highlighter,
+	     .Tool_Pixelate, .Tool_Blur, .Tool_Eraser, .Tool_Magnify, .Tool_Step, .Tool_Crop, .Tool_Cut_Out:
 		edit_tool_set(m, Edit_Tool(int(a) - int(Editor_Action.Tool_Select)))
 	case .Undo:        edit_undo(m)
 	case .Redo:        edit_redo(m)
 	case .Paste:       editor_paste_begin(ed)
+	case .Select_All:  edit_select_all(m)
+	case .Insert_File: editor_insert_file(ed)
+	case .Insert_Last: editor_insert_last(ed)
+	case .Insert_Cursor: edit_add_cursor(m, editor_insert_at(ed))
+	case .Rotate_Right: edit_picture_change(m, {kind = .Rotate, turns = 1})
+	case .Rotate_Left:  edit_picture_change(m, {kind = .Rotate, turns = 3})
+	case .Rotate_Half:  edit_picture_change(m, {kind = .Rotate, turns = 2})
+	case .Flip_Across:  edit_picture_change(m, {kind = .Flip, across = true})
+	case .Flip_Down:    edit_picture_change(m, {kind = .Flip, across = false})
+	case .Resize:       editor_size_dialog_open(ed, margins = false)
+	case .Canvas:       editor_size_dialog_open(ed, margins = true)
+	case .Auto_Crop:    editor_trim_begin(ed)
 	case .Delete:      edit_delete(m)
 	case .Delete_All:  edit_delete_all(m)
 	case .Duplicate:   edit_duplicate(m)
@@ -1052,7 +1385,8 @@ editor_export_start :: proc(ed: ^Editor, purpose: Edit_Export_Purpose) {
 		return
 	}
 	ed.color_target = .None
-	if editor_filters_pending(ed) {
+	// (the picture its operations make, then its filters: the file shows what the canvas will)
+	if editor_picture_pending(ed) || editor_filters_pending(ed) {
 		ed.export_wait, ed.export_wait_for = true, purpose
 		ed.host.settle = max(ed.host.settle, 2)
 		return
@@ -1138,7 +1472,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	// (while a text is typed, its field has the keys: no command takes a letter from it; nor while the colour popover
 	// is open: its field takes a colour's letters)
 	_, typing := m.mode.(Edit_Typing)
-	dialog := ed.palette.open || ed.sheet.open || ed.asking || ui.toolbar_menu_open(EDITOR_BAR) || ed.color_target != .None
+	dialog := ed.palette.open || ed.sheet.open || ed.asking || ed.size_dialog.open || ui.toolbar_menu_open(EDITOR_BAR) || ed.color_target != .None
 	if !dialog && !typing && !ed.exporting && !ed.export_wait {
 		if ui.key_press(.Escape) {
 			if !edit_deselect(m) { editor_close_asked(ed) }
@@ -1166,7 +1500,10 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	editor_text_field(ed, em)
 	editor_color_popover(ed)
 	editor_shape_menu(ed)
+	editor_menus(ed)
+	editor_zoom_menu(ed)
 	editor_dialogs(ed)
+	editor_size_dialog(ed)
 	// (the toasts at the bottom of the canvas: over the bar they hid the buttons just pressed)
 	if canvas.max.x > canvas.min.x { ui.set_toast_area(canvas) }
 	ui.set_toast_position(&ed.host.state, .Bottom_Center)
@@ -1219,7 +1556,7 @@ editor_text_field :: proc(ed: ^Editor, em: f32) {
 	}
 	size := max(edit_text_px(&m.doc, sh) * m.view.zoom, em * 0.8)
 	face := sh.style.bold && ed.font_bold != 0 ? ed.font_bold : app.shared.font
-	at := edit_to_window(m.view, sh.a)
+	at := edit_to_window(m.view, edit_text_origin(&m.doc, sh))
 	pad := math.round(em * 0.3)
 	// (as wide as its longest line, as tall as its lines: the field grows with what is typed; a pass over the text
 	// typed, not over the document)
@@ -1252,9 +1589,10 @@ editor_text_field :: proc(ed: ^Editor, em: f32) {
 	}
 }
 
-// The bar: the tools, the properties, then what is done with the picture. A window too narrow for all of it folds the
-// properties first, then undo, redo, copy, save, upload and pin, then the tools, into the bar's "…" panel; Cancel and
-// Done stay. Save as and Print are in the palette and on their keys.
+// The bar: the tools, the Insert and Picture menus, the properties, then what is done with the picture. A window too
+// narrow for all of it folds into the bar's "…" panel, item by item (EDITOR_FOLD_*): the rare tools and the menus, then
+// pin, upload and redo, then the zoom, then the properties (the last of them first), then undo, copy and save, then the
+// everyday tools; Cancel and Done stay. Save as and Print are in the palette and on their keys.
 @(private = "file")
 editor_bar :: proc(ed: ^Editor, em: f32) {
 	m := &ed.model
@@ -1262,18 +1600,30 @@ editor_bar :: proc(ed: ^Editor, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(side + math.round(em * 0.8))})
 	if ui.toolbar(EDITOR_BAR) {
 		ui.spacer(ui.px(em * 0.5))
-		if ui.toolbar_group("tools", {priority = 2}) {
+		// (what folds first: the rare tools and the two menus, then pin, upload and redo, then the zoom, then the
+		// properties (the colours last of them), then undo, copy and save, then the everyday tools)
+		if ui.toolbar_group("tools", {priority = EDITOR_FOLD_TOOLS}) {
 			for t in Edit_Tool {
 				a := Editor_Action(int(Editor_Action.Tool_Select) + int(t))
-				if bar_icon(fmt.tprintf("tool%d", int(t)), EDITOR_ACTIONS[a], side, active = m.tool == t, enabled = true) { editor_action(ed, a) }
+				priority: Maybe(int)
+				if t in EDITOR_RARE_TOOLS { priority = EDITOR_FOLD_RARE }
+				if ui.toolbar_item(fmt.tprintf("tool%d", int(t)), priority) {
+					if bar_icon(fmt.tprintf("tool%d", int(t)), EDITOR_ACTIONS[a], side, active = m.tool == t, enabled = true) { editor_action(ed, a) }
+				}
 			}
 		}
-		if ui.toolbar_group("properties", {separator = true}) { editor_properties(ed, em, side) }
+		if ui.toolbar_group("insert", {priority = EDITOR_FOLD_RARE}) { editor_menu_buttons(ed, side) }
+		if ui.toolbar_group("properties", {separator = true, priority = EDITOR_FOLD_PROPERTIES}) { editor_properties(ed, em, side) }
 		ui.spacer(ui.fill())
-		if ui.toolbar_group("zoom", {priority = 1}) { editor_zoom(ed, em, side) }
-		if ui.toolbar_group("acts", {priority = 1}) {
+		if ui.toolbar_group("zoom", {priority = EDITOR_FOLD_ZOOM}) { editor_zoom(ed, em, side) }
+		if ui.toolbar_group("acts", {priority = EDITOR_FOLD_ACTS}) {
 			for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save, .Upload, .Pin}) {
-				if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(ed, a)) { editor_action(ed, a) }
+				// (copy and save at each capture; pin, upload and redo also have their keys)
+				priority: Maybe(int)
+				if a == .Redo || a == .Upload || a == .Pin { priority = EDITOR_FOLD_SELDOM }
+				if ui.toolbar_item(fmt.tprintf("act%d", int(a)), priority) {
+					if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(ed, a)) { editor_action(ed, a) }
+				}
 			}
 		}
 		if ui.toolbar_group("end", {pinned = true}) {
@@ -1292,6 +1642,79 @@ editor_bar :: proc(ed: ^Editor, em: f32) {
 // The id of the editor's tool bar (ui.toolbar_menu_open: its "…" panel has Escape).
 @(private = "file") EDITOR_BAR :: "editor_bar"
 @(private = "file") EDITOR_ZOOM_MENU :: "editor_zoom_menu"
+@(private = "file") EDITOR_INSERT_MENU :: "editor_insert_menu"
+@(private = "file") EDITOR_PICTURE_MENU :: "editor_picture_menu"
+
+// The bar's fold priorities, the lowest folds first: what is used at each capture (the colours, the everyday tools,
+// copy and save) stays longest in a narrow window.
+@(private = "file") EDITOR_FOLD_RARE       :: -3   // the rare tools, the Insert and Picture menus
+@(private = "file") EDITOR_FOLD_SELDOM     :: -2   // pin, upload, redo (each has its key)
+@(private = "file") EDITOR_FOLD_ZOOM       :: -1
+@(private = "file") EDITOR_FOLD_PROPERTIES :: 0    // the last of them first: the colours fold last
+@(private = "file") EDITOR_FOLD_ACTS       :: 1
+@(private = "file") EDITOR_FOLD_TOOLS      :: 2
+@(private = "file") EDITOR_RARE_TOOLS :: bit_set[Edit_Tool]{.Balloon, .Eraser, .Magnify, .Cut_Out}
+
+// The stickers' names, in EDIT_STICKERS' order (the menu's search finds them by name).
+EDITOR_STICKER_NAMES := [len(EDIT_STICKERS)]string{
+	i18n.later("Thumbs up"), i18n.later("Thumbs down"), i18n.later("Check mark"), i18n.later("Cross mark"), i18n.later("Warning"),
+	i18n.later("Exclamation mark"), i18n.later("Question mark"), i18n.later("Light bulb"), i18n.later("Star"), i18n.later("Heart"),
+	i18n.later("Fire"), i18n.later("Party popper"), i18n.later("Smiling face"), i18n.later("Tears of joy"), i18n.later("Thinking face"),
+	i18n.later("Eyes"), i18n.later("Pointing right"), i18n.later("Bug"),
+}
+
+// Two buttons, each an item of the bar that folds on its own: their menus offer what can be put on the picture (a
+// picture from a file, the last screenshot, a pointer, an emoji), and what can be done to the picture itself (turn,
+// mirror, resize, margins, trim).
+@(private = "file")
+editor_menu_buttons :: proc(ed: ^Editor, side: f32) {
+	menu_button :: proc(id, menu, icon, tip: string, side: f32) {
+		if ui.toolbar_item(id) {
+			ui.next({width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)})
+			sig := ui.button(id, icon = icon, o = {tip = tip, face = .Ghost, lit = ui.menu_is_open(menu)})
+			if sig.clicked {
+				if ui.menu_is_open(menu) { ui.menu_close() } else { ui.menu_open(menu, sig.box.rect, anchor = sig.box.key) }
+			}
+		}
+	}
+	menu_button("insert", EDITOR_INSERT_MENU, lucide.IMAGE_PLUS, i18n.tr("Insert a picture, a pointer, an emoji"), side)
+	menu_button("picture", EDITOR_PICTURE_MENU, lucide.IMAGE, i18n.tr("Turn, mirror, resize or trim the picture"), side)
+}
+
+// The Insert and Picture menus, built outside the bar: a button folded into its "…" panel opens one, and the panel
+// closes at the press in the menu.
+@(private = "file")
+editor_menus :: proc(ed: ^Editor) {
+	item :: proc(ed: ^Editor, a: Editor_Action) {
+		c := EDITOR_ACTIONS[a]
+		if ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), icon = c.icon, disabled = !editor_action_enabled(ed, a)).clicked { editor_action(ed, a) }
+	}
+	if ui.menu(EDITOR_INSERT_MENU) {
+		item(ed, .Insert_File)
+		item(ed, .Insert_Last)
+		item(ed, .Insert_Cursor)
+		ui.menu_separator()
+		if ui.menu_submenu(i18n.tr("Emoji"), icon = lucide.STICKER, disabled = !edit_idle(&ed.model)) {
+			for e, i in EDIT_STICKERS {
+				if ui.menu_item(fmt.tprintf("%s   %s", e, i18n.tr(EDITOR_STICKER_NAMES[i]))).clicked { edit_add_sticker(&ed.model, e, editor_insert_at(ed)) }
+			}
+		}
+	}
+	if ui.menu(EDITOR_PICTURE_MENU) {
+		item(ed, .Rotate_Right)
+		item(ed, .Rotate_Left)
+		item(ed, .Rotate_Half)
+		ui.menu_separator()
+		item(ed, .Flip_Across)
+		item(ed, .Flip_Down)
+		ui.menu_separator()
+		item(ed, .Resize)
+		item(ed, .Canvas)
+		ui.menu_separator()
+		item(ed, .Auto_Crop)
+		item(ed, .Remove_Crop)
+	}
+}
 @(private = "file") EDITOR_SHAPE_MENU :: "editor_shape_menu"
 @(private = "file") EDITOR_COLOR_POPOVER :: "###editor_color"
 
@@ -1304,6 +1727,12 @@ editor_zoom :: proc(ed: ^Editor, em, side: f32) {
 	if sig.clicked {
 		if ui.menu_is_open(EDITOR_ZOOM_MENU) { ui.menu_close() } else { ui.menu_open(EDITOR_ZOOM_MENU, sig.box.rect, anchor = sig.box.key, search = false) }
 	}
+}
+
+// The zoom's menu, built outside the bar as the Insert and Picture menus are (the zoom folds early in a narrow window).
+@(private = "file")
+editor_zoom_menu :: proc(ed: ^Editor) {
+	m := &ed.model
 	if ui.menu(EDITOR_ZOOM_MENU) {
 		c := EDITOR_ACTIONS[.Zoom_Fit]
 		if ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), checked = m.view.fit).clicked { edit_view_fit(m) }
@@ -1363,8 +1792,33 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 	} }
 	if .Width in props { if ui.toolbar_item("width") {
 		// (a slider for the feel, its field for the exact width)
-		ui.next({width = ui.px(math.round(em * 13)), height = ui.px(math.round(side * 0.85))})
+		// (narrower than the shadow's: at 1180 px the colours, the fill and the width share the bar with the tools)
+		ui.next({width = ui.px(math.round(em * 10)), height = ui.px(math.round(side * 0.85))})
 		ui.number("###width", &style.width, lo = f32(EDIT_WIDTH_MIN), hi = f32(EDIT_WIDTH_MAX), step = 1, unit = "px", slider = true)
+		ui.spacer(ui.px(em * 0.5))
+	} }
+	if .Heads in props { if ui.toolbar_item("heads") {
+		// (in Edit_Heads' order)
+		labels := [len(Edit_Heads)]string{"—", "→", "←", "↔"}
+		tips := [len(Edit_Heads)]string{i18n.tr("No head"), i18n.tr("A head at the end"), i18n.tr("A head at the start"), i18n.tr("A head at both ends")}
+		at := int(style.heads)
+		ui.next({width = ui.px(em * 8), height = ui.px(math.round(side * 0.85))})
+		if ui.segmented("###heads", labels[:], &at, tips[:]) { style.heads = Edit_Heads(at) }
+		ui.spacer(ui.px(em * 0.5))
+	} }
+	if .Dash in props { if ui.toolbar_item("dash") {
+		// (in Edit_Dash's order)
+		labels := [len(Edit_Dash)]string{"──", "╌╌", "┈┈"}
+		tips := [len(Edit_Dash)]string{i18n.tr("A solid line"), i18n.tr("A dashed line"), i18n.tr("A dotted line")}
+		at := int(style.dash)
+		ui.next({width = ui.px(em * 7), height = ui.px(math.round(side * 0.85))})
+		if ui.segmented("###dash", labels[:], &at, tips[:]) { style.dash = Edit_Dash(at) }
+		ui.spacer(ui.px(em * 0.5))
+	} }
+	if .Radius in props { if ui.toolbar_item("radius") {
+		bar_label("radius_label", i18n.tr("Corners"), side)
+		ui.next({width = ui.px(math.round(em * 11)), height = ui.px(math.round(side * 0.85))})
+		ui.number("###radius", &style.radius, lo = f32(0), hi = f32(EDIT_RADIUS_MAX), step = 1, unit = "px", slider = true)
 		ui.spacer(ui.px(em * 0.5))
 	} }
 	if .Text_Size in props { if ui.toolbar_item("text_size") {
@@ -1403,6 +1857,27 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 		bar_label("step_number_label", edit_has_selection(m) ? i18n.tr("Number") : i18n.tr("Next"), side)
 		ui.next({width = ui.px(math.round(em * 6)), height = ui.px(math.round(side * 0.85))})
 		if ui.number("###step_number", &n, lo = 1, hi = 9999, step = 1) { edit_step_number_set(m, n) }
+		ui.spacer(ui.px(em * 0.5))
+	} }
+	if .Zoom in props { if ui.toolbar_item("zoom") {
+		labels: [len(EDIT_MAGNIFY_ZOOMS)]string
+		tips: [len(EDIT_MAGNIFY_ZOOMS)]string
+		for v, i in EDIT_MAGNIFY_ZOOMS {
+			labels[i] = fmt.tprintf("%g×", v)
+			tips[i] = fmt.tprintf(i18n.tr("%g times larger"), v)
+		}
+		at := nearest(EDIT_MAGNIFY_ZOOMS[:], style.zoom)
+		ui.next({width = ui.px(em * 10), height = ui.px(math.round(side * 0.85))})
+		if ui.segmented("###magnify_zoom", labels[:], &at, tips[:]) { style.zoom = EDIT_MAGNIFY_ZOOMS[at] }
+		ui.spacer(ui.px(em * 0.5))
+	} }
+	if .Lens in props { if ui.toolbar_item("lens") {
+		// (in Edit_Lens' order)
+		labels := [len(Edit_Lens)]string{i18n.tr("lens shape", "Circle"), i18n.tr("lens shape", "Box")}
+		tips := [len(Edit_Lens)]string{i18n.tr("A round magnifier"), i18n.tr("A rectangular magnifier")}
+		at := int(style.lens)
+		ui.next({width = ui.px(em * 9), height = ui.px(math.round(side * 0.85))})
+		if ui.segmented("###lens", labels[:], &at, tips[:]) { style.lens = Edit_Lens(at) }
 		ui.spacer(ui.px(em * 0.5))
 	} }
 	if .Blur_Radius in props { if ui.toolbar_item("blur_radius") {
@@ -1625,6 +2100,80 @@ editor_dialogs :: proc(ed: ^Editor) {
 	}
 }
 
+// The dialog of the picture's size or of its margins, filled with the picture's size and margins of nothing.
+@(private = "file")
+editor_size_dialog_open :: proc(ed: ^Editor, margins: bool) {
+	m := &ed.model
+	if !edit_idle(m) { return }
+	ed.size_dialog = {open = true, margins = margins, width = int(m.doc.size.x), height = int(m.doc.size.y), keep_ratio = true, sides = {16, 16, 16, 16}, color = EDIT_OPAQUE | 0xFFFFFF}
+	ed.color_target = .None
+}
+
+// The size: a width and a height (with "keep the ratio", one follows the other). The margins: one per side, and their
+// colour (a swatch, or none: transparent). Enter or the button applies (one undo step), Escape or Cancel closes.
+@(private = "file")
+editor_size_dialog :: proc(ed: ^Editor) {
+	d := &ed.size_dialog
+	m := &ed.model
+	em := ui.font_size()
+	apply := false
+	title := d.margins ? i18n.tr("Add margins to the picture") : i18n.tr("Resize the picture")
+	field :: proc(id, text: string, v: ^int, em: f32) -> bool {
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+		changed := false
+		if ui.row(.Center, id = fmt.tprintf("###%s_row", id)) {
+			ui.next({width = ui.px(math.round(em * 7)), height = ui.px(math.round(em * 2.2)), text_pad = 0})
+			ui.label(fmt.tprintf("%s###%s_label", text, id))
+			ui.next({width = ui.px(math.round(em * 9)), height = ui.px(math.round(em * 2))})
+			changed = ui.number(fmt.tprintf("###%s", id), v, lo = 0, hi = EDIT_PICTURE_MAX, step = 1, unit = "px")
+		}
+		ui.spacer(ui.px(math.round(em * 0.4)))
+		return changed
+	}
+	if ui.modal("editor_size", &d.open, {width_em = 24}) {
+		if ui.dialog_header("size_title", title, {icon = d.margins ? lucide.FRAME : lucide.SCALING, close = true}) {}
+		if ui.dialog_body("size_body") {
+			if d.margins {
+				names := [4]string{i18n.tr("Left"), i18n.tr("Top"), i18n.tr("Right"), i18n.tr("Bottom")}
+				for &v, i in d.sides { field(fmt.tprintf("side%d", i), names[i], &v, em) }
+				side := math.round(em * 1.6)
+				ui.next({width = ui.fill(), height = ui.px(side), axis = .X, cross = .Center})
+				if ui.row(.Center, id = "###margin_colors") {
+					transparent := d.color >> 24 == 0
+					if _, clicked := swatch_box("margin_none", 0, i18n.tr("Transparent"), transparent, side, .Slash); clicked { d.color = 0 }
+					ui.spacer(ui.px(math.round(em * 0.3)))
+					for c, i in EDIT_COLORS {
+						if swatch(fmt.tprintf("margin_swatch%d", i), c, i18n.tr(EDITOR_COLOR_NAMES[i]), !transparent && d.color & 0xFFFFFF == c, side) { d.color = EDIT_OPAQUE | c }
+						ui.spacer(ui.px(math.round(em * 0.3)))
+					}
+				}
+			} else {
+				size := m.doc.size
+				if field("width", i18n.tr("Width"), &d.width, em) && d.keep_ratio && size.x > 0 {
+					d.height = max(int(math.round(f32(d.width) * size.y / size.x)), 1)
+				}
+				if field("height", i18n.tr("Height"), &d.height, em) && d.keep_ratio && size.y > 0 {
+					d.width = max(int(math.round(f32(d.height) * size.x / size.y)), 1)
+				}
+				if ui.checkbox("###keep_ratio", i18n.tr("Keep the ratio"), &d.keep_ratio) && d.keep_ratio && size.x > 0 {
+					d.height = max(int(math.round(f32(d.width) * size.y / size.x)), 1)
+				}
+			}
+		}
+		if ui.dialog_buttons("size_buttons") {
+			if ui.button("size_cancel", i18n.tr("Cancel"), lucide.X).clicked { d.open = false }
+			act := d.margins ? i18n.tr("Add the margins") : i18n.tr("Resize")
+			if ui.button("size_apply", fmt.tprintf(i18n.tr("%s (Enter)"), act), lucide.CHECK, {intent = .Primary}).clicked || ui.key_press(.Return) {
+				apply, d.open = true, false
+			}
+		}
+	}
+	if !apply { return }
+	op := Edit_Op{kind = .Resize, size = {d.width, d.height}}
+	if d.margins { op = {kind = .Canvas, margins = d.sides, color = d.color} }
+	if !edit_picture_change(m, op) && !d.margins { app_announce(ed.app, .Info, i18n.tr("The picture keeps its size"), "", &ed.host) }
+}
+
 ////////////////////////////////
 // The canvas
 
@@ -1664,27 +2213,49 @@ canvas_crop :: proc(dc: ^draw.Context, m: ^Edit_Model) {
 	draw.rect(dc, draw.rect_pad(c, 1), {1, 1, 1, 0.9}, 0, 1)
 }
 
-// The selected shape's frame and handles.
+// The selection's frames, the handles of a shape alone selected (or of the crop, with the Crop tool), the band being
+// cut out, the box being drawn to select.
 @(private = "file")
 canvas_selection :: proc(dc: ^draw.Context, m: ^Edit_Model, accent: draw.Color, scale: f32) {
-	s := edit_selected_shape(m)
-	if s == nil { return }
-	if _, typing := m.mode.(Edit_Typing); typing { return }
 	px := max(math.round(scale), 1)
-	at, has := edit_handles(&m.doc, s)
-	// (a frame around all but a line or an arrow, whose two handles say where it is)
-	if s.kind != .Arrow && s.kind != .Line {
-		r := edit_shape_box(&m.doc, s)
-		pad := edit_stroke_px(&m.doc, s) * 0.5 * m.view.zoom + 3
-		box := draw.rect_pad(draw.Rect{edit_to_window(m.view, r.min), edit_to_window(m.view, r.max)}, pad)
-		draw.rect(dc, box, accent, 0, px)
-	}
 	half := f32(EDITOR_HANDLE_SIDE) * 0.5 * scale
-	for h in Edit_Handle {
-		if h not_in has { continue }
-		c := edit_to_window(m.view, at[h])
-		draw.rect(dc, {c - half, c + half}, {1, 1, 1, 1}, 1.5)
-		draw.rect(dc, {c - half, c + half}, accent, 1.5, px)
+	handles :: proc(dc: ^draw.Context, m: ^Edit_Model, at: [Edit_Handle]Edit_Vec, has: Edit_Handles, half, px: f32, accent: draw.Color) {
+		for h in Edit_Handle {
+			if h not_in has { continue }
+			c := edit_to_window(m.view, at[h])
+			draw.rect(dc, {c - half, c + half}, {1, 1, 1, 1}, 1.5)
+			draw.rect(dc, {c - half, c + half}, accent, 1.5, px)
+		}
+	}
+	window_box :: proc(m: ^Edit_Model, r: Edit_Box) -> draw.Rect { return {edit_to_window(m.view, r.min), edit_to_window(m.view, r.max)} }
+	if band, cutting := edit_cut_shown(m); cutting {
+		draw.rect(dc, window_box(m, band), {0.9, 0.22, 0.21, 0.35})
+		draw.rect(dc, draw.rect_pad(window_box(m, band), px), {0.9, 0.22, 0.21, 1}, 0, px)
+	}
+	if box, selecting := edit_selecting_shown(m); selecting {
+		r := window_box(m, box)
+		fill := accent
+		fill.a = 0.15
+		draw.rect(dc, r, fill)
+		draw.rect(dc, r, accent, 0, px)
+	}
+	if m.tool == .Crop && edit_idle(m) {
+		at, has := edit_crop_handles(&m.doc)
+		handles(dc, m, at, has, half, px, accent)
+	}
+	if _, typing := m.mode.(Edit_Typing); typing { return }
+	if m.doc.picked_count == 0 { return }
+	// (a frame around each shape picked but a line or an arrow, whose two handles say where it is when it is alone)
+	alone := m.doc.picked_count == 1
+	for &s in m.doc.shapes {
+		if !s.picked || (alone && (s.kind == .Arrow || s.kind == .Line)) { continue }
+		r := edit_shape_box(&m.doc, &s)
+		pad := edit_stroke_px(&m.doc, &s) * 0.5 * m.view.zoom + 3
+		draw.rect(dc, draw.rect_pad(window_box(m, r), pad), accent, 0, px)
+	}
+	if s := edit_selected_shape(m); s != nil && alone {
+		at, has := edit_handles(&m.doc, s)
+		handles(dc, m, at, has, half, px, accent)
 	}
 }
 
@@ -1702,8 +2273,9 @@ editor_copied :: proc(app: ^App, r: Result_Copy_Encoded) {
 ////////////////////////////////
 // The last choices: the tool and each tool's style, kept in the preferences (editor.tool, editor.styles) when an editor's
 // picture goes, and given to the next editor. A style reads "<tool> <rrggbb> <width> <shadow's softness> <fill aarrggbb>
-// <text size> <text look> <bold> <step format> <blur radius> <pixel size>" (the looks and formats by their number in
-// their enum), one per tool, separated by ";". A style of another form is not read: the tool keeps its default.
+// <text size> <text look> <bold> <step format> <blur radius> <pixel size> <dash> <corners> <heads> <zoom> <lens>" (the
+// looks, formats, dashes, heads and lenses by their number in their enum), one per tool, separated by ";". A style of
+// another form is not read: the tool keeps its default.
 
 // The model given the choices kept; what is not there, or not read, stays the default.
 editor_choices_load :: proc(app: ^App, m: ^Edit_Model) {
@@ -1726,8 +2298,8 @@ edit_choices_text :: proc(m: ^Edit_Model) -> (tool, styles: string) {
 	for t in Edit_Tool {
 		s := m.styles[t]
 		if t != .Select { strings.write_string(&b, ";") }
-		fmt.sbprintf(&b, "%v %06x %g %g %08x %g %d %d %d %g %g", t, s.color, s.width, s.shadow, s.fill_color, s.text_size,
-			int(s.text_look), s.bold ? 1 : 0, int(s.step_format), s.blur_radius, s.pixel_size)
+		fmt.sbprintf(&b, "%v %06x %g %g %08x %g %d %d %d %g %g %d %g %d %g %d", t, s.color, s.width, s.shadow, s.fill_color, s.text_size,
+			int(s.text_look), s.bold ? 1 : 0, int(s.step_format), s.blur_radius, s.pixel_size, int(s.dash), s.radius, int(s.heads), s.zoom, int(s.lens))
 	}
 	return fmt.tprintf("%v", m.tool), strings.to_string(b)
 }
@@ -1738,7 +2310,7 @@ edit_choices_read :: proc(m: ^Edit_Model, tool, styles: string) {
 	rest := styles
 	for part in strings.split_iterator(&rest, ";") {
 		f := strings.fields(part, context.temp_allocator)
-		if len(f) != 11 { continue }
+		if len(f) != 16 { continue }
 		t, known := edit_tool_named(f[0])
 		color, c_ok := strconv.parse_u64_of_base(f[1], 16)
 		width, w_ok := strconv.parse_f32(f[2])
@@ -1749,8 +2321,14 @@ edit_choices_read :: proc(m: ^Edit_Model, tool, styles: string) {
 		format, fo_ok := strconv.parse_int(f[8])
 		blur, b_ok := strconv.parse_f32(f[9])
 		pixel, p_ok := strconv.parse_f32(f[10])
-		if !known || !c_ok || !w_ok || !sh_ok || !fi_ok || !s_ok || !l_ok || !fo_ok || !b_ok || !p_ok { continue }
+		dash, d_ok := strconv.parse_int(f[11])
+		radius, r_ok := strconv.parse_f32(f[12])
+		heads, h_ok := strconv.parse_int(f[13])
+		zoom, z_ok := strconv.parse_f32(f[14])
+		lens, le_ok := strconv.parse_int(f[15])
+		if !known || !c_ok || !w_ok || !sh_ok || !fi_ok || !s_ok || !l_ok || !fo_ok || !b_ok || !p_ok || !d_ok || !r_ok || !h_ok || !z_ok || !le_ok { continue }
 		if color > 0xFFFFFF || fill > 0xFFFFFFFF || size <= 0 || look < 0 || look >= len(Edit_Text_Look) || format < 0 || format >= len(Edit_Step_Format) { continue }
+		if dash < 0 || dash >= len(Edit_Dash) || heads < 0 || heads >= len(Edit_Heads) || lens < 0 || lens >= len(Edit_Lens) { continue }
 		m.styles[t] = {
 			color = u32(color), fill_color = u32(fill),
 			width = clamp(width, EDIT_WIDTH_MIN, EDIT_WIDTH_MAX), shadow = clamp(shadow, 0, EDIT_SHADOW_MAX),
@@ -1758,6 +2336,8 @@ edit_choices_read :: proc(m: ^Edit_Model, tool, styles: string) {
 			step_format = Edit_Step_Format(format),
 			// (the choices offered: a value in between would make a mosaic or a blurred copy of its own)
 			blur_radius = EDIT_BLUR_RADII[nearest(EDIT_BLUR_RADII[:], blur)], pixel_size = EDIT_PIXEL_SIZES[nearest(EDIT_PIXEL_SIZES[:], pixel)],
+			dash = Edit_Dash(dash), radius = clamp(radius, 0, EDIT_RADIUS_MAX), heads = Edit_Heads(heads),
+			zoom = EDIT_MAGNIFY_ZOOMS[nearest(EDIT_MAGNIFY_ZOOMS[:], zoom)], lens = Edit_Lens(lens),
 		}
 	}
 }

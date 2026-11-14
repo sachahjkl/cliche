@@ -49,7 +49,10 @@ run_check :: proc(args: []string) -> int {
 	// (the French catalogue has every text of the code, translated: `clichetool i18n fr` writes it)
 	if e := toolbox.i18n_catalogue({"src"}, "i18n/fr.txt", "fr", check = true); e != "" { fmt.eprintln(e); return toolbox.EXIT_FAILED }
 	if run_test(nil) != toolbox.EXIT_DONE { return toolbox.EXIT_FAILED }
-	return run_build({"release"})
+	if code := run_build({"release"}); code != toolbox.EXIT_DONE { return code }
+	// (Windows: the release build starts, with its icon, through its launcher: a broken manifest once made Windows refuse
+	// every program, and nothing but starting it shows that)
+	return toolbox.check_launcher(project()) ? toolbox.EXIT_DONE : toolbox.EXIT_FAILED
 }
 
 // The settings' pages, the editor, the history and the workflows, drawn offscreen by a build of the program with

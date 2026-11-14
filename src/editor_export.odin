@@ -29,6 +29,19 @@ EDIT_SHADOW_COLOR  :: draw.Color{0, 0, 0, 0.6}
 EDIT_STEP_RING     :: 0.12   // a step's ring around a disc of its fill colour, in its radius
 EDIT_STEP_LABEL    :: 1.6    // the widest a step's label is, in its radius (a longer one is written smaller)
 EDIT_TEXT_BOX_ROUND :: 0.2   // a text's box's corners, in its text size
+EDIT_BALLOON_ROUND  :: 0.6   // a balloon's corners, in its text size
+EDIT_BALLOON_BASE   :: 0.25  // the width of a balloon's tail where it leaves the box, in the side it leaves (at most)
+// The dashes and the gaps, in strokes' widths. A dash's round ends reach half a width past it each side: a dash of 2
+// shows 3 widths long, a gap of 3 shows 2. A dot is a dash of nothing: a round dot, a width across, a width apart.
+EDIT_DASHED := [2]f32{2, 3}
+EDIT_DOTTED := [2]f32{0, 2}
+EDIT_TRIM_TOLERANCE :: 2     // how far a pixel's channel may be from the border's colour and still be trimmed (a JPEG's noise)
+
+// A mouse pointer's outline, in a box of 11.5 x 18 (its tip at the top left): an arrow with a tail, the usual pointer's shape.
+@(private = "file")
+CURSOR_OUTLINE := [?]Edit_Vec{{0, 0}, {0, 16}, {4.2, 12.2}, {6.8, 18}, {9.2, 17}, {6.6, 11.4}, {11.5, 11.4}}
+@(private = "file")
+CURSOR_BOX :: Edit_Vec{11.5, 18}
 
 // The mean colour of each cell of the picture (sRGB, row by row; owned).
 Edit_Mosaic :: struct {
@@ -133,12 +146,56 @@ target :: proc(p: ^Edit_Paint, v: Edit_Vec) -> Edit_Vec { return v * p.zoom + p.
 @(private = "file")
 target_box :: proc(p: ^Edit_Paint, r: Edit_Box) -> draw.Rect { return {target(p, r.min), target(p, r.max)} }
 
-// The picture, then the shapes in their order.
+// The picture, then the shapes in their order. (Circular corners: a rounded box filled and its dashes, a path, meet.)
 edit_paint :: proc(dc: ^draw.Context, p: ^Edit_Paint) {
+	circular := draw.set_circular_corners(dc, true)
+	defer draw.set_circular_corners(dc, circular)
 	draw.image(dc, p.picture, {p.origin, p.origin + p.doc.size * p.zoom})
 	for &s, i in p.doc.shapes {
 		if i != p.skip { edit_paint_shape(dc, p, &s) }
 	}
+}
+
+// The picture taken (`rgba`, of `size`, not kept) through the operations, in order: the picture the shapes are on
+// (owned; nil when an operation leaves nothing). It reads and writes every pixel: the window runs it on the chores.
+edit_picture_make :: proc(rgba: []u8, size: [2]int, ops: []Edit_Op, allocator := context.allocator) -> (pixels: []u8, out_size: [2]int) {
+	img := pic.Image{pixels = rgba, width = size.x, height = size.y}
+	owned := false
+	for op in ops {
+		next: pic.Image
+		switch op.kind {
+		case .Rotate: next = pic.rotate(img, op.turns, allocator)
+		case .Flip:   next = pic.flip(img, op.across, allocator)
+		case .Resize: next = pic.resize(img, op.size.x, op.size.y, allocator = allocator)
+		case .Canvas:
+			m := op.margins
+			next = pic.pad(img, m[0], m[1], m[2], m[3], pic.hex(op.color & 0xFFFFFF, u8(op.color >> 24)), allocator)
+		case .Cut:    next = pic.cut_out(img, op.at, op.length, op.across, allocator)
+		}
+		if owned { delete(img.pixels, allocator) }
+		img, owned = next, true
+		if img.width <= 0 || img.height <= 0 { return nil, {} }
+	}
+	if !owned { img.pixels = slice.clone(rgba, allocator) }
+	return img.pixels, {img.width, img.height}
+}
+
+// The mean colour around `box` (picture pixels) of the picture `rgba` of `size`, 0xAARRGGBB: a smart eraser's. It reads
+// the pixels of the box's edge only, not of its inside: a few thousand at most.
+edit_edge_color :: proc(rgba: []u8, size: [2]int, box: Edit_Box) -> u32 {
+	img := pic.Image{pixels = rgba, width = size.x, height = size.y}
+	x0, y0 := int(math.floor(box.min.x)), int(math.floor(box.min.y))
+	x1, y1 := int(math.ceil(box.max.x)), int(math.ceil(box.max.y))
+	c := pic.edge_mean(img, {x0, y0, max(x1 - x0, 1), max(y1 - y0, 1)})
+	return u32(c[3]) << 24 | u32(c[0]) << 16 | u32(c[1]) << 8 | u32(c[2])
+}
+
+// The part of the picture `rgba` of `size` that is not a border of one colour (auto crop); ok false: there is no such
+// border, or the picture is of one colour. It reads every pixel: the window runs it on the chores.
+edit_trim_box :: proc(rgba: []u8, size: [2]int) -> (box: Edit_Box, ok: bool) {
+	r := pic.trim_bounds(pic.Image{pixels = rgba, width = size.x, height = size.y}, EDIT_TRIM_TOLERANCE)
+	if r.w <= 0 || r.h <= 0 || (r.w == size.x && r.h == size.y) { return {}, false }
+	return {{f32(r.x), f32(r.y)}, {f32(r.x + r.w), f32(r.y + r.h)}}, true
 }
 
 // A shape, with its shadow under it: the toolkit's drop shadow of a layer holding the shape alone.
@@ -166,48 +223,181 @@ paint_body :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
 	switch s.kind {
 	case .Rectangle:
 		r := target_box(p, edit_box_of(s.a, s.b))
+		radius := min(s.style.radius * doc.scale * p.zoom, draw.rect_size(r).x * 0.5, draw.rect_size(r).y * 0.5)
 		// (the stroke is centred on the box's edge, as a line's is on its path; the fill goes under it)
-		if filled { draw.rect(dc, r, fill) }
-		draw.rect(dc, draw.rect_pad(r, w * 0.5), color, 0, w)
+		if filled { draw.rect(dc, r, fill, radius) }
+		if s.style.dash == .Solid {
+			draw.rect(dc, draw.rect_pad(r, w * 0.5), color, radius > 0 ? radius + w * 0.5 : 0, w)
+		} else {
+			path := draw.path_make(allocator = context.temp_allocator)
+			draw.path_rounded_rect(&path, r, radius)
+			stroke(dc, &path, w, color, s.style.dash)
+		}
 	case .Ellipse:
 		r := target_box(p, edit_box_of(s.a, s.b))
-		centre := draw.rect_center(r)
-		radii := draw.rect_size(r) * 0.5
 		path := draw.path_make(allocator = context.temp_allocator)
-		draw.path_arc(&path, centre, radii, 0, 2 * math.PI)
+		draw.path_arc(&path, draw.rect_center(r), draw.rect_size(r) * 0.5, 0, 2 * math.PI)
 		draw.path_close(&path)
 		if filled { draw.path_fill(dc, &path, fill) }
-		draw.path_stroke(dc, &path, w, color)
+		stroke(dc, &path, w, color, s.style.dash)
 	case .Line:
-		draw.line(dc, target(p, s.a), target(p, s.b), w, color)
+		path := draw.path_make(allocator = context.temp_allocator)
+		draw.path_move_to(&path, target(p, s.a))
+		draw.path_line_to(&path, target(p, s.b))
+		stroke(dc, &path, w, color, s.style.dash)
 	case .Arrow:
-		paint_arrow(dc, target(p, s.a), target(p, s.b), w, doc.scale * p.zoom, color)
+		pts := [2]Edit_Vec{target(p, s.a), target(p, s.b)}
+		paint_arrow(dc, pts[:], w, doc.scale * p.zoom, color, s.style.heads, s.style.dash)
 	case .Pen:
 		if len(s.points) == 0 { return }
-		if len(s.points) == 1 {
-			q := target(p, s.points[0])
-			draw.line(dc, q, q, w, color)
-			return
-		}
-		path := draw.path_make(allocator = context.temp_allocator)
-		draw.path_move_to(&path, target(p, s.points[0]))
-		for q in s.points[1:] { draw.path_line_to(&path, target(p, q)) }
-		draw.path_stroke(dc, &path, w, color)
+		pts := make([]Edit_Vec, len(s.points), context.temp_allocator)
+		for q, i in s.points { pts[i] = target(p, q) }
+		paint_arrow(dc, pts, w, doc.scale * p.zoom, color, s.style.heads, s.style.dash)
 	case .Text:
 		paint_text(dc, p, s)
+	case .Balloon:
+		paint_balloon(dc, p, s)
 	case .Highlighter:
 		draw.rect(dc, target_box(p, edit_box_of(s.a, s.b)), edit_color(s.style.color, EDIT_HIGHLIGHT_ALPHA))
 	case .Pixelate:
 		paint_mosaic(dc, p, edit_box_of(s.a, s.b), edit_pixel_cell(doc, s.style))
 	case .Blur:
 		paint_blur(dc, p, edit_box_of(s.a, s.b), edit_blur_px(doc, s.style))
+	case .Eraser:
+		// (the colour around it, once the window read it: a grey box until then)
+		c := draw.Color{0.5, 0.5, 0.5, 1}
+		if s.sample >> 24 != 0 { c = edit_color(s.sample & 0xFFFFFF, f32(s.sample >> 24) / 255) }
+		draw.rect(dc, target_box(p, edit_box_of(s.a, s.b)), c)
+	case .Magnify:
+		paint_magnify(dc, p, s)
 	case .Step:
 		paint_step(dc, p, s)
 	case .Image:
 		for img in p.images {
 			if img.id == s.image { draw.image(dc, img.tex, target_box(p, edit_box_of(s.a, s.b))); break }
 		}
+	case .Cursor:
+		paint_cursor(dc, target_box(p, edit_box_of(s.a, s.b)))
+	case .Sticker:
+		size := edit_text_px(doc, s) * p.zoom
+		m := font.metrics(p.fonts, p.font_id, size)
+		at := target(p, s.a)
+		// (white: an emoji draws in its own colours; a glyph with none takes white)
+		draw.text(dc, p.font_id, size, {at.x, at.y + m.ascent}, {1, 1, 1, 1}, s.text)
 	}
+}
+
+// A path stroked whole, in dashes or in dots; their lengths grow with the width.
+@(private = "file")
+stroke :: proc(dc: ^draw.Context, path: ^draw.Path, w: f32, color: draw.Color, dash: Edit_Dash) {
+	switch dash {
+	case .Solid:
+		draw.path_stroke(dc, path, w, color)
+	case .Dashed, .Dotted:
+		pattern := (dash == .Dashed ? EDIT_DASHED : EDIT_DOTTED) * w
+		dashes := draw.path_dash(path, pattern[:], allocator = context.temp_allocator)
+		draw.path_stroke(dc, &dashes, w, color)
+	}
+}
+
+// A balloon: its box and tail as one outline, filled and stroked, then its text inside.
+@(private = "file")
+paint_balloon :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
+	doc := p.doc
+	r := target_box(p, edit_box_of(s.a, s.b))
+	radius := min(edit_text_px(doc, s) * p.zoom * EDIT_BALLOON_ROUND, draw.rect_size(r).x * 0.5, draw.rect_size(r).y * 0.5)
+	path := draw.path_make(allocator = context.temp_allocator)
+	balloon_outline(&path, r, radius, target(p, s.c))
+	fill, filled := fill_color(s.style)
+	if filled { draw.path_fill(dc, &path, fill) }
+	if s.style.width > 0 { stroke(dc, &path, max(edit_stroke_px(doc, s) * p.zoom, 1), edit_color(s.style.color), s.style.dash) }
+	paint_lines(dc, p, s, edit_text_origin(doc, s), edit_color(s.style.color))
+}
+
+// A rounded box `r` and a tail to `tip` as one closed contour, clockwise: the tail leaves the side that faces its tip,
+// where the tip is across from it (clamped clear of the corners). A tip inside the box has no tail.
+@(private = "file")
+balloon_outline :: proc(path: ^draw.Path, r: draw.Rect, radius: f32, tip: Edit_Vec) {
+	k := radius
+	c := k * (1 - draw.PATH_KAPPA)
+	// (the side the tail leaves: 0 top, 1 right, 2 bottom, 3 left; -1 none)
+	side := -1
+	switch {
+	case tip.y > r.max.y: side = 2
+	case tip.y < r.min.y: side = 0
+	case tip.x > r.max.x: side = 1
+	case tip.x < r.min.x: side = 3
+	}
+	// (where along that side its base is centred, and how wide)
+	tail :: proc(path: ^draw.Path, from, to: f32, along: f32, k: f32, fixed: f32, tip: Edit_Vec, across: bool) {
+		lo, hi := min(from, to), max(from, to)
+		room := (hi - lo) - 2 * k
+		if room <= 1 { return }
+		half := min(room * EDIT_BALLOON_BASE, room) * 0.5
+		centre := clamp(along, lo + k + half, hi - k - half)
+		// (in the travel's direction: from `from` towards `to`)
+		dir: f32 = to > from ? 1 : -1
+		b0, b1 := centre - dir * half, centre + dir * half
+		pt :: proc(v, fixed: f32, across: bool) -> Edit_Vec { return across ? Edit_Vec{v, fixed} : Edit_Vec{fixed, v} }
+		draw.path_line_to(path, pt(b0, fixed, across))
+		draw.path_line_to(path, tip)
+		draw.path_line_to(path, pt(b1, fixed, across))
+	}
+	draw.path_move_to(path, {r.min.x + k, r.min.y})
+	if side == 0 { tail(path, r.min.x, r.max.x, tip.x, k, r.min.y, tip, true) }
+	draw.path_line_to(path, {r.max.x - k, r.min.y})
+	if k > 0 { draw.path_cubic_to(path, {r.max.x - c, r.min.y}, {r.max.x, r.min.y + c}, {r.max.x, r.min.y + k}) }
+	if side == 1 { tail(path, r.min.y, r.max.y, tip.y, k, r.max.x, tip, false) }
+	draw.path_line_to(path, {r.max.x, r.max.y - k})
+	if k > 0 { draw.path_cubic_to(path, {r.max.x, r.max.y - c}, {r.max.x - c, r.max.y}, {r.max.x - k, r.max.y}) }
+	if side == 2 { tail(path, r.max.x, r.min.x, tip.x, k, r.max.y, tip, true) }
+	draw.path_line_to(path, {r.min.x + k, r.max.y})
+	if k > 0 { draw.path_cubic_to(path, {r.min.x + c, r.max.y}, {r.min.x, r.max.y - c}, {r.min.x, r.max.y - k}) }
+	if side == 3 { tail(path, r.max.y, r.min.y, tip.y, k, r.min.x, tip, false) }
+	draw.path_line_to(path, {r.min.x, r.min.y + k})
+	if k > 0 { draw.path_cubic_to(path, {r.min.x, r.min.y + c}, {r.min.x + c, r.min.y}, {r.min.x + k, r.min.y}) }
+	draw.path_close(path)
+}
+
+// The picture under a magnifier's box, `zoom` times larger around its centre, in a circle (an ellipse in a box not
+// square) or a rectangle, and its edge. The picture alone: the shapes under it are not magnified.
+@(private = "file")
+paint_magnify :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
+	doc := p.doc
+	box := edit_box_of(s.a, s.b)
+	centre := (box.min + box.max) * 0.5
+	half := edit_box_size(box) * 0.5 / max(s.style.zoom, 1)
+	src := draw.Rect{centre - half, centre + half}
+	r := target_box(p, box)
+	w := max(edit_stroke_px(doc, s) * p.zoom, 1)
+	color := edit_color(s.style.color)
+	path := draw.path_make(allocator = context.temp_allocator)
+	switch s.style.lens {
+	case .Circle:
+		draw.push_clip_ellipse(dc, draw.rect_center(r), draw.rect_size(r) * 0.5)
+		draw.image(dc, p.picture, r, src)
+		draw.pop_clip(dc)
+		draw.path_arc(&path, draw.rect_center(r), draw.rect_size(r) * 0.5, 0, 2 * math.PI)
+		draw.path_close(&path)
+	case .Rectangle:
+		draw.image(dc, p.picture, r, src)
+		draw.path_rounded_rect(&path, r)
+	}
+	if s.style.width > 0 { stroke(dc, &path, w, color, s.style.dash) }
+}
+
+// A mouse pointer filling `r`: white, with a dark edge, as the system's.
+@(private = "file")
+paint_cursor :: proc(dc: ^draw.Context, r: draw.Rect) {
+	k := draw.rect_size(r) / CURSOR_BOX
+	path := draw.path_make(allocator = context.temp_allocator)
+	for q, i in CURSOR_OUTLINE {
+		v := r.min + q * k
+		if i == 0 { draw.path_move_to(&path, v) } else { draw.path_line_to(&path, v) }
+	}
+	draw.path_close(&path)
+	draw.path_fill(dc, &path, {1, 1, 1, 1})
+	draw.path_stroke(dc, &path, max(min(k.x, k.y), 1), {0, 0, 0, 1})
 }
 
 // Black or white, whichever stands out from `rgb`: a text's outline or box when it has no fill colour.
@@ -235,6 +425,10 @@ paint_text :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
 	if s.style.text_look == .Background {
 		draw.rect(dc, target_box(p, edit_shape_box(doc, s)), other, size * EDIT_TEXT_BOX_ROUND)
 	}
+	if s.style.text_look != .Outline {
+		paint_lines(dc, p, s, s.a, color)
+		return
+	}
 	m := font.metrics(p.fonts, face, size)
 	at := target(p, s.a)
 	y := at.y + m.ascent
@@ -242,41 +436,96 @@ paint_text :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
 	for {
 		nl := strings.index_byte(rest, '\n')
 		line := nl < 0 ? rest : rest[:nl]
-		if s.style.text_look == .Outline {
-			sh := font.shape(p.fonts, face, size, line, {}, context.temp_allocator)
-			draw.glyph_run_stroke(dc, size, {at.x, y}, other, sh.glyphs, size * EDIT_TEXT_OUTLINE)
-			draw.glyph_run(dc, size, {at.x, y}, color, sh.glyphs)
-		} else {
-			draw.text(dc, face, size, {at.x, y}, color, line)
-		}
+		sh := font.shape(p.fonts, face, size, line, {}, context.temp_allocator)
+		draw.glyph_run_stroke(dc, size, {at.x, y}, other, sh.glyphs, size * EDIT_TEXT_OUTLINE)
+		draw.glyph_run(dc, size, {at.x, y}, color, sh.glyphs)
 		if nl < 0 { break }
 		rest = rest[nl + 1:]
 		y += m.line_height
 	}
 }
 
-// A line and a filled head that grows with the width (shortened with a short arrow).
+// A shape's text, line by line, from `origin` (its top left, picture pixels), in its size and weight.
 @(private = "file")
-paint_arrow :: proc(dc: ^draw.Context, a, b: Edit_Vec, w, k: f32, color: draw.Color) {
-	d := b - a
-	l := math.sqrt(d.x * d.x + d.y * d.y)
-	if l < 0.5 {
-		draw.line(dc, a, b, w, color)
+paint_lines :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape, origin: Edit_Vec, color: draw.Color) {
+	size := edit_text_px(p.doc, s) * p.zoom
+	face := s.style.bold && p.font_bold != 0 ? p.font_bold : p.font_id
+	m := font.metrics(p.fonts, face, size)
+	at := target(p, origin)
+	y := at.y + m.ascent
+	rest := s.text
+	for {
+		nl := strings.index_byte(rest, '\n')
+		draw.text(dc, face, size, {at.x, y}, color, nl < 0 ? rest : rest[:nl])
+		if nl < 0 { break }
+		rest = rest[nl + 1:]
+		y += m.line_height
+	}
+}
+
+// A line through `pts` (an arrow's two ends, a drawing's points), and a filled head at either end or both, that grows
+// with the width (shortened on a short line). The line ends inside each head: its round end does not show past the
+// head's back.
+@(private = "file")
+paint_arrow :: proc(dc: ^draw.Context, pts: []Edit_Vec, w, k: f32, color: draw.Color, heads: Edit_Heads, dash: Edit_Dash) {
+	n := len(pts)
+	if n == 0 { return }
+	full: f32
+	for i in 1 ..< n { full += vec_length(pts[i] - pts[i - 1]) }
+	if n == 1 || full < 0.5 {
+		draw.line(dc, pts[0], pts[n - 1], w, color)
 		return
 	}
-	dir := d / l
-	n := Edit_Vec{-dir.y, dir.x}
-	head := min(w * 4 + 4 * k, l)
-	half := head * 0.6
-	base := b - dir * head
-	// (the shaft ends inside the head: its round end does not show past the head's back)
-	draw.line(dc, a, b - dir * (head * 0.5), w, color)
+	head := min(w * 4 + 4 * k, full)
+	at_end := heads == .End || heads == .Both
+	at_start := heads == .Start || heads == .Both
+	if at_end && at_start { head = min(head, full * 0.5) }
+	// (each head points along the line from where it is a head's length back: a drawing's last wiggle does not turn it)
+	first, last := 0, n - 1
+	end_dir, start_dir: Edit_Vec
+	if at_end {
+		j := n - 2
+		for j > 0 && vec_length(pts[n - 1] - pts[j]) < head { j -= 1 }
+		end_dir = vec_unit(pts[n - 1] - pts[j])
+		last = j
+	}
+	if at_start {
+		j := 1
+		for j < n - 1 && vec_length(pts[0] - pts[j]) < head { j += 1 }
+		start_dir = vec_unit(pts[0] - pts[j])
+		first = j
+	}
 	path := draw.path_make(allocator = context.temp_allocator)
-	draw.path_move_to(&path, b)
+	draw.path_move_to(&path, at_start ? pts[0] - start_dir * (head * 0.5) : pts[0])
+	// (the points under a head are left out; the ends are the two above and below)
+	for i in first ..= last { if i > 0 && i < n - 1 { draw.path_line_to(&path, pts[i]) } }
+	draw.path_line_to(&path, at_end ? pts[n - 1] - end_dir * (head * 0.5) : pts[n - 1])
+	stroke(dc, &path, w, color, dash)
+	if at_end { arrow_head(dc, pts[n - 1], end_dir, head, color) }
+	if at_start { arrow_head(dc, pts[0], start_dir, head, color) }
+}
+
+// A filled head with its tip at `tip`, pointing along `dir`.
+@(private = "file")
+arrow_head :: proc(dc: ^draw.Context, tip, dir: Edit_Vec, head: f32, color: draw.Color) {
+	n := Edit_Vec{-dir.y, dir.x}
+	half := head * 0.6
+	base := tip - dir * head
+	path := draw.path_make(allocator = context.temp_allocator)
+	draw.path_move_to(&path, tip)
 	draw.path_line_to(&path, base + n * half)
 	draw.path_line_to(&path, base - n * half)
 	draw.path_close(&path)
 	draw.path_fill(dc, &path, color)
+}
+
+@(private = "file")
+vec_length :: proc(v: Edit_Vec) -> f32 { return math.sqrt(v.x * v.x + v.y * v.y) }
+
+@(private = "file")
+vec_unit :: proc(v: Edit_Vec) -> Edit_Vec {
+	l := vec_length(v)
+	return l > 0 ? v / l : Edit_Vec{1, 0}
 }
 
 // A disc of the step's colour (of its fill colour, in a ring of its colour, when it has one) and its label.

@@ -40,27 +40,27 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | ShareX | cliche today | Gap | Prio | Effort, fit |
 |---|---|---|---|---|
 | Select and move | `Edit_Tool.Select` `editor_model.odin:29`, key V | none | – | – |
-| Rectangle | `.Rectangle`, key R | partial: no corner radius | P2 | S; `Edit_Style.radius`, `draw.rect` takes a radius already |
+| Rectangle | `.Rectangle`, key R, corners `Edit_Style.radius` | done (WP4) | – | – |
 | Ellipse | `.Ellipse`, key E | none | – | – |
-| Line | `.Line`, key L | partial: no line style | see options | – |
-| Arrow | `.Arrow`, key A | partial: no head at start / both ends, no curved arrow | P2 | S; `Edit_Style.heads` enum, `paint_arrow` `editor_export.odin:179` |
-| Freehand | `.Pen`, key P | partial: no handles to resize, no smoothing | P3 | S |
-| Freehand arrow | no | missing | P3 | S; `.Pen` + arrow head at the last segment |
+| Line | `.Line`, key L, `Edit_Style.dash` | done (WP4) | – | – |
+| Arrow | `.Arrow`, key A, `Edit_Style.heads` (end, start, both) | done (WP4), no curved arrow | P3 | S |
+| Freehand | `.Pen`, key P, scale handle | partial: no smoothing | P3 | S |
+| Freehand arrow | `.Pen` with a head (`Edit_Style.heads`) | done (WP4) | – | – |
 | Text (outline) | `.Text`, key T, plain colour `editor_export.odin` `.Text` case | partial: no outline, single line (`ui.line_edit` `editor.odin:837`), one font, no bold | P1 | M; `Edit_Style.text_look` (plain / outline / background), multi-line field (toolkit `ui.text_edit` if present, else Shift+Enter in `Line_Edit`) |
 | Text (background) | no | missing | P1 | S once the item above lands; rounded box behind the text, colour = fill colour |
-| Speech balloon | no | missing | P2 | M; new `Edit_Kind.Balloon`: box + tail point (third handle), text inside |
+| Speech balloon | `Edit_Kind.Balloon`, key Q, tail handle | done (WP4) | – | – |
 | Step number | `.Step`, key N, auto-increment `edit_step_next` `editor_model.odin:336` | partial: no start number, no letters / Roman, no tail to point | P2 | S; `Edit_Style.step_format`, a start value on the model |
-| Magnifier | no | missing | P2 | M; `Edit_Kind.Magnify`: box that draws the picture texture with a source rect, `zoom` option |
-| Image from a file | no | missing | P2 | M; `Edit_Kind.Image` with its own texture; decode on the chores as `editor_load_run` `editor.odin:255` |
-| Image from the screen | no | missing | P3 | M; same kind, picture from a region capture |
-| Sticker / emoji | no | missing | P3 | M; `Edit_Kind.Image` + a picker; emoji from the font as text is cheaper (S) |
-| Cursor | no | missing | P3 | S; `Edit_Kind.Image` with a built-in pointer bitmap |
-| Smart eraser | no | missing | P2 | S; a filled rectangle whose colour is the picture's pixel under the press point (read from `shot.rgba`) |
+| Magnifier | `Edit_Kind.Magnify`, key M, zoom 1.5 to 4, circle or rectangle | done (WP4) | – | – |
+| Image from a file | Insert menu, Ctrl+I | done (WP4) | – | – |
+| Image from the screen | Insert menu, Ctrl+Shift+I: the history's last screenshot | done (WP4), decided: no new capture | – | – |
+| Sticker / emoji | Insert menu, `Edit_Kind.Sticker` (18 emoji from the font) | done (WP4) | – | – |
+| Cursor | Insert menu, `Edit_Kind.Cursor` (a vector pointer) | done (WP4) | – | – |
+| Smart eraser | `Edit_Kind.Eraser`, key X: the mean colour of its box's edge | done (WP4) | – | – |
 | Blur | no (the Pixelate tool's tags say "blur" `editor.odin:78`) | missing | P1 | M; a blurred copy made on the chores like `edit_mosaic_make` `editor_export.odin:45`, drawn clipped; radius option |
 | Pixelate | `.Pixelate`, key B, cell fixed `EDIT_PIXELATE_CELL` `editor_export.odin:21` | partial: no cell size option | P3 | S; option, mosaic recomputed per size |
 | Highlighter | `.Highlighter`, key H, alpha 0.4 `editor_model.odin:77` | none (ShareX: rectangle highlight) | – | – |
-| Crop | `.Crop`, key C, undoable `editor_model.odin:656` | partial: no handles to adjust the crop after the drag, no Enter-to-apply | P2 | S; give the crop box handles |
-| Cut out (remove a horizontal or vertical band) | no | missing | P3 | M; document-level op on the picture; shapes shift |
+| Crop | `.Crop`, key C, handles with the Crop tool | done (WP4); the crop applies at Done (no Enter-to-apply: Enter is Done) | – | – |
+| Cut out (remove a horizontal or vertical band) | `.Cut_Out`, key K (`Edit_Op.Cut`) | done (WP4) | – | – |
 
 ### 1.3 Tool options
 
@@ -69,14 +69,14 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Border (stroke) colour | 8 swatches `editor_model.odin:69`, bar `editor.odin:885` | partial: no custom colour, no recent colours, no eyedropper | P1 | S; toolkit colour picker (the workflow inspector has a `.Color` param type) in a popover after the swatches |
 | Fill colour (separate) | `fill: bool` uses the stroke colour `editor_model.odin:64` | partial: fill = stroke colour only | P1 | S; `Edit_Style.fill_color` (0 alpha = none) |
 | Thickness | 1–40 slider + field `editor.odin:895` | none | – | – |
-| Line style (solid, dashed, dotted) | no | missing | P2 | M; dash support in `gt:draw` paths (none today) |
-| Rounded corners | no | missing | P2 | S |
+| Line style (solid, dashed, dotted) | `Edit_Style.dash`, `draw.path_dash` | done (WP4) | – | – |
+| Rounded corners | `Edit_Style.radius` | done (WP4) | – | – |
 | Shadow | softness slider `editor.odin:907` | none (cliche has a softness; ShareX on/off) | – | – |
 | Text font, size, bold, italic, alignment | 4 sizes S/M/L/XL `editor_model.odin:72` | partial: no font, no bold/italic, no free size | P2 | S for bold/size field; M for font choice |
 | Opacity per shape | no | missing | P3 | S; alpha in `Edit_Style.color` |
-| Arrow heads (start, end, both) | end only | partial | P2 | S |
+| Arrow heads (start, end, both) | `Edit_Style.heads` | done (WP4) | – | – |
 | Step: start number, type | auto only | partial | P2 | S |
-| Blur radius / pixel size / magnify zoom | none of the three | missing | P2 | S each, with their tools |
+| Blur radius / pixel size / magnify zoom | `Edit_Style.blur_radius`, `pixel_size` (WP1), `zoom` (WP4) | done | – | – |
 | Options remembered per tool | `editor_choices_keep` `editor.odin:1063` | none | – | – |
 
 ### 1.4 Editor actions
@@ -88,7 +88,7 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Duplicate | Ctrl+D `editor.odin:84` | none | – | – |
 | Copy / paste shapes, paste an image (Ctrl+V) | no | missing | P1 | M; paste image = `Edit_Kind.Image`; paste text = a Text shape |
 | Bring to front / back, up / down | no | missing | P2 | S; reorder `doc.shapes` |
-| Multi-select (box select, Shift+click) | one `selected: int` `editor_model.odin:116` | missing | P2 | M; `selected` becomes a set; move, delete, style apply to the set |
+| Multi-select (box select, Shift+click) | `Edit_Shape.picked`; box select, Shift+click, Ctrl+A | done (WP4) | – | – |
 | Zoom: percent shown + menu (fit, 100 %, 200 %…) | Ctrl+=, Ctrl+-, Ctrl+0 fit, Ctrl+wheel `editor.odin:86-88` | partial: no percent shown, no 100 % key, no menu | P1 | S; a button in the bar showing `view.zoom`, a `ui.menu` of steps, Ctrl+1 = 100 % |
 | Confirm / cancel | Done (Enter) / Cancel (Ctrl+W, Escape) `editor.odin:869-873` | none | – | – |
 | Copy | Ctrl+C `editor.odin:89` | none | – | – |
@@ -97,9 +97,9 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Upload | only through Done → the workflow | partial: no direct button | P1 | S; Ctrl+U sends a `Job_Node` Upload with the default uploader, result copies the URL |
 | Pin to screen | no | missing | P2 | M; a borderless always-on-top window (gt:host overlay window) showing the picture; drag to move, wheel to zoom/opacity, Escape closes |
 | Print | no | missing | P3 | M; Windows print dialog; Linux through the portal `org.freedesktop.portal.Print` |
-| Resize image / resize canvas | workflow nodes Resize, Pad `workflow_nodes.odin:76,95` | partial: not in the editor | P2 | M; document ops that change `doc.size`; shapes scale or stay |
-| Rotate / flip | workflow nodes `workflow_nodes.odin:89,92` | partial: not in the editor | P3 | M |
-| Auto crop (trim uniform borders) | no | missing | P3 | S; scan `shot.rgba`, set `doc.crop` |
+| Resize image / resize canvas | Picture menu: a dialog each (`Edit_Op.Resize`, `Edit_Op.Canvas`) | done (WP4) | – | – |
+| Rotate / flip | Picture menu, Ctrl+R, Ctrl+Shift+R (`Edit_Op.Rotate`, `Edit_Op.Flip`) | done (WP4) | – | – |
+| Auto crop (trim uniform borders) | Picture menu, Ctrl+Shift+X (`image.trim_bounds`) | done (WP4) | – | – |
 | Background / beautify | node Background `workflow_nodes.odin:114` | partial: not previewed in the editor | P2 | M; editor button that runs the node's op on a preview |
 | Image effects | 14 nodes `workflow_nodes.odin:18-24` | partial: not in the editor | P3 | M |
 | Open an image file in the editor | `editor_open_file` PNG only `editor.odin:258` | partial: no JPEG / WebP / BMP, no drag-and-drop onto the editor | P2 | S; decode with gt:image if it reads them; file-drop events from gt:platform (check) |
@@ -251,16 +251,32 @@ Files: `overlay.odin`, `geometry.odin`, `workflow.odin`, `shortcuts.odin`, `sett
 
 ### WP4: editor tools for parity (P2, P3)
 
-Files: `editor_model.odin`, `editor_export.odin`, `editor.odin`; `gt:draw` for dashes.
+Status: written. The toolkit gained `draw.path_dash` and `image.cut_out`, `image.trim_bounds`, `image.edge_mean`.
 
-1. Line style (solid, dashed, dotted) through dash support in `gt:draw` paths.
-2. Rounded corners; arrow heads (start, end, both); freehand arrow.
-3. Speech balloon (`Edit_Kind.Balloon`, tail handle).
-4. Magnifier (`Edit_Kind.Magnify`, zoom option).
-5. Image from a file, image from the screen, cursor, sticker / emoji (all on `Edit_Kind.Image`).
-6. Smart eraser.
-7. Multi-select (box select, Shift+click).
-8. Crop handles; cut out; resize image and canvas; rotate and flip; auto crop.
+Files: `editor_model.odin`, `editor_export.odin`, `editor.odin`; `gt:draw` for dashes, `gt:image` for the cut, the trim
+and the eraser's colour.
+
+1. Line style: done. `Edit_Style.dash` (solid, dashed, dotted) for rectangles, ellipses, lines, arrows, drawings,
+   balloons and magnifiers; `draw.path_dash` cuts the path, the export draws through the same painter.
+2. Done. `Edit_Style.radius` (a slider, 0 to 60 px); `Edit_Style.heads` (none, end, start, both) for arrows and
+   drawings: a drawing with a head is the freehand arrow (no tool of its own: the Pen's option).
+3. Done. `Edit_Kind.Balloon` (key Q): a rounded box, a tail whose tip is `Edit_Shape.c` with its own handle
+   (`Edit_Handle.Tail`); its words are typed as soon as it is drawn, in the same undo step; it grows to hold them.
+4. Done. `Edit_Kind.Magnify` (key M): the picture under it, 1.5, 2, 3 or 4 times larger, in a circle or a rectangle,
+   with an edge. Decided: it magnifies the picture, not the annotations under it.
+5. Done, through the Insert menu. A file (Ctrl+I: the system's dialog, decoded on the chores by `image.decode`) and the
+   last screenshot (Ctrl+Shift+I) are `Edit_Kind.Image`. Decided: "from the screen" is the history's newest picture
+   whose file is there, not a new region capture (the editor would hide behind its own overlay). The pointer
+   (`Edit_Kind.Cursor`) is a vector arrow; an emoji (`Edit_Kind.Sticker`, 18 in the menu) is drawn from the font.
+6. Done. `Edit_Kind.Eraser` (key X): a box of the mean colour of its edge (`image.edge_mean`), read again when it moves.
+7. Done. The selection is a flag per shape (`Edit_Shape.picked`); a drag of Select on nothing picks what it touches,
+   Shift+click adds or takes away, Ctrl+A picks all; a move, a property (what all the shapes picked share), the order,
+   duplicate and delete apply to all; the handles show for one alone.
+8. Done. The crop has handles with the Crop tool. The picture's own changes are a list in the document
+   (`Edit_Doc.ops`: turn, mirror, resize, margins, a band cut out), undone as a gesture is; the shapes follow (letters
+   stay upright); the window makes the picture again from the one taken, on the chores (`edit_picture_make`). Cut out
+   (key K): a drag across removes columns, a drag down rows. Resize and margins: a dialog (width and height, the ratio
+   kept or not; four margins and a colour). Auto crop (Ctrl+Shift+X): `image.trim_bounds` on the chores, then a crop.
 
 ### WP5: workflow nodes, uploads, tools (P2, P3)
 

@@ -124,6 +124,9 @@ fr Crayon
 en Text
 fr Texte
 
+en Speech balloon
+fr Bulle
+
 en Highlighter
 fr Surligneur
 
@@ -133,11 +136,20 @@ fr Pixeliser
 en Blur
 fr Flou
 
+en Smart eraser
+fr Gomme intelligente
+
+en Magnifier
+fr Loupe
+
 en Step number
 fr Numéro d'étape
 
 en Crop
 fr Rogner
+
+en Cut out a band
+fr Découper une bande
 
 en Undo
 fr Annuler
@@ -150,6 +162,9 @@ fr Rétablir
 
 en Paste a picture or a text
 fr Coller une image ou un texte
+
+en Select every annotation
+fr Sélectionner toutes les annotations
 
 en Delete the selection
 fr Supprimer la sélection
@@ -175,6 +190,45 @@ fr Mettre à l'arrière-plan
 en Remove the crop
 fr Retirer le rognage
 
+en Insert a picture from a file…
+fr Insérer une image depuis un fichier…
+
+en Insert
+fr Insérer
+
+en Insert the last screenshot
+fr Insérer la dernière capture d'écran
+
+en Insert a mouse pointer
+fr Insérer un pointeur de souris
+
+en Turn the picture right
+fr Tourner l'image vers la droite
+
+en Picture
+fr Image
+
+en Turn the picture left
+fr Tourner l'image vers la gauche
+
+en Turn the picture upside down
+fr Retourner l'image tête en bas
+
+en Mirror the picture left to right
+fr Inverser l'image de gauche à droite
+
+en Mirror the picture top to bottom
+fr Inverser l'image de haut en bas
+
+en Resize the picture…
+fr Redimensionner l'image…
+
+en Add margins to the picture…
+fr Ajouter des marges à l'image…
+
+en Trim the picture's plain edges
+fr Rogner les bords unis de l'image
+
 en Zoom in
 fr Zoom avant
 
@@ -192,9 +246,6 @@ fr Taille réelle (100 %)
 
 en Copy the picture
 fr Copier l'image
-
-en Picture
-fr Image
 
 en Save the picture
 fr Enregistrer l'image
@@ -268,6 +319,12 @@ fr Non enregistrée
 en Saved
 fr Enregistrée
 
+en Nothing to trim
+fr Rien à rogner
+
+en The picture has no plain edges.
+fr L'image n'a pas de bords unis.
+
 en Nothing to paste
 fr Rien à coller
 
@@ -276,6 +333,15 @@ fr Le presse-papiers ne contient ni image ni texte.
 
 en The clipboard's picture cannot be read
 fr L'image du presse-papiers ne peut pas être lue
+
+en Pictures
+fr Images
+
+en Insert a picture
+fr Insérer une image
+
+en The history has no screenshot with its file.
+fr L'historique n'a aucune capture d'écran avec son fichier.
 
 en Only pictures open here
 fr Seules les images s'ouvrent ici
@@ -298,6 +364,69 @@ fr Lecture de l'image…
 en Done
 fr Terminé
 
+en Thumbs up
+fr Pouce levé
+
+en Thumbs down
+fr Pouce baissé
+
+en Check mark
+fr Coche
+
+en Cross mark
+fr Croix
+
+en Warning
+fr Attention
+
+en Exclamation mark
+fr Point d'exclamation
+
+en Question mark
+fr Point d'interrogation
+
+en Light bulb
+fr Ampoule
+
+en Star
+fr Étoile
+
+en Heart
+fr Cœur
+
+en Fire
+fr Feu
+
+en Party popper
+fr Cotillons
+
+en Smiling face
+fr Visage souriant
+
+en Tears of joy
+fr Larmes de joie
+
+en Thinking face
+fr Visage pensif
+
+en Eyes
+fr Yeux
+
+en Pointing right
+fr Doigt vers la droite
+
+en Bug
+fr Bogue
+
+en Insert a picture, a pointer, an emoji
+fr Insérer une image, un pointeur, un émoji
+
+en Turn, mirror, resize or trim the picture
+fr Tourner, inverser, redimensionner ou rogner l'image
+
+en Emoji
+fr Émoji
+
 en Zoom
 fr Zoom
 
@@ -312,6 +441,30 @@ fr Couleur de remplissage : aucune
 
 en Fill
 fr Remplissage
+
+en No head
+fr Sans pointe
+
+en A head at the end
+fr Une pointe à la fin
+
+en A head at the start
+fr Une pointe au début
+
+en A head at both ends
+fr Une pointe à chaque bout
+
+en A solid line
+fr Un trait plein
+
+en A dashed line
+fr Un trait en tirets
+
+en A dotted line
+fr Un trait en pointillés
+
+en Corners
+fr Coins
 
 ctx text size, short
 en S
@@ -383,6 +536,23 @@ fr Numéro
 en Next
 fr Suivant
 
+en %g times larger
+fr %g fois plus grand
+
+ctx lens shape
+en Circle
+fr Cercle
+
+ctx lens shape
+en Box
+fr Rectangle
+
+en A round magnifier
+fr Une loupe ronde
+
+en A rectangular magnifier
+fr Une loupe rectangulaire
+
 en A blur of %d px
 fr Un flou de %d px
 
@@ -409,6 +579,48 @@ fr Les annotations de cette image sont perdues. Rien n'est copié ni enregistré
 
 en Drop the changes
 fr Abandonner les modifications
+
+en Add margins to the picture
+fr Ajouter des marges à l'image
+
+en Resize the picture
+fr Redimensionner l'image
+
+en Left
+fr Gauche
+
+en Top
+fr Haut
+
+en Right
+fr Droite
+
+en Bottom
+fr Bas
+
+en Transparent
+fr Transparent
+
+en Width
+fr Largeur
+
+en Height
+fr Hauteur
+
+en Keep the ratio
+fr Garder les proportions
+
+en Add the margins
+fr Ajouter les marges
+
+en Resize
+fr Redimensionner
+
+en %s (Enter)
+fr %s (Entrée)
+
+en The picture keeps its size
+fr L'image garde sa taille
 
 en Copied to the clipboard
 fr Copiée dans le presse-papiers
@@ -952,9 +1164,6 @@ fr Encadrer la fenêtre sous le pointeur
 en Frame the window under the pointer: a click takes it. Off: a click does nothing, only a drag chooses.
 fr Encadrer la fenêtre sous le pointeur : un clic la prend. Désactivé : un clic ne fait rien, seul un glissement choisit.
 
-en Magnifier
-fr Loupe
-
 en Show a magnifier near the pointer, with the pointer's position and the selection's size.
 fr Afficher une loupe près du pointeur, avec la position du pointeur et la taille de la sélection.
 
@@ -1456,9 +1665,6 @@ fr Ce que son raccourci capture
 en Delay
 fr Délai
 
-en Resize
-fr Redimensionner
-
 en Geometry
 fr Géométrie
 
@@ -1491,18 +1697,6 @@ fr Lisse
 
 en Fast
 fr Rapide
-
-en Left
-fr Gauche
-
-en Top
-fr Haut
-
-en Right
-fr Droite
-
-en Bottom
-fr Bas
 
 en Rotate
 fr Pivoter
@@ -1545,9 +1739,6 @@ fr Bordure
 
 en Look
 fr Apparence
-
-en Width
-fr Largeur
 
 en Inside the picture
 fr Dans l'image
@@ -1689,9 +1880,6 @@ fr Contrôle du flux
 
 en When
 fr Quand
-
-en Height
-fr Hauteur
 
 en Width / height
 fr Largeur / hauteur
