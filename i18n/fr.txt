@@ -364,6 +364,12 @@ fr Mise en ligne…
 en Reading the picture…
 fr Lecture de l'image…
 
+en Insert a picture, a pointer, an emoji
+fr Insérer une image, un pointeur, un émoji
+
+en Turn, mirror, resize or trim the picture
+fr Tourner, inverser, redimensionner ou rogner l'image
+
 en Zoom
 fr Zoom
 
@@ -423,12 +429,6 @@ fr Doigt vers la droite
 
 en Bug
 fr Bogue
-
-en Insert a picture, a pointer, an emoji
-fr Insérer une image, un pointeur, un émoji
-
-en Turn, mirror, resize or trim the picture
-fr Tourner, inverser, redimensionner ou rogner l'image
 
 en Emoji
 fr Émoji

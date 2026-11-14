@@ -1622,7 +1622,9 @@ editor_tools_bar :: proc(ed: ^Editor, em: f32) {
 					a := Editor_Action(int(Editor_Action.Tool_Select) + int(t))
 					if ui.toolbar_tool(fmt.tprintf("tool%d", int(t)), {command = EDITOR_ACTIONS[a], on = m.tool == t}) { editor_action(ed, a) }
 				}
-				editor_menu_buttons(ed, side)
+				// (each opens its menu, built outside the bar: editor_menus)
+				ui.toolbar_tool("insert", {label = i18n.tr("Insert a picture, a pointer, an emoji"), icon = lucide.IMAGE_PLUS, menu = EDITOR_INSERT_MENU})
+				ui.toolbar_tool("picture", {label = i18n.tr("Turn, mirror, resize or trim the picture"), icon = lucide.IMAGE, menu = EDITOR_PICTURE_MENU})
 			}
 			editor_properties(ed, em, side)
 		}
@@ -1635,14 +1637,14 @@ editor_tools_bar :: proc(ed: ^Editor, em: f32) {
 // Print are in the palette and on their keys.
 @(private = "file")
 editor_actions_bar :: proc(ed: ^Editor, em: f32) {
-	side := math.round(em * EDITOR_BAR_SIDE_EM)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###actions_row") {
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill()})
 		if ui.toolbar("editor_actions", {overflow = .Wrap}) {
 			if ui.toolbar_group("zoom", {title = i18n.tr("Zoom")}) {
-				if ui.toolbar_control("zoom", {label = i18n.tr("Zoom")}) { editor_zoom(ed, em, side) }
+				// (its words are the zoom in percent; its menu, built outside the bar: editor_zoom_menu)
+				ui.toolbar_tool("zoom", {label = fmt.tprintf("%d %%", int(math.round(ed.model.view.zoom * 100))), words = true, tip = i18n.tr("Zoom"), menu = EDITOR_ZOOM_MENU, menu_search = false})
 			}
 			if ui.toolbar_group("picture", {title = i18n.tr("Picture"), separator = true}) {
 				for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save, .Upload, .Pin}) {
@@ -1672,25 +1674,9 @@ EDITOR_STICKER_NAMES := [len(EDIT_STICKERS)]string{
 	i18n.later("Eyes"), i18n.later("Pointing right"), i18n.later("Bug"),
 }
 
-// Two buttons, each a control of the tools bar (a tool cannot anchor a menu: its box is the toolkit's): their menus
-// offer what can be put on the picture (a picture from a file, the last screenshot, a pointer, an emoji), and what can
-// be done to the picture itself (turn, mirror, resize, margins, trim).
-@(private = "file")
-editor_menu_buttons :: proc(ed: ^Editor, side: f32) {
-	menu_button :: proc(id, label, menu, icon, tip: string, side: f32) {
-		if ui.toolbar_control(id, {label = label}) {
-			ui.next({width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)})
-			sig := ui.button(id, icon = icon, o = {tip = tip, face = .Ghost, lit = ui.menu_is_open(menu)})
-			if sig.clicked {
-				if ui.menu_is_open(menu) { ui.menu_close() } else { ui.menu_open(menu, sig.box.rect, anchor = sig.box.key) }
-			}
-		}
-	}
-	menu_button("insert", i18n.tr("Insert"), EDITOR_INSERT_MENU, lucide.IMAGE_PLUS, i18n.tr("Insert a picture, a pointer, an emoji"), side)
-	menu_button("picture", i18n.tr("Picture"), EDITOR_PICTURE_MENU, lucide.IMAGE, i18n.tr("Turn, mirror, resize or trim the picture"), side)
-}
-
-// The Insert and Picture menus, built outside the bar: a menu stays open while the bar wraps under it.
+// The Insert and Picture menus, built outside the bar: what can be put on the picture (a picture from a file, the last
+// screenshot, a pointer, an emoji), and what can be done to the picture itself (turn, mirror, resize, margins, trim). A
+// menu stays open while the bar wraps under it.
 @(private = "file")
 editor_menus :: proc(ed: ^Editor) {
 	item :: proc(ed: ^Editor, a: Editor_Action) {
@@ -1726,18 +1712,8 @@ editor_menus :: proc(ed: ^Editor) {
 @(private = "file") EDITOR_SHAPE_MENU :: "editor_shape_menu"
 @(private = "file") EDITOR_COLOR_POPOVER :: "###editor_color"
 
-// The zoom in percent; a click opens its menu: fit, 50, 100, 200, 400 %.
-@(private = "file")
-editor_zoom :: proc(ed: ^Editor, em, side: f32) {
-	m := &ed.model
-	ui.next({width = ui.text_size(em * 0.6), height = ui.px(side), radius = math.round(side * 0.22)})
-	sig := ui.button("zoom", fmt.tprintf("%d %%", int(math.round(m.view.zoom * 100))), o = {face = .Ghost, tip = i18n.tr("Zoom"), lit = ui.menu_is_open(EDITOR_ZOOM_MENU)})
-	if sig.clicked {
-		if ui.menu_is_open(EDITOR_ZOOM_MENU) { ui.menu_close() } else { ui.menu_open(EDITOR_ZOOM_MENU, sig.box.rect, anchor = sig.box.key, search = false) }
-	}
-}
-
-// The zoom's menu, built outside the bar as the Insert and Picture menus are.
+// The zoom's menu (the zoom tool of the bar under opens it), built outside the bar as the Insert and Picture menus are:
+// fit, 50, 100, 200, 400 %.
 @(private = "file")
 editor_zoom_menu :: proc(ed: ^Editor) {
 	m := &ed.model

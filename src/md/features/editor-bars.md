@@ -24,7 +24,8 @@ under, once per picture. ShareX's editor has the same split.
 - **Refused: bars built by hand** (`ui.flow` in a row, cliche's own separators and end buttons). The toolkit's tool bar
   does the same in both of its modes, and other programs use it: one bar, one look.
 - **The bar's parts.** Above: the group "tools" (each tool a `toolbar_tool` of its command, held down when it is the
-  tool in use; the Insert and Picture buttons), then the groups "colours", "fill" and "style", a line before each.
+  tool in use; the Insert and Picture tools, which open their menus), then the groups "colours", "fill" and "style", a
+  line before each.
   Under: the group "zoom", the group "picture" (undo, redo, copy, save, upload, pin), then the pinned group "end".
 - **A property stays in one piece.** Each property is one `toolbar_control`: the colours and their "another colour"
   disc, or a label and its slider, go to the next line together, never split. A group goes to the next line whole; a
@@ -37,7 +38,9 @@ under, once per picture. ShareX's editor has the same split.
 
 - The colour popover anchors on the disc that opened it (`ed.color_anchor`, the disc's rect, built in its control).
   When the bar wraps, the disc moves, and the popover follows on the next frame.
-- The Insert, Picture and zoom buttons are controls, not tools: each opens a menu anchored on its own box, which a
-  tool's box (the toolkit's) does not give.
+- The Insert, Picture and zoom buttons are tools with a `menu`: each opens its menu under itself and is lit while it is
+  open. The zoom tool's words are the zoom in percent.
 - The Insert, Picture and zoom menus are built outside the bars (`editor_menus`, `editor_zoom_menu`). A menu that
   opened from a button stays open while the bar wraps under it.
+- The spacing between the tools, the controls and the groups is the toolkit's, as in every bar. cliche adds none
+  inside the bars; the colours' own gaps between their swatches are the control's.
