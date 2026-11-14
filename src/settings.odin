@@ -39,7 +39,6 @@ PREF_DEFS := [?]config.Def{
 	// History
 	{name = "history.size", title = i18n.later("Captures kept"), description = i18n.later("How many captures the history keeps: the oldest go first. The files stay where they are."), kind = .Int, default = {i = 1000}, min = 10, max = 100000, bounded = true, tags = {"history", "recent", "limit"}},
 	{name = "history.view", title = i18n.later("View"), description = i18n.later("How the history shows the captures: thumbnails in a grid, or a list with their details."), kind = .String, default = {s = "grid"}, tags = {"grid", "list", "thumbnails"}},
-	{name = "history.preview_width", title = "Preview width", description = "The width of the preview pane, in ems. Dragging the line beside it changes it.", kind = .Float, default = {f = HISTORY_PREVIEW_EM}, min = HISTORY_PREVIEW_MIN_EM, max = HISTORY_PREVIEW_MAX_EM, bounded = true, hidden = true},
 	{name = "history.thumbnail_size", title = i18n.later("Thumbnail size"), description = i18n.later("The size of the thumbnails in the grid."), kind = .String, default = {s = "medium"}, tags = {"grid", "preview", "size"}},
 
 	// Editor: the last choices, as they were when an editor last closed (editor_choices_keep)
@@ -90,7 +89,6 @@ Settings :: struct {
 	history_size:       int,
 	history_view:       History_View_Mode,
 	history_thumbnail:  int,
-	history_preview_em: f32,   // the preview pane's width, ems (history.preview_width: its splitter sets it)
 	ocr_languages:      string,
 	confirm_on_release: bool,
 	frame_windows:      bool,
@@ -152,7 +150,7 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.gif_width = int(config.int_of(p, "record.gif_width"))
 	s.record_max_s = int(config.int_of(p, "record.max_length"))
 	s.record_cursor = config.bool_of(p, "record.cursor")
-	s.history_size, s.history_view, s.history_thumbnail, s.history_preview_em = history_settings_read(p)
+	s.history_size, s.history_view, s.history_thumbnail = history_settings_read(p)
 	s.ocr_languages = strings.clone(strings.trim_space(config.string_of(p, "capture.ocr_languages")), allocator)
 	s.confirm_on_release = config.bool_of(p, "region.confirm_on_release")
 	s.frame_windows = config.bool_of(p, "region.frame_windows")

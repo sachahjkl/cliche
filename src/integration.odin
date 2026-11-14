@@ -9,7 +9,6 @@ package cliche
 import "core:fmt"
 import "core:os"
 import desktop "gt:desktop"
-import prefs_page "gt:prefs_page"
 import setup "gt:setup"
 
 @(rodata)
@@ -69,10 +68,11 @@ setup_options :: proc() -> setup.Setup_Options {
 	}
 }
 
-// The install's dialog over the main window (cliche --setup, Settings > Apps' Uninstall).
+// The install's view in the main window (cliche --setup, Settings > Apps' Uninstall): asked outside a build, it opens in
+// the window's next build (a view opens in the window being built).
 setup_show :: proc(app: ^App) {
 	history_window_show(app)
-	if app.history_window.opened { prefs_page.install_open(&app.install) }
+	if app.history_window.opened { app.history_window.setup_due = true }
 }
 
 // The launcher and the start with the session as asked, on the worker. "" when it went well, else why not.

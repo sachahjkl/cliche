@@ -47,7 +47,10 @@ shots_run :: proc(folder: string, which: string) -> int {
 	licence_init(app, memory = true)
 	// (the main window's build asks the install each frame, as in app_run: never offered here, history_window_open is headless)
 	prefs_page.install_init(&app.install, &app.prefs, setup_options())
+	// (the views in memory only: the pictures show each view at its home, the preview open as at a first start)
+	views_start(app, "")
 	defer {
+		ui.views_destroy(&app.views)
 		settings_free(&app.settings)
 		config.prefs_destroy(&app.prefs)
 		delete(app.editors)
@@ -105,7 +108,7 @@ shots_settings :: proc(app: ^App, folder: string) -> int {
 	// the command palette, open on the first page
 	delete(page.current)
 	page.current = strings.clone(SETTINGS_PAGES[0].category)
-	ui.palette_open(&hw.palette)
+	history_palette_show(app)
 	failed |= !shots_write(app, &hw.host, folder, "settings-palette")
 	return failed ? 1 : 0
 }

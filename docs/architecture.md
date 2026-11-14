@@ -109,6 +109,15 @@ does each node's work.
   run's marks change, not at each frame. "Run on the last capture" decodes the newest picture of the history on the
   worker and runs the workflow with its effects off; each node then shows its state and a thumbnail of its picture.
 
+## Views
+
+The dialogs and the history's preview are gui_toolkit's views (`src/views.odin`; the design in
+`src/md/features/views.md`): one `ui.Views` for the program, given to every window's State, its memory in
+`<state dir>/cliche/views.txt`. A view opens in the window whose build opens it. The history window builds
+`ui.views_frame` around its modes and a dock space, `history`, around its grid or list: the preview's home. Each editor's
+views are instances named by the editor. Each window that owns views makes its host the backend of the views' windows
+at the top of its build (`views_owner_build`).
+
 ## Shortcuts
 
 `src/shortcuts.odin` binds one global shortcut per kind of capture through `gt:shortcuts`: on Linux the desktop portal's

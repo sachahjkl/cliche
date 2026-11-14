@@ -71,10 +71,7 @@ workflow_list_body :: proc(app: ^App, em: f32) {
 		if list_icon_button("new", lucide.PLUS, i18n.tr("New workflow"), em, true) { workflow_new(app) }
 		if list_icon_button("rename", lucide.PENCIL, i18n.tr("Rename (or double-click its name)"), em, m.shown != 0) { workflow_rename_start(app, m.shown) }
 		if list_icon_button("duplicate", lucide.COPY, i18n.tr("Duplicate"), em, m.shown != 0) { workflow_duplicate(app, m.shown) }
-		if list_icon_button("delete", lucide.TRASH_2, i18n.tr("Delete…"), em, m.shown != 0) {
-			m.delete_id = m.shown
-			m.confirm_open = true
-		}
+		if list_icon_button("delete", lucide.TRASH_2, i18n.tr("Delete…"), em, m.shown != 0) { workflow_delete_ask(app, m.shown) }
 		ui.spacer(ui.px(em * 0.4))
 	}
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})

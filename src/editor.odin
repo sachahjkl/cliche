@@ -212,10 +212,10 @@ Editor_Picture_Work :: struct {
 	app:      ^App,
 }
 
-// What the dialog of the picture's size or margins holds while it is open.
+// What the view of the picture's size or margins (EDITOR_SIZE_VIEW) holds while it is open.
 Editor_Size_Dialog :: struct {
-	open:    bool,
 	margins: bool,     // the margins' dialog; else the size's
+	focus_due: bool,   // its first field takes the keyboard at its first build
 	width, height: int,
 	keep_ratio: bool,
 	sides:   [4]int,   // the margins: left, top, right, bottom
@@ -243,13 +243,17 @@ Editor :: struct {
 	app:         ^App,
 	id:          u64,          // stable for its life: what the worker's results for it name (never 0)
 	ask:         Annotate_Ask, // the run and node its picture is for (run 0: none, as for a picture of the history)
+	name:        string,       // owned, stable for its life: the instance of each of its views (EDITOR_INSTANCE, its id)
 	host:        host.Host,
 	visible:     bool,
 	icons:       font.Font_Id,
 	theme_shown: ui.Theme_Shown,
 	palette:     ui.Command_Palette,
+	palette_table: Palette_Table,  // what the palette lists (editor_palette_keep)
+	palette_views: u64,            // the views' moves it was made with (View_Commands.serial)
+	view_cmds:   ui.View_Commands, // the views' moves, made again only when the views or the language change
 	sheet:       ui.Shortcuts_Sheet,
-	asking:      bool,       // the question before the changes are dropped
+	drop_due:    bool,       // the question before the changes are dropped opens at the next build
 	close_due:   bool,       // closed in a frame: acted on after it (editor_after_frame)
 	done_due:    bool,       // Done with nothing changed, in a frame: acted on after it (what follows may open a window)
 
@@ -348,8 +352,7 @@ editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
 	edit_model_init(&ed.model, shot.size, scale, editor_measure, ed, editor_sample)
 	editor_choices_load(app, &ed.model)
 	ed.field_typing = 0
-	ed.size_dialog.open = false
-	ed.asking, ed.close_due, ed.done_due, ed.exporting, ed.export_wait = false, false, false, false, false
+	ed.drop_due, ed.close_due, ed.done_due, ed.exporting, ed.export_wait = false, false, false, false, false
 	ed.filters_revision = 0
 	ed.color_target = .None
 	ed.shape_menu_due = false
@@ -441,6 +444,8 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 		return nil
 	}
 	app_standard_follow(app, &ed.host)
+	views_window(app, &ed.host)
+	ed.name = fmt.aprintf("%s%d", EDITOR_INSTANCE, ed.id)
 	ed.host.input = editor_input
 	ed.host.close_asked = editor_host_close
 	ed.host.params = editor_params
@@ -595,7 +600,10 @@ editor_free :: proc(ed: ^Editor) {
 	editor_load_stop(ed)
 	editor_picture_drop(ed)
 	ui.palette_destroy(&ed.palette)
+	palette_table_destroy(&ed.palette_table)
+	ui.views_commands_destroy(&ed.view_cmds)
 	ui.shortcuts_sheet_destroy(&ed.sheet)
+	delete(ed.name)
 	ui.text_edit_destroy(&ed.field)
 	ui.color_pick_destroy(&ed.color_pick)
 	for p in ed.drops { delete(p) }
@@ -610,9 +618,11 @@ editor_free :: proc(ed: ^Editor) {
 // The window hidden, the picture and its shapes let go: editors_sweep frees it, or keeps it for the next picture.
 @(private = "file")
 editor_close :: proc(ed: ^Editor) {
-	ed.palette.open = false
-	ed.sheet.open = false
-	ed.asking = false
+	// (its views go with it, wherever the user put them: the editor is kept for another picture)
+	ui.palette_close(&ed.palette)
+	ui.shortcuts_sheet_close(&ed.sheet)
+	ui.view_close(&ed.app.views, EDITOR_DROP_VIEW, ed.name)
+	ed.drop_due = false
 	ed.color_target = .None
 	ed.ask = {}
 	if ed.visible {
@@ -628,7 +638,7 @@ editor_picture_drop :: proc(ed: ^Editor) {
 	editor_filters_stop(ed)
 	editor_paste_stop(ed)
 	editor_picture_stop(ed)
-	ed.size_dialog.open = false
+	ui.view_close(&ed.app.views, EDITOR_SIZE_VIEW, ed.name)   // (it asks about this picture)
 	editor_save_as_stop(ed)
 	edit_export_free(&ed.export)
 	ed.exporting, ed.export_wait = false, false
@@ -1135,7 +1145,7 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 	if !ed.has_picture {
 		return events
 	}
-	blocked := ed.palette.open || ed.sheet.open || ed.asking || ed.size_dialog.open || ed.exporting || ed.export_wait || ui.menu_any_open()
+	blocked := editor_views_open(ed) || ed.drop_due || ed.exporting || ed.export_wait || ui.menu_any_open()
 	_, typing := m.mode.(Edit_Typing)
 	for e in events {
 		#partial switch e.kind {
@@ -1353,17 +1363,18 @@ editor_action :: proc(ed: ^Editor, a: Editor_Action) {
 	case .Print:       editor_export_start(ed, .Print)
 	case .Done:        editor_export_start(ed, .Done)
 	case .Close:       editor_close_asked(ed)
-	case .Palette:     ui.palette_open(&ed.palette)
-	case .Keys:        ed.sheet.open = true
+	case .Palette:     editor_palette_show(ed)
+	case .Keys:        ui.shortcuts_sheet_open(&ed.sheet, slice.enumerated_array(&EDITOR_ACTIONS), i18n.tr("The editor's keys"))
 	case .Nudge:       edit_nudge(m, {1, 0})
 	}
 	editor_hover(ed)
 }
 
-// A close asked (the window's button, Escape, Ctrl+W): at once with nothing changed, else after the question.
+// A close asked (the window's button, Escape, Ctrl+W): at once with nothing changed, else after the question. The
+// question opens in the editor's build (editor_dialogs): the window's close comes outside one.
 editor_close_asked :: proc(ed: ^Editor) {
 	if ed.exporting || ed.done_due { return }
-	if ed.has_picture && edit_changed(&ed.model) { ed.asking = true } else { ed.close_due = true }
+	if ed.has_picture && edit_changed(&ed.model) { ed.drop_due = true } else { ed.close_due = true }
 }
 
 // The picture flattened for `purpose`. A text being typed is kept first. Done with nothing changed hands the picture as
@@ -1457,6 +1468,7 @@ editor_done :: proc(ed: ^Editor, shot: Shot) {
 @(private = "file")
 editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	ed := (^Editor)(h.user)
+	views_owner_build(ed.app, h)
 	em := ui.font_size()
 	if !ed.has_picture {
 		editor_waiting(ed, em)
@@ -1466,14 +1478,14 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	ed.accent, ed.scale = ui.color("accent"), ui.scale()
 
 	// (the colour popover closes with Escape, or when the shape it was for is no longer the one selected)
-	if ed.color_target != .None && !ed.palette.open && !ed.sheet.open && ui.key_press(.Escape) { ed.color_target = .None }
+	if ed.color_target != .None && !editor_views_open(ed) && ui.key_press(.Escape) { ed.color_target = .None }
 	if ed.color_target != .None && ed.color_shape != m.doc.selected { ed.color_target = .None }
 	ed.color_built = {}
 
 	// (while a text is typed, its field has the keys: no command takes a letter from it; nor while the colour popover
 	// is open: its field takes a colour's letters)
 	_, typing := m.mode.(Edit_Typing)
-	dialog := ed.palette.open || ed.sheet.open || ed.asking || ed.size_dialog.open || ed.color_target != .None
+	dialog := editor_views_open(ed) || ed.drop_due || ed.color_target != .None
 	if !dialog && !typing && !ed.exporting && !ed.export_wait {
 		if ui.key_press(.Escape) {
 			if !edit_deselect(m) { editor_close_asked(ed) }
@@ -1505,7 +1517,6 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	editor_menus(ed)
 	editor_zoom_menu(ed)
 	editor_dialogs(ed)
-	editor_size_dialog(ed)
 	// (the toasts at the bottom of the canvas: over the bar they hid the buttons just pressed)
 	if canvas.max.x > canvas.min.x { ui.set_toast_area(canvas) }
 	ui.set_toast_position(&ed.host.state, .Bottom_Center)
@@ -2094,95 +2105,167 @@ swatch_box :: proc(id: string, rgb: u32, name: string, chosen: bool, side: f32, 
 	return b, sig.clicked
 }
 
-// The palette (every action but the arrows), the sheet of keys, the question before the changes are dropped.
-@(private = "file")
-editor_dialogs :: proc(ed: ^Editor) {
-	all := slice.enumerated_array(&EDITOR_ACTIONS)
-	if ed.palette.open {
-		listed := all[:len(all) - 1]   // (Nudge: its keys are the arrows)
-		disabled := make([]bool, len(listed), context.temp_allocator)
-		for i in 0 ..< len(listed) { disabled[i] = !editor_action_enabled(ed, Editor_Action(i)) }
-		if i, _ := ui.palette(&ed.palette, listed, disabled); i >= 0 { editor_action(ed, Editor_Action(i)) }
-	}
-	ui.shortcuts_sheet(&ed.sheet, "keys", all, i18n.tr("The editor's keys"))
-	switch ui.confirm("drop", &ed.asking, {title = i18n.tr("Close the editor and drop the changes?"), note = i18n.tr("The annotations on this picture are lost. Nothing is copied or saved."), act = i18n.tr("Drop the changes")}) {
-	case .Confirmed: ed.close_due = true
-	case .Cancelled, .None:
-	}
+// Once, at the start: the editors' own view, the size dialog (an instance per editor: Editor.name).
+editor_views_register :: proc(app: ^App) {
+	ui.view_register(&app.views, EDITOR_SIZE_VIEW, editor_size_view, ui.View_Options{title = i18n.later("Resize the picture"), icon = lucide.SCALING, width_em = 24})
 }
 
-// The dialog of the picture's size or of its margins, filled with the picture's size and margins of nothing.
+// Whether one of the editor's views is open, wherever the user put it: its palette, its sheet, the question before its
+// changes go, the size dialog. The canvas and the editor's keys wait for it, as they waited for its dialogs.
+editor_views_open :: proc(ed: ^Editor) -> bool {
+	vs := &ed.app.views
+	return ui.palette_is_open(&ed.palette) || ui.shortcuts_sheet_is_open(&ed.sheet) ||
+		ui.view_is_open(vs, EDITOR_DROP_VIEW, ed.name) || ui.view_is_open(vs, EDITOR_SIZE_VIEW, ed.name)
+}
+
+// The palette's table: every action but Nudge (its keys are the arrows), then the moves of the editor's own views
+// (another window's are not this one's). Made again only when the views or the language change. True: it was.
+@(private = "file")
+editor_palette_keep :: proc(ed: ^Editor) -> bool {
+	_ = ui.views_commands_update(&ed.view_cmds, &ed.app.views)
+	t := &ed.palette_table
+	if t.version != 0 && ed.palette_views == ed.view_cmds.serial { return false }
+	ed.palette_views = ed.view_cmds.serial
+	a := palette_table_remake(t)
+	all := slice.enumerated_array(&EDITOR_ACTIONS)
+	moves, acts := views_moves(&ed.view_cmds, proc(c: ui.View_Command, user: rawptr) -> bool { return c.instance == (^Editor)(user).name }, ed, a)
+	t.commands = slice.concatenate([][]ui.Command{all[:len(all) - 1], moves}, a)
+	t.disabled = make([]bool, len(t.commands), a)
+	t.acts = acts
+	return true
+}
+
+// What the palette lists, given to it when its table was made again, when what can act changed, or with `force`.
+@(private = "file")
+editor_palette_give :: proc(ed: ^Editor, force: bool) {
+	t := &ed.palette_table
+	made := editor_palette_keep(ed)
+	disabled := make([]bool, len(t.disabled), context.temp_allocator)
+	for i in 0 ..< len(Editor_Action) - 1 { disabled[i] = !editor_action_enabled(ed, Editor_Action(i)) }
+	if !made && !force && slice.equal(disabled, t.disabled) { return }
+	copy(t.disabled, disabled)
+	ui.palette_set(&ed.palette, t.commands, t.disabled, {version = t.version})
+}
+
+// The palette, on what can act now (Ctrl+K).
+@(private = "file")
+editor_palette_show :: proc(ed: ^Editor) {
+	editor_palette_give(ed, force = true)
+	ui.palette_open(&ed.palette)
+}
+
+// The answers of the editor's views (the palette's choice, the question before the changes are dropped, the size
+// dialog), its palette's table kept while it is open, and the question opened when a close asked for it.
+@(private = "file")
+editor_dialogs :: proc(ed: ^Editor) {
+	app := ed.app
+	t := &ed.palette_table
+	actions := len(Editor_Action) - 1
+	// (the choice is a line of the table it was made from: taken before the table is made again)
+	if i, _, ok := ui.palette_chosen(&ed.palette); ok && i < len(t.commands) {
+		if i < actions { editor_action(ed, Editor_Action(i)) } else { ui.views_command_run(&app.views, t.acts[i - actions]) }
+	}
+	if ui.palette_is_open(&ed.palette) { editor_palette_give(ed, force = false) }
+	if ed.drop_due {
+		ed.drop_due = false
+		ui.confirm_open(EDITOR_DROP_VIEW, {title = i18n.tr("Close the editor and drop the changes?"), note = i18n.tr("The annotations on this picture are lost. Nothing is copied or saved."), act = i18n.tr("Drop the changes")}, ed.name)
+	}
+	if ui.confirm_answer(EDITOR_DROP_VIEW, ed.name) == .Confirmed { ed.close_due = true }
+	if code, ok := ui.view_ended(&app.views, EDITOR_SIZE_VIEW, ed.name); ok && code != ui.VIEW_CANCELLED { editor_size_apply(ed) }
+}
+
+// The view of the picture's size or of its margins, filled with the picture's size and margins of nothing. Its owner
+// is this editor's window: each editor has its own (its instance is the editor's name).
 @(private = "file")
 editor_size_dialog_open :: proc(ed: ^Editor, margins: bool) {
 	m := &ed.model
 	if !edit_idle(m) { return }
-	ed.size_dialog = {open = true, margins = margins, width = int(m.doc.size.x), height = int(m.doc.size.y), keep_ratio = true, sides = {16, 16, 16, 16}, color = EDIT_OPAQUE | 0xFFFFFF}
+	ed.size_dialog = {margins = margins, focus_due = true, width = int(m.doc.size.x), height = int(m.doc.size.y), keep_ratio = true, sides = {16, 16, 16, 16}, color = EDIT_OPAQUE | 0xFFFFFF}
 	ed.color_target = .None
+	ui.view_open(&ed.app.views, EDITOR_SIZE_VIEW, ed, instance = ed.name, owner = &ed.host.state)
 }
 
 // The size: a width and a height (with "keep the ratio", one follows the other). The margins: one per side, and their
-// colour (a swatch, or none: transparent). Enter or the button applies (one undo step), Escape or Cancel closes.
+// colour (a swatch, or none: transparent). Enter or the button applies (one undo step: editor_size_apply, when the
+// editor takes the answer), Escape or Cancel closes. Its first field has the keyboard from its first build, unseen as
+// it is: what is typed at once goes in.
 @(private = "file")
-editor_size_dialog :: proc(ed: ^Editor) {
+editor_size_view :: proc(v: ^ui.View, ed: ^Editor) {
 	d := &ed.size_dialog
 	m := &ed.model
 	em := ui.font_size()
-	apply := false
-	title := d.margins ? i18n.tr("Add margins to the picture") : i18n.tr("Resize the picture")
-	field :: proc(id, text: string, v: ^int, em: f32) -> bool {
+	if d.margins { ui.view_title(v, i18n.tr("Add margins to the picture")) }
+	// (a row: a label, then a number field; the key of the field's text, which the number's row builds under it)
+	field :: proc(id, text: string, v: ^int, em: f32) -> (changed: bool, key: ui.Key) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		changed := false
 		if ui.row(.Center, id = fmt.tprintf("###%s_row", id)) {
 			ui.next({width = ui.px(math.round(em * 7)), height = ui.px(math.round(em * 2.2)), text_pad = 0})
 			ui.label(fmt.tprintf("%s###%s_label", text, id))
 			ui.next({width = ui.px(math.round(em * 9)), height = ui.px(math.round(em * 2))})
-			changed = ui.number(fmt.tprintf("###%s", id), v, lo = 0, hi = EDIT_PICTURE_MAX, step = 1, unit = "px")
+			number_id := fmt.tprintf("###%s", id)
+			key = ui.key_from_string(ui.key_from_string(ui.parent_box().key, number_id), "###value")
+			changed = ui.number(number_id, v, lo = 0, hi = EDIT_PICTURE_MAX, step = 1, unit = "px")
 		}
 		ui.spacer(ui.px(math.round(em * 0.4)))
-		return changed
+		return
 	}
-	if ui.modal("editor_size", &d.open, {width_em = 24}) {
-		if ui.dialog_header("size_title", title, {icon = d.margins ? lucide.FRAME : lucide.SCALING, close = true}) {}
-		if ui.dialog_body("size_body") {
-			if d.margins {
-				names := [4]string{i18n.tr("Left"), i18n.tr("Top"), i18n.tr("Right"), i18n.tr("Bottom")}
-				for &v, i in d.sides { field(fmt.tprintf("side%d", i), names[i], &v, em) }
-				side := math.round(em * 1.6)
-				ui.next({width = ui.fill(), height = ui.px(side), axis = .X, cross = .Center})
-				if ui.row(.Center, id = "###margin_colors") {
-					transparent := d.color >> 24 == 0
-					if _, clicked := swatch_box("margin_none", 0, i18n.tr("Transparent"), transparent, side, .Slash); clicked { d.color = 0 }
+	first: ui.Key
+	if ui.dialog_body("size_body") {
+		if d.margins {
+			names := [4]string{i18n.tr("Left"), i18n.tr("Top"), i18n.tr("Right"), i18n.tr("Bottom")}
+			for &x, i in d.sides {
+				_, key := field(fmt.tprintf("side%d", i), names[i], &x, em)
+				if i == 0 { first = key }
+			}
+			side := math.round(em * 1.6)
+			ui.next({width = ui.fill(), height = ui.px(side), axis = .X, cross = .Center})
+			if ui.row(.Center, id = "###margin_colors") {
+				transparent := d.color >> 24 == 0
+				if _, clicked := swatch_box("margin_none", 0, i18n.tr("Transparent"), transparent, side, .Slash); clicked { d.color = 0 }
+				ui.spacer(ui.px(math.round(em * 0.3)))
+				for c, i in EDIT_COLORS {
+					if swatch(fmt.tprintf("margin_swatch%d", i), c, i18n.tr(EDITOR_COLOR_NAMES[i]), !transparent && d.color & 0xFFFFFF == c, side) { d.color = EDIT_OPAQUE | c }
 					ui.spacer(ui.px(math.round(em * 0.3)))
-					for c, i in EDIT_COLORS {
-						if swatch(fmt.tprintf("margin_swatch%d", i), c, i18n.tr(EDITOR_COLOR_NAMES[i]), !transparent && d.color & 0xFFFFFF == c, side) { d.color = EDIT_OPAQUE | c }
-						ui.spacer(ui.px(math.round(em * 0.3)))
-					}
-				}
-			} else {
-				size := m.doc.size
-				if field("width", i18n.tr("Width"), &d.width, em) && d.keep_ratio && size.x > 0 {
-					d.height = max(int(math.round(f32(d.width) * size.y / size.x)), 1)
-				}
-				if field("height", i18n.tr("Height"), &d.height, em) && d.keep_ratio && size.y > 0 {
-					d.width = max(int(math.round(f32(d.height) * size.x / size.y)), 1)
-				}
-				if ui.checkbox("###keep_ratio", i18n.tr("Keep the ratio"), &d.keep_ratio) && d.keep_ratio && size.x > 0 {
-					d.height = max(int(math.round(f32(d.width) * size.y / size.x)), 1)
 				}
 			}
-		}
-		if ui.dialog_buttons("size_buttons") {
-			if ui.button("size_cancel", i18n.tr("Cancel"), lucide.X).clicked { d.open = false }
-			act := d.margins ? i18n.tr("Add the margins") : i18n.tr("Resize")
-			if ui.button("size_apply", fmt.tprintf(i18n.tr("%s (Enter)"), act), lucide.CHECK, {intent = .Primary}).clicked || ui.key_press(.Return) {
-				apply, d.open = true, false
+		} else {
+			size := m.doc.size
+			changed: bool
+			changed, first = field("width", i18n.tr("Width"), &d.width, em)
+			if changed && d.keep_ratio && size.x > 0 {
+				d.height = max(int(math.round(f32(d.width) * size.y / size.x)), 1)
+			}
+			changed, _ = field("height", i18n.tr("Height"), &d.height, em)
+			if changed && d.keep_ratio && size.y > 0 {
+				d.width = max(int(math.round(f32(d.height) * size.x / size.y)), 1)
+			}
+			if ui.checkbox("###keep_ratio", i18n.tr("Keep the ratio"), &d.keep_ratio) && d.keep_ratio && size.x > 0 {
+				d.height = max(int(math.round(f32(d.width) * size.y / size.x)), 1)
 			}
 		}
 	}
-	if !apply { return }
+	if d.focus_due && first != 0 {
+		ui.set_focus(first)
+		d.focus_due = false
+	}
+	if ui.dialog_buttons("size_buttons") {
+		if ui.button("size_cancel", i18n.tr("Cancel"), lucide.X).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
+		act := d.margins ? i18n.tr("Add the margins") : i18n.tr("Resize")
+		if ui.button("size_apply", fmt.tprintf(i18n.tr("%s (Enter)"), act), lucide.CHECK, {intent = .Primary}).clicked || ui.key_press(.Return) {
+			ui.view_end(v, 0)
+		}
+	}
+}
+
+// The size dialog's answer: its size or its margins, one undo step. The dialog may have floated beside the canvas while
+// the picture changed: what it asks is applied to the picture as it is now.
+@(private = "file")
+editor_size_apply :: proc(ed: ^Editor) {
+	if !ed.has_picture { return }
+	d := &ed.size_dialog
 	op := Edit_Op{kind = .Resize, size = {d.width, d.height}}
 	if d.margins { op = {kind = .Canvas, margins = d.sides, color = d.color} }
-	if !edit_picture_change(m, op) && !d.margins { app_announce(ed.app, .Info, i18n.tr("The picture keeps its size"), "", &ed.host) }
+	if !edit_picture_change(&ed.model, op) && !d.margins { app_announce(ed.app, .Info, i18n.tr("The picture keeps its size"), "", &ed.host) }
 }
 
 ////////////////////////////////

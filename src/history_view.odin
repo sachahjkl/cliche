@@ -48,10 +48,12 @@ HISTORY_CELL_EM := [3]f32{7, 10, 14}
 HISTORY_ROW_EM := [3]f32{2.6, 3.6, 5}
 // A list's thumbnail is this much wider than high (most screens' shape).
 HISTORY_ROW_THUMB_ASPECT :: 1.6
-// The preview's pane, in ems.
-HISTORY_PREVIEW_EM     :: 26   // the preview pane's width at first, in ems (history.preview_width)
+// The preview's pane (the view PREVIEW_VIEW), in ems: its width when first docked, and its least width.
+HISTORY_PREVIEW_EM     :: 26
 HISTORY_PREVIEW_MIN_EM :: 14
-HISTORY_PREVIEW_MAX_EM :: 80
+// The dock space of the history's page, around its grid or list: the preview's home. It is built only while the history
+// shows, so the preview steps aside in the settings and the workflows (src/md/features/views.md).
+HISTORY_SPACE :: "history"
 // Entries an action opens at once (each starts a program).
 HISTORY_OPEN_MAX :: 8
 
@@ -86,6 +88,7 @@ Palette_Key :: struct {
 	prefs:     u64,              // app.prefs.version + 1 (0: not made)
 	workflows: bool,             // the Workflows mode is shown: its actions are in the table
 	language:  u32,              // i18n.version(): a change of language makes it again
+	views:     u64,              // View_Commands.serial: the views' moves at its end
 }
 
 History_Window :: struct {
@@ -98,6 +101,7 @@ History_Window :: struct {
 	palette:     ui.Command_Palette,
 	palette_table: Palette_Table,     // the palette's commands (history_palette_keep)
 	palette_made:  Palette_Key,       // what they were made for
+	view_cmds:   ui.View_Commands,    // the views' moves, made again only when the views or the language change
 	sheet:       ui.Shortcuts_Sheet,
 	sheet_table: Palette_Table,       // the sheet's commands (history_sheet_keep)
 	sheet_language: u32,          // i18n.version() they were made in
@@ -137,7 +141,6 @@ History_Window :: struct {
 	frame:       u64,
 	today:       int,             // the local day of this frame (timefmt.local_day)
 
-	preview_open: bool,
 	preview:     ui.Preview,
 	preview_id:  u64,             // the entry of preview_tex (0: none)
 	preview_asked: u64,
@@ -150,8 +153,8 @@ History_Window :: struct {
 
 	settings_mode: Settings_Mode,   // settings_view.odin
 	workflow_mode: Workflow_Mode,   // workflow_view.odin
-	confirm_open: bool,
-	delete_ids:  [dynamic]u64,
+	delete_ids:  [dynamic]u64,    // the files the question HISTORY_DELETE_VIEW asks about
+	setup_due:   bool,            // the setup's view opens at the next build (asked outside one: cliche --setup)
 	status:      string,          // what the last action did, under the view (owned)
 }
 
@@ -302,8 +305,7 @@ history_prefs_changed :: proc(app: ^App) {
 }
 
 // The preferences of the history, as prefs_read copies them into Settings.
-history_settings_read :: proc(p: ^config.Prefs) -> (size: int, view: History_View_Mode, thumbnail: int, preview_em: f32) {
-	preview_em = f32(config.float_of(p, "history.preview_width"))
+history_settings_read :: proc(p: ^config.Prefs) -> (size: int, view: History_View_Mode, thumbnail: int) {
 	size = int(config.int_of(p, "history.size"))
 	if size <= 0 { size = HISTORY_SIZE_DEFAULT }
 	view = config.string_of(p, "history.view") == HISTORY_VIEW_NAMES[.List] ? .List : .Grid
@@ -352,6 +354,9 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	// window of the screenshots)
 	if !headless && !app.install.known { prefs_page.install_offer(&app.install, &hw.host.state, offer = ODIN_OS == .Windows) }
 	app_standard_follow(app, &hw.host)
+	views_window(app, &hw.host)
+	// (the preview as the user left it at the last quit; shown at the very first start)
+	_ = ui.view_restore(&app.views, PREVIEW_VIEW, app, first_start_open = true, owner = &hw.host.state)
 	// (the window's close hides it)
 	hw.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).history_window.hide_due = true }
 	hw.host.params = history_params
@@ -447,11 +452,14 @@ history_after_frame :: proc(app: ^App) {
 	for id in gone { history_thumb_drop(app, id) }
 	if !hw.hide_due { return }
 	hw.hide_due = false
-	hw.palette.open = false
-	hw.sheet.open = false
-	hw.confirm_open = false
-	hw.workflow_mode.add.open = false
-	hw.workflow_mode.confirm_open = false
+	// (what was asked in the window goes with it; the preview, a pane, stays for its next show)
+	vs := &app.views
+	ui.palette_close(&hw.palette)
+	ui.shortcuts_sheet_close(&hw.sheet)
+	ui.palette_close(&hw.workflow_mode.add)
+	ui.view_close(vs, HISTORY_DELETE_VIEW)
+	clear(&hw.delete_ids)
+	ui.view_close(vs, WORKFLOW_DELETE_VIEW)
 	ui.menu_close()
 	host.host_hide(&hw.host)
 	hw.visible = false
@@ -468,6 +476,7 @@ history_window_free :: proc(app: ^App) {
 	delete(hw.thumbs)
 	ui.palette_destroy(&hw.palette)
 	ui.shortcuts_sheet_destroy(&hw.sheet)
+	ui.views_commands_destroy(&hw.view_cmds)
 	palette_table_destroy(&hw.palette_table)
 	palette_table_destroy(&hw.sheet_table)
 	hw.palette_made, hw.sheet_language = {}, 0   // (the screenshots open the window again after this)
@@ -508,6 +517,7 @@ history_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app := (^App)(h.user)
 	hw := &app.history_window
+	views_owner_build(app, h)
 	hw.frame += 1
 	now_ms := f64(time.to_unix_nanoseconds(time.now())) / 1e6
 	hw.today = timefmt.local_day(now_ms, hw.offset_minutes)
@@ -521,64 +531,84 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 		hw.mode_built = app.settings.history_view
 	}
 
-	workflows := hw.workflow_mode.open
-	dialog := hw.palette.open || hw.sheet.open || hw.confirm_open || ui.menu_any_open() || hw.workflow_mode.add.open || hw.workflow_mode.confirm_open || prefs_page.install_open_now(&app.install)
-	settings := hw.settings_mode.open
-	if !dialog && workflows {
-		workflow_keys(app)
-		// (the window's own commands; the history's other keys mean nothing here)
-		if !hw.workflow_mode.typing { history_keys(app) }
-	} else if !dialog && settings {
-		settings_keys(app)
-		// (the window's own commands; the history's other keys mean nothing on the settings)
-		if !prefs_page.editing(&hw.settings_mode.page) { history_keys(app) }
-	} else if !dialog {
-		if ui.key_press(.Escape) {
-			if hw.search_focused && len(hw.search.buf) > 0 { ui.line_edit_set(&hw.search, ""); hw.shown_due = true } else { hw.hide_due = true }
-		}
-		history_keys(app)
-		ui.type_to_field(hw.search_key)
+	// (asked outside a build, cliche --setup: the setup's view opens in this window, in its build)
+	if hw.setup_due {
+		hw.setup_due = false
+		prefs_page.install_open(&app.install)
 	}
+	// (the preview closed by its own close, its menu or the palette: its picture goes)
+	if !ui.view_is_open(&app.views, PREVIEW_VIEW) && (hw.preview_id != 0 || hw.preview_asked != 0) { history_preview_drop(app) }
 
+	workflows := hw.workflow_mode.open
+	settings := hw.settings_mode.open
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###history") {   // (the theme's surface: the host only clears to black)
-		switch {
-		case workflows: workflow_build(app, em)
-		case settings:  settings_build(app, em)
-		case:           history_page(app, em)
+		// (the views docked at the window's edges, and the floating ones, are built first: their keys are theirs first)
+		if ui.views_frame(&app.views) {
+			dialog := history_views_open(app) || ui.menu_any_open()
+			if !dialog && workflows {
+				workflow_keys(app)
+				// (the window's own commands; the history's other keys mean nothing here)
+				if !hw.workflow_mode.typing { history_keys(app) }
+			} else if !dialog && settings {
+				settings_keys(app)
+				// (the window's own commands; the history's other keys mean nothing on the settings)
+				if !prefs_page.editing(&hw.settings_mode.page) { history_keys(app) }
+			} else if !dialog {
+				if ui.key_press(.Escape) {
+					if hw.search_focused && len(hw.search.buf) > 0 { ui.line_edit_set(&hw.search, ""); hw.shown_due = true } else { hw.hide_due = true }
+				}
+				history_keys(app)
+				ui.type_to_field(hw.search_key)
+			}
+			switch {
+			case workflows: workflow_build(app, em)
+			case settings:  settings_build(app, em)
+			case:           history_page(app, em)
+			}
 		}
 	}
 	if !settings && !workflows { history_menu(app, em) }
 	history_dialogs(app)
-	if prefs_page.install_frame(&app.install, em) == .Launched { app.quit = true }   // (the installed copy starts at the end: app_run)
+	if prefs_page.install_frame(&app.install) == .Launched { app.quit = true }   // (the installed copy starts at the end: app_run)
 }
 
-// The history's mode: the toolbar, the grid or the list (and the preview), the footer.
+// Whether a view of the window that takes the keys is open, wherever the user put it: its palettes, its sheet, a
+// question, the setup. The window's own keys wait for it, as they waited for its dialogs. The preview is not one: it
+// leaves the keys to the page.
+@(private = "file")
+history_views_open :: proc(app: ^App) -> bool {
+	hw := &app.history_window
+	vs := &app.views
+	return ui.palette_is_open(&hw.palette) || ui.shortcuts_sheet_is_open(&hw.sheet) || ui.palette_is_open(&hw.workflow_mode.add) ||
+		ui.view_is_open(vs, HISTORY_DELETE_VIEW) || ui.view_is_open(vs, WORKFLOW_DELETE_VIEW) || prefs_page.install_open_now(&app.install)
+}
+
+// The history's mode: the toolbar, the grid or the list in the dock space of the preview, the footer.
 @(private = "file")
 history_page :: proc(app: ^App, em: f32) {
-	hw := &app.history_window
 	history_toolbar(app, em)
 	ui.hline(ui.fill())
 	crash_bar.bar(&app.crash_bar, {name = "cliche", version = APP_VERSION, repository = "sachahjkl/cliche"})
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
-	if ui.row(id = "###body") {
-		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
-		if ui.column(id = "###main") {
-			history_main(app, em)
-		}
-		if hw.preview_open {
-			// (the rule between the view and the pane, dragged, sets the pane's width: kept when let go)
-			w := app.settings.history_preview_em
-			ui.next({height = ui.fill()})
-			split := ui.splitter("###preview_split", .X, &w, HISTORY_PREVIEW_MIN_EM, HISTORY_PREVIEW_MAX_EM,
-				{after = true, unit = em, flush = true, line_at = .Start, default_size = HISTORY_PREVIEW_EM})
-			if split.changed { app.settings.history_preview_em = w }
-			// (a tenth of an em: the file keeps a short number)
-			if split.finished && config.set_float(&app.prefs, "history.preview_width", f64(math.round(w * 10) / 10)) == .None { app_prefs_changed(app) }
-			history_preview_pane(app, em)
-		}
+	ui.next({width = ui.fill(), height = ui.fill()})
+	if ui.views_dock(&app.views, HISTORY_SPACE, {content = true}) {
+		history_main(app, em)
 	}
 	history_footer(app, em)
+}
+
+// Once, at the start: the history window's own view, the preview, a panel at the right of the grid or the list.
+history_views_register :: proc(app: ^App) {
+	ui.view_register(&app.views, PREVIEW_VIEW, history_preview_view, ui.View_Options{
+		title = i18n.later("Preview"), icon = lucide.EYE, home = .Panel, home_place = {space = HISTORY_SPACE, edge = .Right},
+		extent_em = HISTORY_PREVIEW_EM, width_em = HISTORY_PREVIEW_EM, min_width_em = HISTORY_PREVIEW_MIN_EM,
+	})
+}
+
+// The history's palette, on what can act now (Ctrl+K, the toolbar's button).
+history_palette_show :: proc(app: ^App) {
+	history_palette_give(app, force = true)
+	ui.palette_open(&app.history_window.palette)
 }
 
 // The entries shown, made again when the history, the search, the filter or the sort changed (not per frame).
@@ -673,7 +703,7 @@ history_tools :: proc(app: ^App, filters, sizes, views: []string, em: f32) {
 	// (the date's filter in a menu: four choices would make the bar too wide; the tip says the one in use)
 	if history_icon_button("period", lucide.CALENDAR, fmt.tprintf("%s: %s", i18n.tr("Date"), i18n.tr(HISTORY_PERIOD_TEXT[hw.period])), em) { history_action(app, .Period) }
 	// (the keys in the tooltips as the keyboards of the language name them)
-	if history_icon_button("preview", lucide.EYE, ui.key_tip(hw.preview_open ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}}), em) { history_action(app, .Preview) }
+	if history_icon_button("preview", lucide.EYE, ui.key_tip(ui.view_is_open(&app.views, PREVIEW_VIEW) ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}}), em) { history_action(app, .Preview) }
 	if history_icon_button("folder", lucide.FOLDER_OPEN, i18n.tr("Open the save folder"), em) { history_action(app, .Open_Folder) }
 	if history_icon_button("workflows", lucide.GIT_FORK, ui.key_tip(i18n.tr("Workflows: what happens after a capture"), {.W, {.Ctrl, .Shift}}), em) { history_action(app, .Workflows) }
 	if history_icon_button("palette", lucide.COMMAND, ui.key_tip(i18n.tr("Command palette"), {.K, {.Ctrl}}), em) { history_action(app, .Palette) }
@@ -933,7 +963,7 @@ history_list :: proc(app: ^App, em: f32) {
 		if len(hw.selection.marked) > 1 { for id in hw.selection.marked { t.vl.marks[id] = true } }
 		if hw.selection.focus != 0 { ui.table_select_id(t, hw.selection.focus) }
 	}
-	dialog := hw.palette.open || hw.sheet.open || hw.confirm_open || ui.menu_any_open()
+	dialog := history_views_open(app) || ui.menu_any_open()
 	keys: ui.Table_Events
 	if !dialog { keys = ui.table_keys(t) }
 	ui.next({width = ui.fill(), height = ui.fill()})
@@ -1003,10 +1033,13 @@ history_table_lead :: proc(t: ^ui.Table, row: int, size: f32) {
 ////////////////////////////////
 // The preview
 
+// The view PREVIEW_VIEW: the capture selected, as large as its place, and what it is under it. Its place is the
+// toolkit's (a panel beside the grid, a floating window, a window of its own): it fills it.
 @(private = "file")
-history_preview_pane :: proc(app: ^App, em: f32) {
+history_preview_view :: proc(v: ^ui.View, app: ^App) {
 	hw := &app.history_window
-	ui.next({width = ui.px(math.round(em * app.settings.history_preview_em)), height = ui.fill(), axis = .Y})
+	em := ui.font_size()
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(id = "###preview_pane") {
 		e := history_find(&hw.history, hw.selection.focus)
 		if e == nil {
@@ -1145,73 +1178,118 @@ history_menu :: proc(app: ^App, em: f32) {
 	}
 }
 
-// The palette's table: the history's actions, the settings' actions, every setting, then the Workflows mode's actions
-// while it is shown. Made again only when the preferences, the mode shown or the language change.
+// The palette's table: the history's actions, the settings' actions, every setting, the Workflows mode's actions while
+// it is shown, then the moves of the window's views (float, dock, open in a window, re-attach, close). Made again only
+// when the preferences, the mode shown, the language or the views change. True: it was made again.
 @(private = "file")
-history_palette_keep :: proc(app: ^App) {
+history_palette_keep :: proc(app: ^App) -> bool {
 	hw := &app.history_window
-	key := Palette_Key{prefs = app.prefs.version + 1, workflows = hw.workflow_mode.open, language = i18n.version()}
-	if hw.palette_made == key { return }
+	_ = ui.views_commands_update(&hw.view_cmds, &app.views)
+	key := Palette_Key{prefs = app.prefs.version + 1, workflows = hw.workflow_mode.open, language = i18n.version(), views = hw.view_cmds.serial}
+	if hw.palette_made == key { return false }
 	hw.palette_made = key
 	t := &hw.palette_table
 	a := palette_table_remake(t)
 	theirs, names := settings_palette(app, a)
 	flows := key.workflows ? slice.enumerated_array(&WORKFLOW_ACTIONS) : nil
-	t.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), theirs, flows}, a)
+	moves, acts := views_moves(&hw.view_cmds, history_view_mine, nil, a)
+	t.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), theirs, flows, moves}, a)
 	t.disabled = make([]bool, len(t.commands), a)
 	t.names = names
+	t.acts = acts
+	return true
 }
 
-// The sheet's table: every action of the window, from constant tables; made once, and again in another language.
+// The views whose moves the window's palette lists: not a palette's own (it is open while they are listed), not an
+// editor's (each editor's palette lists them), not a sheet's (its owner is not known here: its header moves it).
 @(private = "file")
-history_sheet_keep :: proc(app: ^App) {
+history_view_mine :: proc(c: ui.View_Command, _: rawptr) -> bool {
+	return c.id != ui.PALETTE_VIEW && c.id != ui.SHORTCUTS_VIEW && !strings.has_prefix(c.instance, EDITOR_INSTANCE)
+}
+
+// What the palette lists, given to it when its table was made again, when what can act changed, or with `force`. Only
+// the actions can be disabled, and they are first.
+@(private = "file")
+history_palette_give :: proc(app: ^App, force: bool) {
 	hw := &app.history_window
-	if hw.sheet_table.version != 0 && hw.sheet_language == i18n.version() { return }
+	t := &hw.palette_table
+	made := history_palette_keep(app)
+	disabled := make([]bool, len(t.disabled), context.temp_allocator)
+	set := history_enabled(app)
+	for a in History_Action { disabled[int(a)] = a not_in set }
+	settings_palette_disable(app, disabled[len(History_Action):])
+	if !made && !force && slice.equal(disabled, t.disabled) { return }
+	copy(t.disabled, disabled)
+	ui.palette_set(&hw.palette, t.commands, t.disabled, {version = t.version})
+}
+
+// The sheet's table: every action of the window, from constant tables; made once, and again in another language. True:
+// it was made again.
+@(private = "file")
+history_sheet_keep :: proc(app: ^App) -> bool {
+	hw := &app.history_window
+	if hw.sheet_table.version != 0 && hw.sheet_language == i18n.version() { return false }
 	hw.sheet_language = i18n.version()
 	a := palette_table_remake(&hw.sheet_table)
 	hw.sheet_table.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), slice.enumerated_array(&SETTINGS_ACTIONS), slice.enumerated_array(&WORKFLOW_ACTIONS)}, a)
+	return true
 }
 
-// The palette (the history's actions, the settings' actions, then every setting), the sheet of keys, the question
-// before files are deleted.
+// The answers of the window's views: the palette's choice, the question before files are deleted; and the tables of the
+// palette and the sheet kept while they are open.
 @(private = "file")
 history_dialogs :: proc(app: ^App) {
 	hw := &app.history_window
-	if hw.palette.open {
-		history_palette_keep(app)
-		t := &hw.palette_table
-		// (only the actions can be disabled, and they are first: as many each frame whatever the preferences)
-		set := history_enabled(app)
-		for a in History_Action { t.disabled[int(a)] = a not_in set }
-		settings_palette_disable(app, t.disabled[len(History_Action):])
-		if i, _ := ui.palette(&hw.palette, t.commands, t.disabled, {version = t.version}); i >= 0 {
-			theirs := len(Settings_Action) + len(t.names)
-			switch {
-			case i < len(History_Action):          history_action(app, History_Action(i))
-			case i < len(History_Action) + theirs: settings_palette_chosen(app, i - len(History_Action), t.names)
-			case:                                  workflow_action(app, Workflow_Action(i - len(History_Action) - theirs))
-			}
+	t := &hw.palette_table
+	// (the choice is a line of the table it was made from: taken before the table is made again)
+	if i, _, ok := ui.palette_chosen(&hw.palette); ok && i < len(t.commands) {
+		theirs := len(Settings_Action) + len(t.names)
+		flows := hw.palette_made.workflows ? len(Workflow_Action) : 0
+		switch {
+		case i < len(History_Action):                  history_action(app, History_Action(i))
+		case i < len(History_Action) + theirs:         settings_palette_chosen(app, i - len(History_Action), t.names)
+		case i < len(History_Action) + theirs + flows: workflow_action(app, Workflow_Action(i - len(History_Action) - theirs))
+		case:                                          ui.views_command_run(&app.views, t.acts[i - len(History_Action) - theirs - flows])
 		}
 	}
-	if hw.sheet.open { history_sheet_keep(app) }
-	ui.shortcuts_sheet(&hw.sheet, "keys", hw.sheet_table.commands, i18n.tr("cliche's keys"), version = hw.sheet_table.version)
-	if hw.confirm_open {
-		names := make([dynamic]string, context.temp_allocator)
+	if ui.palette_is_open(&hw.palette) { history_palette_give(app, force = false) }
+	// (an open sheet lists from the table, which the making empties: it gets the new one at once)
+	if ui.shortcuts_sheet_is_open(&hw.sheet) && history_sheet_keep(app) {
+		hw.sheet.commands, hw.sheet.version = hw.sheet_table.commands, hw.sheet_table.version
+	}
+	switch ui.confirm_answer(HISTORY_DELETE_VIEW) {
+	case .Confirmed:
+		// (the question may have floated beside the history while it changed: what is still there goes)
+		ids := make([dynamic]u64, 0, len(hw.delete_ids), context.temp_allocator)
 		for id in hw.delete_ids {
-			if e := history_find(&hw.history, id); e != nil { append(&names, e.path) }
+			if e := history_find(&hw.history, id); e != nil && e.path != "" && !e.missing { append(&ids, id) }
 		}
-		title := fmt.tprintf(i18n.tr("Delete %d files for good?"), len(names))
-		if len(names) == 1 { title = fmt.tprintf(i18n.tr("Delete %s for good?"), names[0][strings.last_index_any(names[0], "/\\") + 1:]) }
-		switch ui.confirm("delete", &hw.confirm_open, {title = title, note = i18n.tr("The files go from the disk, not to the trash. Their lines stay in the history, marked missing."), lines = names[:], act = i18n.tr("Delete")}) {
-		case .Confirmed:
-			worker_send(&app.worker, Job_History(History_Delete{ids = clone_ids(hw.delete_ids[:])}))
-			app_announce(app, .Good, len(names) == 1 ? i18n.tr("The file is deleted") : fmt.tprintf(i18n.tr("%d files are deleted"), len(names)), "", history_window_of(app))
-			clear(&hw.delete_ids)
-		case .Cancelled:
-			clear(&hw.delete_ids)
-		case .None:
+		clear(&hw.delete_ids)
+		if len(ids) == 0 { return }
+		worker_send(&app.worker, Job_History(History_Delete{ids = clone_ids(ids[:])}))
+		app_announce(app, .Good, len(ids) == 1 ? i18n.tr("The file is deleted") : fmt.tprintf(i18n.tr("%d files are deleted"), len(ids)), "", history_window_of(app))
+	case .Cancelled:
+		clear(&hw.delete_ids)
+	case .None:
+	}
+}
+
+// The question before the files of `ids` are deleted for good (those with a file on the disk).
+@(private = "file")
+history_delete_ask :: proc(app: ^App, ids: []u64) {
+	hw := &app.history_window
+	clear(&hw.delete_ids)
+	names := make([dynamic]string, context.temp_allocator)
+	for id in ids {
+		if e := history_find(&hw.history, id); e != nil && e.path != "" && !e.missing {
+			append(&hw.delete_ids, id)
+			append(&names, e.path)
 		}
 	}
+	if len(names) == 0 { return }
+	title := fmt.tprintf(i18n.tr("Delete %d files for good?"), len(names))
+	if len(names) == 1 { title = fmt.tprintf(i18n.tr("Delete %s for good?"), names[0][strings.last_index_any(names[0], "/\\") + 1:]) }
+	ui.confirm_open(HISTORY_DELETE_VIEW, {title = title, note = i18n.tr("The files go from the disk, not to the trash. Their lines stay in the history, marked missing."), lines = names[:], act = i18n.tr("Delete")})
 }
 
 // The entries the actions act on: the selection, in the order shown.
@@ -1324,19 +1402,20 @@ history_action :: proc(app: ^App, a: History_Action) {
 	case .Period:
 		ui.menu_open(HISTORY_PERIOD_MENU_ID, ui.mouse_pos())
 	case .Delete_File:
-		clear(&hw.delete_ids)
-		for id in ids {
-			if e := history_find(&hw.history, id); e != nil && e.path != "" && !e.missing { append(&hw.delete_ids, id) }
-		}
-		hw.confirm_open = len(hw.delete_ids) > 0
+		history_delete_ask(app, ids)
 	case .Remove:
 		gone := clone_ids(ids)
 		history_remove(&hw.history, gone)
 		worker_send(&app.worker, Job_History(History_Remove{ids = gone}))
 		app_announce(app, .Good, len(gone) == 1 ? i18n.tr("Removed from the history") : fmt.tprintf(i18n.tr("%d removed from the history"), len(gone)), len(gone) == 1 ? i18n.tr("The file stays.") : i18n.tr("The files stay."), history_window_of(app))
 	case .Preview:
-		hw.preview_open = !hw.preview_open
-		if !hw.preview_open { history_preview_drop(app) }
+		// (a pane the user may have floated or docked elsewhere: it comes back where it was)
+		if ui.view_is_open(&app.views, PREVIEW_VIEW) {
+			ui.view_close(&app.views, PREVIEW_VIEW)
+			history_preview_drop(app)
+		} else {
+			ui.view_open(&app.views, PREVIEW_VIEW, app, owner = &hw.host.state)
+		}
 	case .Select_All:
 		if app.settings.history_view == .List {
 			ui.list_mark_all(&hw.table.vl)
@@ -1361,9 +1440,10 @@ history_action :: proc(app: ^App, a: History_Action) {
 		workflow_mode_leave(app)
 		settings_enter(app)
 	case .Palette:
-		ui.palette_open(&hw.palette)
+		history_palette_show(app)
 	case .Keys:
-		hw.sheet.open = true
+		history_sheet_keep(app)
+		ui.shortcuts_sheet_open(&hw.sheet, hw.sheet_table.commands, i18n.tr("cliche's keys"), hw.sheet_table.version)
 	case .Close:
 		hw.hide_due = true
 	case .Quit:

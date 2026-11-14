@@ -23,3 +23,5 @@ documentation (`README.md` at the root) and not the map of the code (`docs/archi
 
 - [features/editor-bars.md](features/editor-bars.md): the editor's two bars, tools above and actions under; why nothing
   folds away
+- [features/views.md](features/views.md): the dialogs and the preview as gui_toolkit's views; several windows owning
+  views, an editor's instances, where each view opens

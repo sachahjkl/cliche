@@ -75,8 +75,7 @@ Workflow_Mode :: struct {
 	renaming:   u64,                  // the workflow whose name is being typed (0: none)
 	rename:     ui.Line_Edit,
 	rename_focus: bool,               // its field takes the keyboard at its next build
-	confirm_open: bool,
-	delete_id:  u64,
+	delete_id:  u64,                  // the workflow the question WORKFLOW_DELETE_VIEW asks about
 
 	inspector:  ui.Node_Inspector,    // the node selected's parameters (workflow_inspector.odin)
 	typing:     bool,                 // a field of the mode had the keyboard last frame: its keys are the field's
@@ -140,6 +139,9 @@ workflow_mode_leave :: proc(app: ^App) {
 	m := &app.history_window.workflow_mode
 	if !m.open { return }
 	m.open = false
+	// (its views ask about what the mode shows: they go with it)
+	ui.palette_close(&m.add)
+	ui.view_close(&app.views, WORKFLOW_DELETE_VIEW)
 	// (a Capture step's keys left while being recorded: the global shortcuts take theirs again)
 	shortcuts.hold(app.shortcuts, false)
 	workflows_save(app)
@@ -530,8 +532,11 @@ workflow_view_center :: proc(m: ^Workflow_Mode) -> [2]f32 {
 @(private = "file")
 workflow_add_open :: proc(app: ^App, at: [2]f32, from: Maybe(flowgraph.Port_Ref)) {
 	m := &app.history_window.workflow_mode
-	if workflows_find(&app.workflows, m.shown) == nil { return }
+	wf := workflows_find(&app.workflows, m.shown)
+	if wf == nil { return }
 	m.add_at, m.add_from = at, from
+	workflow_add_keep(app, wf)
+	workflow_add_give(app)
 	ui.palette_open(&m.add)
 }
 
@@ -591,30 +596,41 @@ workflow_undo :: proc(app: ^App, back: bool) {
 
 // The add palette's table (ui.flow_palette: the catalog's kinds, those that cannot be added disabled), made again only
 // when the graph (workflows.version), the workflow shown or the port a link was dropped from change. The catalog is
-// constant.
+// constant. True: it was made again.
 @(private = "file")
-workflow_add_keep :: proc(app: ^App, wf: ^flowgraph.Graph_Entry) {
+workflow_add_keep :: proc(app: ^App, wf: ^flowgraph.Graph_Entry) -> bool {
 	m := &app.history_window.workflow_mode
 	key := Add_Key{workflows = app.workflows.version + 1, shown = m.shown, from = m.add_from}
-	if m.add_made == key { return }
+	if m.add_made == key { return false }
 	m.add_made = key
 	t := &m.add_table
 	a := palette_table_remake(t)
 	commands, disabled := ui.flow_palette(&wf.graph, &CATALOG, m.add_from)
 	t.commands = slice.clone(commands, a)   // (its strings are the catalog's)
 	t.disabled = slice.clone(disabled, a)
+	return true
 }
 
+// The add palette's table, given to it (a node kind is a chooser's line: no view's move is listed there).
+@(private = "file")
+workflow_add_give :: proc(app: ^App) {
+	m := &app.history_window.workflow_mode
+	t := &m.add_table
+	ui.palette_set(&m.add, t.commands, t.disabled, {version = t.version})
+}
+
+// The answers of the mode's views (the add palette's kind, the question before a workflow is deleted), its add
+// palette's table kept while it is open, and the node's menu.
 @(private = "file")
 workflow_dialogs :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
-	if m.add.open {
+	// (the kind chosen is a line of the table it was made from: taken before the table is made again)
+	if i, _, ok := ui.palette_chosen(&m.add); ok && i < len(m.add_table.commands) { workflow_add_chosen(app, i) }
+	if ui.palette_is_open(&m.add) {
 		if wf := workflows_find(&app.workflows, m.shown); wf != nil {
-			workflow_add_keep(app, wf)
-			t := &m.add_table
-			if i, _ := ui.palette(&m.add, t.commands, t.disabled, {version = t.version}); i >= 0 { workflow_add_chosen(app, i) }
+			if workflow_add_keep(app, wf) { workflow_add_give(app) }
 		} else {
-			m.add.open = false
+			ui.palette_close(&m.add)
 		}
 	}
 	if ui.menu(WORKFLOW_NODE_MENU_ID) {
@@ -652,19 +668,23 @@ workflow_dialogs :: proc(app: ^App, em: f32) {
 			}
 		}
 	}
-	if m.confirm_open {
-		wf := workflows_find(&app.workflows, m.delete_id)
-		title := wf != nil ? fmt.tprintf(i18n.tr("Delete the workflow %q?"), wf.name) : i18n.tr("Delete the workflow?")
-		note := i18n.tr("Its steps go with it. Undo cannot bring it back.")
-		if wf != nil && len(wf.labels) > 0 { note = i18n.tr("Its steps go with it, and the captures it runs will run nothing until another workflow takes them.") }
-		switch ui.confirm("workflow_delete", &m.confirm_open, {title = title, note = note, act = i18n.tr("Delete")}) {
-		case .Confirmed:
-			workflows_remove(&app.workflows, m.delete_id)
-			if m.shown == m.delete_id { workflow_show(app, len(app.workflows.set.list) > 0 ? app.workflows.set.list[0].id : 0) }
-			workflows_changed(app, now = true)
-		case .Cancelled, .None:
-		}
+	// (the question may have floated beside the list while it changed: a workflow gone since is not looked for)
+	if ui.confirm_answer(WORKFLOW_DELETE_VIEW) == .Confirmed && workflows_find(&app.workflows, m.delete_id) != nil {
+		workflows_remove(&app.workflows, m.delete_id)
+		if m.shown == m.delete_id { workflow_show(app, len(app.workflows.set.list) > 0 ? app.workflows.set.list[0].id : 0) }
+		workflows_changed(app, now = true)
 	}
+}
+
+// The question before the workflow `id` is deleted (its title and its note made once, as it opens).
+workflow_delete_ask :: proc(app: ^App, id: u64) {
+	m := &app.history_window.workflow_mode
+	wf := workflows_find(&app.workflows, id)
+	if wf == nil { return }
+	m.delete_id = id
+	note := i18n.tr("Its steps go with it. Undo cannot bring it back.")
+	if len(wf.labels) > 0 { note = i18n.tr("Its steps go with it, and the captures it runs will run nothing until another workflow takes them.") }
+	ui.confirm_open(WORKFLOW_DELETE_VIEW, {title = fmt.tprintf(i18n.tr("Delete the workflow %q?"), wf.name), note = note, act = i18n.tr("Delete")})
 }
 
 // A new workflow with its Capture node, shown, its name being typed.

@@ -349,6 +349,9 @@ fr Seules les images s'ouvrent ici
 en PNG, JPEG, WebP and BMP files, each in an editor of its own.
 fr Les fichiers PNG, JPEG, WebP et BMP, chacun dans son propre éditeur.
 
+en The editor's keys
+fr Les touches de l'éditeur
+
 en The picture could not be made
 fr L'image n'a pas pu être créée
 
@@ -568,8 +571,8 @@ fr Ombre
 en No fill
 fr Aucun remplissage
 
-en The editor's keys
-fr Les touches de l'éditeur
+en Resize the picture
+fr Redimensionner l'image
 
 en Close the editor and drop the changes?
 fr Fermer l'éditeur et abandonner les modifications ?
@@ -582,9 +585,6 @@ fr Abandonner les modifications
 
 en Add margins to the picture
 fr Ajouter des marges à l'image
-
-en Resize the picture
-fr Redimensionner l'image
 
 en Left
 fr Gauche
@@ -917,8 +917,11 @@ fr Le fichier est manquant
 en No picture
 fr Aucune image
 
-en cliche's keys
-fr Les touches de cliche
+en The file is deleted
+fr Le fichier est supprimé
+
+en %d files are deleted
+fr %d fichiers sont supprimés
 
 en Delete %d files for good?
 fr Supprimer définitivement %d fichiers ?
@@ -931,12 +934,6 @@ fr Les fichiers quittent le disque, sans passer par la corbeille. Leurs lignes r
 
 en Delete
 fr Supprimer
-
-en The file is deleted
-fr Le fichier est supprimé
-
-en %d files are deleted
-fr %d fichiers sont supprimés
 
 en The path is on the clipboard
 fr Le chemin est dans le presse-papiers
@@ -970,6 +967,9 @@ fr Le fichier reste.
 
 en The files stay.
 fr Les fichiers restent.
+
+en cliche's keys
+fr Les touches de cliche
 
 en Pinned picture
 fr Image épinglée
@@ -2238,14 +2238,11 @@ fr aucune capture ne l'exécute
 en Reset its settings
 fr Réinitialiser ses réglages
 
-en Delete the workflow %q?
-fr Supprimer le scénario « %s » ?
-
-en Delete the workflow?
-fr Supprimer le scénario ?
-
 en Its steps go with it. Undo cannot bring it back.
 fr Ses étapes partent avec lui. Annuler ne peut pas le rétablir.
 
 en Its steps go with it, and the captures it runs will run nothing until another workflow takes them.
 fr Ses étapes partent avec lui, et les captures qu'il exécute n'exécuteront rien tant qu'un autre scénario ne les prend pas.
+
+en Delete the workflow %q?
+fr Supprimer le scénario « %s » ?

@@ -12,13 +12,14 @@ Palette_Table :: struct {
 	commands: []ui.Command,
 	disabled: []bool,     // per command; its owner fills the part that changes with the app's state
 	names:    []string,   // per command after the actions: the preference it names (the main palette's)
+	acts:     []ui.View_Command,   // per command at the end: the view's move it does (views_moves)
 	version:  u64,        // raised at each making: the palette's or the sheet's version (0: not made)
 }
 
 // Frees the last making and returns the allocator of the next one: the table's version goes up.
 palette_table_remake :: proc(t: ^Palette_Table) -> runtime.Allocator {
 	virtual.arena_free_all(&t.arena)
-	t.commands, t.disabled, t.names = nil, nil, nil
+	t.commands, t.disabled, t.names, t.acts = nil, nil, nil, nil
 	t.version += 1
 	return virtual.arena_allocator(&t.arena)
 }

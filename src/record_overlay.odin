@@ -58,6 +58,7 @@ record_overlay_show :: proc(app: ^App, headless := false) -> bool {
 		ro.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).record_overlay.decision = .Cancel }
 		ro.opened = true
 		app_standard_follow(app, &ro.host)
+		views_window(app, &ro.host)
 		ro.area = out
 		ro.host.params = record_overlay_params
 		ro.host.after_input = 2

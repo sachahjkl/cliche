@@ -92,6 +92,7 @@ overlay_show :: proc(app: ^App, picker := false) -> bool {
 		if o.layer { o.out = out }
 		o.opened = true
 		app_standard_follow(app, &o.host)
+		views_window(app, &o.host)
 		o.host.input = overlay_input
 		o.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).overlay.decision = .Cancel }
 		o.host.after_input = 2

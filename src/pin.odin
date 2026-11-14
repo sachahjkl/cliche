@@ -191,6 +191,7 @@ pin_open :: proc(app: ^App, shot: Shot) {
 	// (mips: a pin made smaller stays sharp)
 	render.update_texture_rgba(r, p.tex, 0, 0, shot.size.x, shot.size.y, shot.rgba)
 	app_standard_follow(app, &p.host)
+	views_window(app, &p.host)
 	p.host.input = pin_input
 	p.host.close_asked = proc(h: ^host.Host) { (^Pin)(h.user).close_due = true }
 	p.host.params = pin_params

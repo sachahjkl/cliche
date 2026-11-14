@@ -63,6 +63,7 @@ App :: struct {
 	wake_lock:  sync.Mutex,
 	wakes:      [dynamic]^platform.Window,                 // guarded by `wake_lock`: every open window (app_wake)
 	shared:     host.Shared,                               // the renderer, from the first window that needs it
+	views:      ui.Views,                                  // views.odin: the dialogs and panes of every window
 	overlay:    Overlay,                                   // overlay.odin
 	history_window: History_Window,                        // history_view.odin: the main window, with the settings
 	editors:    [dynamic]^Editor,                          // editor.odin: one per picture, and one kept hidden for the next
@@ -161,6 +162,8 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	config.user_writer_start(&app.prefs_writer, &app.prefs, prefs_file())
 	prefs_page.themes_file_init(&app.themes_file, themes_file(), themes())
 	licence_init(app)
+	// (before any window: the views' memory read here, written on its own thread from now on)
+	views_start(app, views_path())
 	history_start(app)
 	workflows_start(app)
 	app.server = instance.serve_start(owner, app_message, app)
@@ -297,6 +300,8 @@ app_windows_close :: proc(app: ^App) {
 	// (the install's thread waited for while the main window's State is there)
 	prefs_page.install_end(&app.install)
 	crash_bar.destroy(&app.crash_bar)
+	// (after the last build, before any window's State goes: which views were open is written, their windows close)
+	ui.views_destroy(&app.views)
 	// (textures go while the renderer is there: before any host closes; the pins are never the renderer's own window)
 	pins_close_all(app)
 	history_window_free(app)
