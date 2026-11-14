@@ -280,3 +280,37 @@ uploader_helpers :: proc(t: ^testing.T) {
 	u, found = uploader_find(list, "gone")
 	testing.expect(t, !found && u.name == "builtin", "the built-in one when the chosen is gone")
 }
+
+// A URL shortener: the built-in ones read, its request carries the address ({input}), the lists keep the uses apart.
+@(test)
+uploader_shortens_addresses :: proc(t: ^testing.T) {
+	shorteners := BUILTIN_SHORTENERS
+	isgd, problem := uploader_parse(transmute([]u8)string(shorteners[0]), "", context.temp_allocator)
+	testing.expect_value(t, problem, "")
+	testing.expect_value(t, isgd.name, BUILTIN_SHORTENER_NAME)
+	testing.expect(t, uploader_shortens(isgd) && !uploader_uploads(isgd), "is.gd shortens and uploads nothing")
+	r, why := uploader_request(isgd, nil, "", input = "https://e.com/a b?x=1")
+	testing.expect_value(t, why, "")
+	testing.expect_value(t, r.method, "GET")
+	testing.expect_value(t, r.url, "https://is.gd/create.php?format=simple&url=https%3A%2F%2Fe.com%2Fa+b%3Fx%3D1")
+	testing.expect_value(t, len(r.body), 0)
+
+	// (a ShareX shortener that posts a form)
+	form_text := `{"Version": "15.0.0", "Name": "S", "DestinationType": "URLShortener", "RequestURL": "https://s/", "Body": "FormURLEncoded", "Arguments": {"url": "{input}"}}`
+	form, _ := uploader_parse(transmute([]u8)form_text, "", context.temp_allocator)
+	r, why = uploader_request(form, nil, "", input = "https://e.com/?q=a&b")
+	testing.expect_value(t, why, "")
+	testing.expect_value(t, string(r.body), "url=https%3A%2F%2Fe.com%2F%3Fq%3Da%26b")
+	content_type, _ := http.header_value(r.headers, "Content-Type")
+	testing.expect_value(t, content_type, "application/x-www-form-urlencoded")
+
+	litterbox, _ := uploader_parse(transmute([]u8)string(BUILTIN_UPLOADER), "", context.temp_allocator)
+	list := []Uploader{litterbox, isgd, {name = "mine", file = "/f/mine.sxcu", destinations = {.Url_Shortener}}}
+	testing.expect_value(t, len(uploaders_names(list, shorteners = false, allocator = context.temp_allocator)), 1)
+	names := uploaders_names(list, shorteners = true, allocator = context.temp_allocator)
+	testing.expect(t, len(names) == 2 && names[0] == BUILTIN_SHORTENER_NAME && names[1] == "mine", "the shorteners, in order")
+	u, found := uploader_find(list, "", shortener = true)
+	testing.expect(t, !found && u.name == BUILTIN_SHORTENER_NAME, "the built-in shortener by default")
+	u, found = uploader_find(list, "mine")
+	testing.expect(t, !found && u.name == litterbox.name, "a shortener is no host for a picture")
+}

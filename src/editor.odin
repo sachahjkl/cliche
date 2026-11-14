@@ -29,7 +29,9 @@ package cliche
 // Done hands the flattened picture back to the run that asked for it (workflow_editor_done); a picture of the history
 // runs the workflow of "Capture a region and edit". Cancel, or a close without Done, cancels the run's Annotate step
 // (workflow_editor_closed): what needs its picture or its "done" is skipped, what hangs on its "cancelled" runs. Flattening runs on the GPU (an offscreen target read back a frame later); Ctrl+S encodes and
-// writes the PNG on the worker (Job_Save). A file of the history is read and decoded by a task of the chores.
+// writes the PNG on the worker (Job_Save). Save as, Upload and Print are editor_output.odin's, Pin pin.odin's. A file
+// (of the history, or dropped on the window: PNG, JPEG, WebP, BMP) is read and decoded by a task of the chores; each
+// file dropped opens in an editor of its own, after the frame.
 
 import "core:fmt"
 import "core:log"
@@ -45,8 +47,8 @@ import "gt:draw"
 import "gt:font"
 import "gt:host"
 import lucide "gt:lucide"
+import pic "gt:image"
 import "gt:platform"
-import png "gt:png"
 import prefs_page "gt:prefs_page"
 import "gt:render"
 import tasks "gt:tasks"
@@ -66,7 +68,7 @@ Editor_Action :: enum u8 {
 	Tool_Pixelate, Tool_Blur, Tool_Step, Tool_Crop,
 	Undo, Redo, Paste, Delete, Delete_All, Duplicate, Bring_To_Front, Bring_Forward, Send_Backward, Send_To_Back, Remove_Crop,
 	Zoom_In, Zoom_Out, Zoom_Fit, Zoom_Actual,
-	Copy, Save, Done,
+	Copy, Save, Save_As, Upload, Pin, Print, Done,
 	Close, Palette, Keys,
 	Nudge,
 }
@@ -106,6 +108,10 @@ EDITOR_ACTIONS := [Editor_Action]ui.Command{
 	.Zoom_Actual      = {label = i18n.later("Actual size (100 %)"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}}, icon = lucide.SCAN, tags = {"zoom", "pixels", "one to one", "100"}},
 	.Copy             = {label = i18n.later("Copy the picture"), group = i18n.later("Picture"), keys = {{.C, {.Ctrl}}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard"}},
 	.Save             = {label = i18n.later("Save the picture"), group = i18n.later("Picture"), keys = {{.S, {.Ctrl}}}, icon = lucide.SAVE, tags = {"file", "png", "write"}},
+	.Save_As          = {label = i18n.later("Save the picture as…"), group = i18n.later("Picture"), keys = {{.S, {.Ctrl, .Shift}}}, icon = lucide.FILE_INPUT, tags = {"file", "folder", "name", "format", "jpeg", "webp", "png", "dialog"}},
+	.Upload           = {label = i18n.later("Upload the picture"), group = i18n.later("Picture"), keys = {{.U, {.Ctrl}}}, icon = lucide.CLOUD_UPLOAD, tags = {"share", "host", "link", "url", "address", "imgur", "sxcu"}},
+	.Pin              = {label = i18n.later("Pin the picture to the screen"), group = i18n.later("Picture"), keys = {{.T, {.Ctrl}}}, icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep", "window"}},
+	.Print            = {label = i18n.later("Print the picture"), group = i18n.later("Picture"), keys = {{.P, {.Ctrl}}}, icon = lucide.PRINTER, tags = {"paper", "printer", "page"}},
 	.Done             = {label = i18n.later("Done: the workflow goes on"), group = i18n.later("Picture"), keys = {{.Return, {}}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
 	.Close            = {label = i18n.later("Close the editor"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}},
 	.Palette          = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}},
@@ -167,7 +173,7 @@ Editor_Paste :: union #no_nil { Editor_Paste_Idle, Editor_Paste_Asking, Editor_P
 // Which colour the colour popover changes.
 Editor_Color_Target :: enum u8 { None, Stroke, Fill }
 
-// A PNG file read and decoded by a task of the chores (editor_open_file). Who frees it is whoever comes last: the task
+// A picture file (PNG, JPEG, WebP, BMP) read and decoded by a task of the chores (editor_open_file). Who frees it is whoever comes last: the task
 // when the editor gave it up, else the editor once it is done (Load_State).
 Editor_Load_Work :: struct {
 	path:  string,   // owned
@@ -212,6 +218,9 @@ Editor :: struct {
 	load_problem: string,             // why the file could not be shown (static text; "" none)
 	export_wait: bool,                // an export asked while a filter was made: it starts once they are (export_wait_for)
 	export_wait_for: Edit_Export_Purpose,
+	save_as:     Editor_Save_As,      // editor_output.odin
+	save_as_serial: u64,              // the ask the dialog's answer must name
+	drops:       [dynamic]string,     // the files dropped in a frame, opened after it (owned)
 
 	// the colour popover: which colour, the picker, the buttons it opens from (their rects, and which were built this
 	// frame), the shape it was opened for (another selected: it closes)
@@ -313,8 +322,8 @@ editor_free_for_picture :: proc(ed: ^Editor) -> bool {
 	return !ed.visible && !ed.has_picture && ed.load_work == nil
 }
 
-// The PNG file at `path` (not kept) in an editor of its own, read and decoded by a task of the chores: the window
-// says so meanwhile, and says why when the file cannot be read.
+// The picture file at `path` (not kept: PNG, JPEG, WebP, BMP, by its first bytes) in an editor of its own, read and
+// decoded by a task of the chores: the window says so meanwhile, and says why when the file cannot be read.
 editor_open_file :: proc(app: ^App, path: string) {
 	ed := editor_take(app)
 	if ed == nil { return }
@@ -336,9 +345,9 @@ editor_open_file :: proc(app: ^App, path: string) {
 editor_load_run :: proc(data: rawptr) {
 	work := (^Editor_Load_Work)(data)
 	if bytes, err := os.read_entire_file(work.path, context.allocator); err == nil {
-		rgba, w, h, ok := png.decode(bytes)
+		img, _, ok := pic.decode(bytes)
 		delete(bytes)
-		if ok { work.rgba, work.size, work.ok = rgba, {w, h}, true }
+		if ok { work.rgba, work.size, work.ok = img.pixels, {img.width, img.height}, true }
 	}
 	app := work.app
 	if _, done := sync.atomic_compare_exchange_strong(&work.state, .Running, .Done); done {
@@ -376,6 +385,8 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 	ed.host.state.icon_font = ed.icons
 	// (once per window: the face is looked for, and kept by the fonts' state)
 	ed.font_bold = font.styled_face(&app.shared.fonts, app.shared.font, true, false)
+	// (a picture file dropped on the window opens; offscreen there is no drag to come)
+	if !headless && !platform.drop_target_enable(ed.host.win, true) { log.warn("the editor takes no files dropped here") }
 	append(&app.editors, ed)
 	app_wake_add(app, ed.host.win)
 	return ed
@@ -391,6 +402,7 @@ editor_find :: proc(app: ^App, id: u64) -> ^Editor {
 // close acted on. What its picture was for goes on last: that may give this editor a new picture (editor_take).
 editor_after_frame :: proc(ed: ^Editor) {
 	editor_load_take(ed)
+	editor_drops_open(ed)
 	if ed.has_picture {
 		editor_filters_want(ed)
 		editor_filters_take(ed)
@@ -468,7 +480,7 @@ editor_load_take :: proc(ed: ^Editor) {
 		return
 	}
 	if !ok {
-		ed.load_problem = i18n.tr("The picture cannot be read: it is not a PNG file, or it is gone.")
+		ed.load_problem = i18n.tr("The picture cannot be read: it is not a PNG, JPEG, WebP or BMP file, or it is gone.")
 		ed.host.settle = max(ed.host.settle, 2)
 		return
 	}
@@ -485,16 +497,20 @@ editor_load_stop :: proc(ed: ^Editor) {
 	editor_load_free(work)
 }
 
-// What the worker said of a save asked from an editor (Ctrl+S): told as cliche tells (app_announce), in that editor
-// when it is still shown. The file is written either way: a closed editor's save is still said.
+// What the worker said of a save asked from an editor (Ctrl+S, Save as) or a pinned picture: told as cliche tells
+// (app_announce), in that editor when it is still shown. The file is written either way: a closed editor's save is
+// still said.
 editor_saved :: proc(app: ^App, r: Result_Saved) {
-	defer delete(r.path)
+	defer { delete(r.path); delete(r.problem) }
 	window := editor_window(app, r.editor)
-	if r.error != .None { app_announce(app, .Bad, i18n.tr("Not saved"), i18n.tr(FLOW_ERROR_TEXT[r.error]), window) } else { app_announce(app, .Good, i18n.tr("Saved"), r.path, window) }
+	switch {
+	case r.problem != "":    app_announce(app, .Bad, i18n.tr("Not saved"), r.problem, window)
+	case r.error != .None:   app_announce(app, .Bad, i18n.tr("Not saved"), i18n.tr(FLOW_ERROR_TEXT[r.error]), window)
+	case:                    app_announce(app, .Good, i18n.tr("Saved"), r.path, window)
+	}
 }
 
 // Where a message for editor `id` is shown: its window while it is shown; nil (cliche's usual place) once it is not.
-@(private = "file")
 editor_window :: proc(app: ^App, id: u64) -> ^host.Host {
 	ed := editor_find(app, id)
 	return ed != nil && ed.visible ? &ed.host : nil
@@ -514,6 +530,8 @@ editor_free :: proc(ed: ^Editor) {
 	ui.shortcuts_sheet_destroy(&ed.sheet)
 	ui.text_edit_destroy(&ed.field)
 	ui.color_pick_destroy(&ed.color_pick)
+	for p in ed.drops { delete(p) }
+	delete(ed.drops)
 	delete(ed.filters)
 	delete(ed.mosaics)
 	delete(ed.blurs)
@@ -540,6 +558,7 @@ editor_picture_drop :: proc(ed: ^Editor) {
 	if ed.has_picture { editor_choices_keep(ed.app, &ed.model) }
 	editor_filters_stop(ed)
 	editor_paste_stop(ed)
+	editor_save_as_stop(ed)
 	edit_export_free(&ed.export)
 	ed.exporting, ed.export_wait = false, false
 	if !ed.has_picture { return }
@@ -799,6 +818,12 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 	ed := (^Editor)(h.user)
 	m := &ed.model
 	out := make([dynamic]platform.Event, 0, len(events), context.temp_allocator)
+	// (a file dropped opens with a picture or without one: before anything else)
+	for e in events {
+		#partial switch e.kind {
+		case .Drop_Enter, .Drop_Over, .Drop_Leave, .Drop: editor_drop_event(ed, e)
+		}
+	}
 	if !ed.has_picture {
 		return events
 	}
@@ -862,6 +887,44 @@ editor_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Even
 	return out[:]
 }
 
+// A drag over the window: taken as a copy when it may hold a picture file (Windows says its files as it enters; X11
+// and Wayland only its types until the drop). Dropped: its pictures are kept to open after the frame, each in an
+// editor of its own (this one keeps its picture and its changes).
+@(private = "file")
+editor_drop_event :: proc(ed: ^Editor, e: platform.Event) {
+	win := ed.host.win
+	#partial switch e.kind {
+	case .Drop_Enter, .Drop_Over:
+		files := false
+		if d := platform.drop_data(win); d != nil && len(d.files) > 0 {
+			for f in d.files { if picture_file(f) { files = true } }
+		} else {
+			for t in platform.drop_types(win) { if t == "text/uri-list" { files = true } }
+		}
+		effect: Maybe(platform.Drop_Effect)
+		if files && .Copy in e.drop_allowed { effect = .Copy }
+		platform.drop_set_effect(win, effect)
+	case .Drop:
+		d := platform.drop_data(win)
+		if d == nil { return }
+		open, left_out := drop_pictures(d.files[:])
+		for p in open { append(&ed.drops, strings.clone(p)) }
+		if left_out { app_announce(ed.app, .Info, i18n.tr("Only pictures open here"), i18n.tr("PNG, JPEG, WebP and BMP files, each in an editor of its own."), &ed.host) }
+		platform.drop_data_release(win)
+	case .Drop_Leave:
+	}
+}
+
+// The files dropped in the last frame, each in an editor of its own: after the frame, since a new window may open.
+@(private = "file")
+editor_drops_open :: proc(ed: ^Editor) {
+	if len(ed.drops) == 0 { return }
+	paths := ed.drops
+	ed.drops = {}
+	defer { for p in paths { delete(p) }; delete(paths) }
+	for p in paths { editor_open_file(ed.app, p) }
+}
+
 // The cursor of the canvas where the pointer is: what a press there would do. (On a move, not at each frame.)
 @(private = "file")
 editor_hover :: proc(ed: ^Editor) {
@@ -921,6 +984,9 @@ editor_action_enabled :: proc(ed: ^Editor, a: Editor_Action) -> bool {
 	case .Bring_To_Front, .Bring_Forward, .Send_Backward, .Send_To_Back:
 		for o in EDITOR_ORDERS { if o.action == a { return edit_can_order(m, o.order) } }
 	case .Remove_Crop:                  return edit_idle(m) && m.doc.has_crop
+	case .Save_As:
+		_, idle := ed.save_as.(Editor_Save_As_Idle)
+		return idle
 	}
 	return true
 }
@@ -947,6 +1013,10 @@ editor_action :: proc(ed: ^Editor, a: Editor_Action) {
 	case .Zoom_Actual: edit_view_zoom_to(m, 1)
 	case .Copy:        editor_export_start(ed, .Copy)
 	case .Save:        editor_export_start(ed, .Save)
+	case .Save_As:     editor_save_as_begin(ed)
+	case .Upload:      editor_export_start(ed, .Upload)
+	case .Pin:         editor_export_start(ed, .Pin)
+	case .Print:       editor_export_start(ed, .Print)
 	case .Done:        editor_export_start(ed, .Done)
 	case .Close:       editor_close_asked(ed)
 	case .Palette:     ui.palette_open(&ed.palette)
@@ -964,13 +1034,18 @@ editor_close_asked :: proc(ed: ^Editor) {
 
 // The picture flattened for `purpose`. A text being typed is kept first. Done with nothing changed hands the picture as
 // it was taken: nothing to draw. While a mosaic or a blurred copy is still made, the export waits for it (its box would
-// be a grey block in the file): editor_after_frame starts it then.
-@(private = "file")
+// be a grey block in the file): editor_after_frame starts it then. A Save as whose export cannot start lets its path go.
 editor_export_start :: proc(ed: ^Editor, purpose: Edit_Export_Purpose) {
 	m := &ed.model
-	if !ed.has_picture || ed.exporting || ed.done_due { return }
+	if !ed.has_picture || ed.exporting || ed.export_wait || ed.done_due {
+		if purpose == .Save_As { editor_save_as_stop(ed) }
+		return
+	}
 	if _, typing := m.mode.(Edit_Typing); typing { edit_step(m, Edit_Type_End{keep = true}) }
-	if !edit_idle(m) { return }
+	if !edit_idle(m) {
+		if purpose == .Save_As { editor_save_as_stop(ed) }
+		return
+	}
 	if purpose == .Done && !edit_changed(m) {
 		// (after the frame, not in this build: the run may open another editor's window)
 		ed.done_due = true
@@ -1000,6 +1075,7 @@ editor_export_poll :: proc(ed: ^Editor) {
 		purpose := ed.export.purpose
 		edit_export_free(&ed.export)
 		ed.exporting = false
+		if purpose == .Save_As { editor_save_as_stop(ed) }
 		app_announce(app, .Bad, i18n.tr("The picture could not be made"), purpose == .Done ? i18n.tr("Nothing was done with it.") : "", &ed.host)
 		return
 	case .Ready:
@@ -1015,6 +1091,19 @@ editor_export_poll :: proc(ed: ^Editor) {
 		worker_send(&app.worker, Job_Copy_Encode{editor = ed.id, shot = shot})
 	case .Save:
 		worker_send(&app.worker, Job_Save{editor = ed.id, shot = shot, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern)})
+	case .Save_As:
+		editor_save_as_write(ed, shot)
+	case .Upload:
+		app_announce(app, .Info, i18n.tr("Uploading…"), "", &ed.host)
+		worker_send(&app.worker, Job_Upload{editor = ed.id, shot = shot, uploader = strings.clone(app.settings.uploader), pattern = strings.clone(app.settings.name_pattern)})
+	case .Pin:
+		// (as large on the screen as the picture it came from: its pixels per logical pixel; after the frame: its window
+		// may open now)
+		pinned := shot
+		pinned.scale = ed.shot.scale
+		pin_open(app, pinned)
+	case .Print:
+		editor_print(ed, shot)
 	}
 }
 
@@ -1164,7 +1253,8 @@ editor_text_field :: proc(ed: ^Editor, em: f32) {
 }
 
 // The bar: the tools, the properties, then what is done with the picture. A window too narrow for all of it folds the
-// properties first, then undo, redo, copy and save, then the tools, into the bar's "…" panel; Cancel and Done stay.
+// properties first, then undo, redo, copy, save, upload and pin, then the tools, into the bar's "…" panel; Cancel and
+// Done stay. Save as and Print are in the palette and on their keys.
 @(private = "file")
 editor_bar :: proc(ed: ^Editor, em: f32) {
 	m := &ed.model
@@ -1182,7 +1272,7 @@ editor_bar :: proc(ed: ^Editor, em: f32) {
 		ui.spacer(ui.fill())
 		if ui.toolbar_group("zoom", {priority = 1}) { editor_zoom(ed, em, side) }
 		if ui.toolbar_group("acts", {priority = 1}) {
-			for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save}) {
+			for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save, .Upload, .Pin}) {
 				if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(ed, a)) { editor_action(ed, a) }
 			}
 		}

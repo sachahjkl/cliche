@@ -24,9 +24,9 @@ Node_Kind :: enum u8 {
 	// filters
 	Blur, Sharpen, Pixelate,
 	// interactive and flow control
-	Annotate, Condition,
+	Annotate, Ask, Condition,
 	// outputs
-	Copy_Image, Save_File, Upload, Copy_Text, Read_Qr, Read_Text, Notify, Show_In_Folder, Add_To_History,
+	Copy_Image, Save_File, Upload, Shorten_Url, Copy_Text, Read_Qr, Read_Text, Make_Qr, Notify, Show_In_Folder, Open, Pin, Delete_File, Add_To_History,
 }
 
 // What flows on a link (flowgraph.Port_Kind: CATALOG.kinds[k]; 0 is the engine's ACTION). A text takes an address or a
@@ -38,13 +38,21 @@ PORT_FILE  :: flowgraph.Port_Kind(4)
 PORT_ANY   :: flowgraph.Port_Kind(5)
 
 // Where a node's work runs (flowgraph.Node_Def.place): the worker (pixels, disk, network), the interface's thread (the
-// clipboard, a notification, the history), the editor (a person), or the run itself, at once (Capture, Condition).
-Node_Place :: enum u8 { Worker, Interface, Editor, Run }
+// clipboard, a notification, the history, a pinned picture), the editor (a person), a question in a notification (a
+// person: Ask), or the run itself, at once (Capture, Condition).
+Node_Place :: enum u8 { Worker, Interface, Editor, Question, Run }
 
 @(private = "file") PLACE_WORKER    :: u8(Node_Place.Worker)
 @(private = "file") PLACE_INTERFACE :: u8(Node_Place.Interface)
 @(private = "file") PLACE_EDITOR    :: u8(Node_Place.Editor)
+@(private = "file") PLACE_QUESTION  :: u8(Node_Place.Question)
 @(private = "file") PLACE_RUN       :: u8(Node_Place.Run)
+
+// The Capture node's outputs: what the run starts from comes out of one of them (Run_Origin). A capture gives a
+// picture; the clipboard a picture, a file or a text; a file chosen to upload, a file.
+CAPTURE_PORT_PICTURE :: 0
+CAPTURE_PORT_FILE    :: 1
+CAPTURE_PORT_TEXT    :: 2
 
 @(private = "file") BLACK :: [4]u8{0, 0, 0, 255}
 @(private = "file") WHITE :: [4]u8{255, 255, 255, 255}
@@ -74,7 +82,12 @@ CATALOG := flowgraph.Catalog{
 	nodes = {
 		// (its parameters: the workflow's own shortcut and what it captures, in Source's order; then the delay and the
 		// pointer of every capture that runs the workflow: capture_options)
-		{name = "capture", title = i18n.later("Capture"), group = i18n.later("Source"), icon = lucide.MONITOR, tags = {"start", "trigger", "screenshot", "shortcut", "hotkey", "delay", "timer", "cursor", "pointer"}, outputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, place = PLACE_RUN, max_count = 1, min_count = 1, params = {
+		// (its outputs, in CAPTURE_PORT_*'s order: a run gives one of them, what its trigger took)
+		{name = "capture", title = i18n.later("Capture"), group = i18n.later("Source"), icon = lucide.MONITOR, tags = {"start", "trigger", "screenshot", "shortcut", "hotkey", "delay", "timer", "cursor", "pointer", "clipboard", "file"}, outputs = {
+			{name = i18n.later("picture"), kind = PORT_IMAGE},
+			{name = i18n.later("file"), kind = PORT_FILE},
+			{name = i18n.later("text"), kind = PORT_TEXT},
+		}, place = PLACE_RUN, max_count = 1, min_count = 1, params = {
 			{name = "shortcut", title = i18n.later("Its own shortcut"), type = .Hotkey},
 			{name = "source", title = i18n.later("What its shortcut captures"), type = .Choice, choices = {i18n.later("A region"), i18n.later("The screen"), i18n.later("The window in front"), i18n.later("All the screens"), i18n.later("The last region")}},
 			{name = "delay", title = i18n.later("Delay"), type = .Int, lo = 0, hi = 30, step = 1, unit = "s"},
@@ -169,6 +182,13 @@ CATALOG := flowgraph.Catalog{
 			{name = i18n.later("done"), kind = flowgraph.ACTION, on = .Done},
 			{name = i18n.later("cancelled"), kind = flowgraph.ACTION, on = .Cancelled},
 		}, place = PLACE_EDITOR},
+		// (a notification with Yes and No: "yes" fires on Yes or a click on it, "no" on No or when it is closed)
+		{name = "ask", title = i18n.later("Ask"), group = i18n.later("Interactive"), icon = lucide.CIRCLE_HELP, tags = {"confirm", "question", "yes", "no", "before upload"}, inputs = {{name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {
+			{name = i18n.later("yes"), kind = flowgraph.ACTION, on = .Done},
+			{name = i18n.later("no"), kind = flowgraph.ACTION, on = .Cancelled},
+		}, place = PLACE_QUESTION, params = {
+			{name = "question", title = i18n.later("Question"), type = .Text, placeholder = i18n.later("Said for you: \"Go on?\"")},
+		}},
 		{name = "condition", title = i18n.later("Condition"), group = i18n.later("Flow control"), icon = lucide.GIT_FORK, tags = {"if", "branch", "test", "when"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, outputs = {{name = i18n.later("yes"), kind = PORT_IMAGE}, {name = i18n.later("no"), kind = PORT_IMAGE}}, place = PLACE_RUN, params = {
 			{name = "test", title = i18n.later("When"), type = .Choice, choices = {i18n.later("Width"), i18n.later("Height"), i18n.later("Width / height"), i18n.later("Source")}},
 			{name = "compare", title = i18n.later("Is"), type = .Choice, choices = {i18n.later("More than"), i18n.later("Less than"), i18n.later("Equal to")}},
@@ -184,19 +204,38 @@ CATALOG := flowgraph.Catalog{
 			{name = "format", title = i18n.later("Format"), type = .Choice, choices = {i18n.later("PNG, small"), i18n.later("PNG, fast"), i18n.later("JPEG"), i18n.later("WebP"), i18n.later("WebP, lossless")}},
 			{name = "quality", title = i18n.later("Quality"), type = .Int, lo = 1, hi = 100, step = 1, unit = "%", default_number = 90},   // (JPEG and WebP)
 		}},
-		{name = "upload", title = i18n.later("Upload"), group = i18n.later("Outputs"), icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link", "sxcu", "imgur"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("address"), kind = PORT_URL}}, place = PLACE_WORKER, effect = true, params = {
+		// (a picture goes as a PNG file, a file as it is, a text as a .txt file; "done" fires once it is online: a Delete
+		// file waits for it)
+		// (its "what" takes several links: the Capture node's picture, file and text all linked, the one a run gives goes)
+		{name = "upload", title = i18n.later("Upload"), group = i18n.later("Outputs"), icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link", "sxcu", "imgur", "file", "text"}, inputs = {{name = i18n.later("what"), kind = PORT_ANY, multiple = true}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {
+			{name = i18n.later("address"), kind = PORT_URL},
+			{name = i18n.later("done"), kind = flowgraph.ACTION, on = .Done},
+		}, place = PLACE_WORKER, effect = true, params = {
 			{name = "uploader", title = i18n.later("Host"), type = .List},
+		}},
+		{name = "shorten_url", title = i18n.later("Shorten URL"), group = i18n.later("Outputs"), icon = lucide.LINK_2, tags = {"short", "link", "address", "is.gd", "v.gd", "shortener"}, inputs = {{name = i18n.later("address"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("address"), kind = PORT_URL}}, place = PLACE_WORKER, effect = true, params = {
+			{name = "shortener", title = i18n.later("Shortener"), type = .List, placeholder = BUILTIN_SHORTENER_NAME},
 		}},
 		{name = "copy_text", title = i18n.later("Copy text"), group = i18n.later("Outputs"), icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "url", "address", "link"}, inputs = {{name = i18n.later("text"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, place = PLACE_INTERFACE, effect = true},
 		{name = "read_qr", title = i18n.later("Read QR code"), group = i18n.later("Outputs"), icon = lucide.QR_CODE, tags = {"scan", "barcode", "decode"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, place = PLACE_WORKER},
 		{name = "read_text", title = i18n.later("Read text"), group = i18n.later("Outputs"), icon = lucide.TEXT_CURSOR_INPUT, tags = {"ocr", "recognition", "tesseract"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, place = PLACE_WORKER, params = {
 			{name = "languages", title = i18n.later("Languages"), type = .Text, placeholder = i18n.later("The default languages (Settings, Capture)")},
 		}},
+		{name = "make_qr", title = i18n.later("Make QR code"), group = i18n.later("Outputs"), icon = lucide.QR_CODE, tags = {"qr", "barcode", "encode", "generate", "share", "phone"}, inputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, outputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
+			{name = "module", title = i18n.later("Square"), type = .Int, lo = 1, hi = 64, step = 1, unit = "px", default_number = 8},
+			{name = "margin", title = i18n.later("Margin"), type = .Int, lo = 0, hi = 16, step = 1, default_number = 4},   // (in squares: readers need 4)
+			{name = "dark", title = i18n.later("Dark colour"), type = .Color, default_color = BLACK},
+			{name = "light", title = i18n.later("Light colour"), type = .Color, default_color = WHITE},
+		}},
 		{name = "notify", title = i18n.later("Notify"), group = i18n.later("Outputs"), icon = lucide.BELL, tags = {"notification", "toast", "message", "tell"}, inputs = {{name = i18n.later("what"), kind = PORT_ANY, multiple = true}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_INTERFACE, effect = true, params = {
 			{name = "title", title = i18n.later("Title"), type = .Text, placeholder = i18n.later("Said for you: \"Screenshot saved\"")},
 			{name = "show", title = i18n.later("Show"), type = .Choice, choices = {i18n.later("What comes in"), i18n.later("A summary of the run")}},
 		}},
 		{name = "show_in_folder", title = i18n.later("Show in folder"), group = i18n.later("Outputs"), icon = lucide.FOLDER_OPEN, tags = {"reveal", "explorer", "file manager"}, inputs = {{name = i18n.later("file"), kind = PORT_FILE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_WORKER, effect = true},
+		// (an address in the browser, a file with its program: the system's choice)
+		{name = "open", title = i18n.later("Open"), group = i18n.later("Outputs"), icon = lucide.EXTERNAL_LINK, tags = {"browser", "launch", "view", "url", "address"}, inputs = {{name = i18n.later("what"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_WORKER, effect = true},
+		{name = "pin", title = i18n.later("Pin to the screen"), group = i18n.later("Outputs"), icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_INTERFACE, effect = true},
+		{name = "delete_file", title = i18n.later("Delete file"), group = i18n.later("Outputs"), icon = lucide.TRASH_2, tags = {"remove", "erase", "after upload", "clean"}, inputs = {{name = i18n.later("file"), kind = PORT_FILE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_WORKER, effect = true},
 		{name = "add_to_history", title = i18n.later("Add to history"), group = i18n.later("Outputs"), icon = lucide.HISTORY, tags = {"remember", "keep", "list"}, inputs = {{name = i18n.later("what"), kind = PORT_ANY, multiple = true}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_INTERFACE, effect = true},
 	},
 }
@@ -205,8 +244,16 @@ CATALOG := flowgraph.Catalog{
 // allocator; "" when there is nothing to say.
 node_summary :: proc(n: ^flowgraph.Node) -> string {
 	switch Node_Kind(n.kind) {
-	case .Grayscale, .Invert, .Sepia, .Annotate, .Copy_Image, .Copy_Text, .Read_Qr, .Show_In_Folder, .Add_To_History:
+	case .Grayscale, .Invert, .Sepia, .Annotate, .Copy_Image, .Copy_Text, .Read_Qr, .Show_In_Folder, .Open, .Pin, .Delete_File, .Add_To_History:
 		return ""
+	case .Ask:
+		q := flowgraph.param_text(&CATALOG, n, "question")
+		return fmt.tprintf("\"%s\"", text_cut(q != "" ? q : i18n.tr("Go on?"), 24))
+	case .Shorten_Url:
+		s := flowgraph.param_text(&CATALOG, n, "shortener")
+		return fmt.tprintf(i18n.tr("with %s"), s != "" ? s : BUILTIN_SHORTENER_NAME)
+	case .Make_Qr:
+		return fmt.tprintf(i18n.tr("squares of %d px"), flowgraph.param_int(&CATALOG, n, "module"))
 	case .Capture:
 		// ("Ctrl+Alt+E: a region, after 3 s, with the pointer"; nothing when it has neither keys, nor delay, nor pointer)
 		b := strings.builder_make(context.temp_allocator)

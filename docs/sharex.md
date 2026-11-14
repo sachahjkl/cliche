@@ -27,8 +27,8 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Window from a list | no | missing | P3 | M; needs window list (`app.desktop.windows`) in a menu |
 | Screenshot delay | `capture.delay` `settings.odin:28`; not for Region `app.odin:399` | partial: one global value, no per-workflow delay, no countdown shown | P2 | S; a `delay` parameter on the Capture node `workflow_nodes.odin:74` |
 | Show cursor in screenshot | recordings only `settings.odin:36` | missing for pictures | P2 | M; gt:capture must give the cursor image and position |
-| Scrolling capture | no | missing | P2 | L; scroll events + frame stitching in gt:capture/gt:image, Windows first (Wayland cannot inject scroll without portals) |
-| Auto capture (every N seconds) | no | missing | P3 | S; timer in `app.odin` that fires a trigger |
+| Scrolling capture | no | decided: not now (WP5, "Decisions") | P2 | L; scroll events + frame stitching in gt:capture/gt:image, Windows first (Wayland cannot inject scroll without portals) |
+| Auto capture (every N seconds) | no | decided: not now (WP5, "Decisions") | P3 | S; timer in `app.odin` that fires a trigger |
 | Text capture (OCR) | trigger `.Ocr`, node Read text `workflow_nodes.odin:183`, `ocr_read.odin` | none | – | – |
 | Screen recording MP4 | `record.odin`, `Record_Format.Mp4` `record.odin:33` | partial: no audio, no pause | P2 | L for audio; S for pause |
 | Screen recording GIF | `Record_Format.Gif`, `record.gif_fps`, `record.gif_width` | none | – | – |
@@ -119,14 +119,14 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Scan QR code | node Read QR `:182` | none | – | – |
 | Recognize text | node Read text `:183` | none | – | – |
 | Upload image | node Upload `:178`, `.sxcu` + Litterbox `uploader.odin:3-6,82` | partial: no OAuth hosts (Imgur account, Google Drive, S3 with signing…) | P2 | L per host; `.sxcu` covers most; S3/Imgur-anonymous as built-in `.sxcu` |
-| Before-upload confirmation | Annotate's Done is the only confirmation | partial | P3 | S; a "Ask" node: notification with Yes/No → action ports |
-| Delete file locally after upload | no | missing | P3 | S; node Delete file |
-| Shorten URL | `Destination.Url_Shortener` parsed `uploader.odin:31`, no node | missing | P2 | S; node Shorten URL (URL in, URL out) using a `.sxcu` of that destination |
-| Share URL (services) | no | missing | P3 | S; same mechanism, URLSharingService |
-| Copy URL | Copy text `:181` | none | – | – |
-| Open URL in the browser | no | missing | P2 | S; node Open (URL or file), `platform.open_url` (check) |
-| Show QR code of the URL | no | missing | P3 | M; QR encoder (gt:qr decodes only, check) |
-| Notification with thumbnail, click to open | node Notify `:186` | partial: no click action (check notification support) | P2 | M |
+| Before-upload confirmation | node Ask: a notification with Yes and No, its "yes" and "no" action outputs (`workflow_app.odin` `workflow_ask`, `Questions` in `workflow_run.odin`) | done (WP5) | – | – |
+| Delete file locally after upload | node Delete file; Upload's "done" action output to wait for the upload | done (WP5) | – | – |
+| Shorten URL | node Shorten URL: is.gd, v.gd built in, or a `.sxcu` URL shortener (`{input}`), `uploader.odin` `shorten_url` | done (WP5) | – | – |
+| Share URL (services) | no | decided: not now; a `URLSharingService` `.sxcu` is read, and the Shorten URL request (`uploader_request` with `input`) would send it | P3 | S |
+| Copy URL | Copy text | none | – | – |
+| Open URL in the browser | node Open (an address in the browser, a file with its program) | done (WP5) | – | – |
+| Show QR code of the URL | node Make QR code (`gt:qr` encodes): text in, picture out | done (WP5) | – | – |
+| Notification with thumbnail, click to open | a click on a run's notification opens its address, else its file (`Run_Summary.open`); no thumbnail | done (WP5), thumbnail not done | P3 | S; `Notification.icon_png` from the run's picture, encoded on the worker |
 | Add to history | node `:191` | none | – | – |
 | Conditions, branches | node Condition `:164` | cliche has more than ShareX | – | – |
 
@@ -135,12 +135,12 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | ShareX | cliche today | Gap | Prio | Effort, fit |
 |---|---|---|---|---|
 | Screen colour picker (copies hex) | no | missing | P1 | S; new trigger `.Color`: the overlay with the magnifier, a click copies `#rrggbb` (pixel from the frozen frame) |
-| Ruler | size label `overlay.odin:306` | partial: no length/angle of a drag, stays only while choosing | P3 | S; overlay mode that does not confirm |
+| Ruler | size label `overlay.odin:306` | decided: not now (WP5, "Decisions") | P3 | S; overlay mode that does not confirm |
 | OCR | trigger `.Ocr` | none | – | – |
 | QR code: decode | trigger `.Qr` | none | – | – |
-| QR code: generate from text | no | missing | P3 | M |
-| Pin to screen | no | missing | P2 | see 1.4 |
-| Image combiner | no | missing | P3 | M; history multi-select → combine (vertical / horizontal) into a new entry |
+| QR code: generate from text | node Make QR code; on the clipboard's text: a workflow of the Clipboard trigger | done (WP5) | – | – |
+| Pin to screen | `pin.odin` (WP2); node Pin to the screen | done | – | – |
+| Image combiner | history, two pictures or more selected: Combine side by side, Combine stacked (`gt:image` `combine`, `Job_Combine`) | done (WP5) | – | – |
 | Image splitter, thumbnailer | no | missing | P3 | S |
 | Image beautifier | node Background `:114` | none in a workflow; not a stand-alone tool | P3 | S |
 | Video converter, video thumbnailer | no | missing | P3 | L |
@@ -151,8 +151,8 @@ Effort: S = under a day; M = a few days; L = a week or more.
 
 | ShareX | cliche today | Gap | Prio | Effort, fit |
 |---|---|---|---|---|
-| Upload a file (any type) | no | missing | P2 | M; Upload node with `PORT_FILE` input; uploader's `File_Uploader` destination |
-| Upload from the clipboard (image, text, files) | no | missing | P2 | S; a trigger `.Clipboard` that starts the workflow with the clipboard image |
+| Upload a file (any type) | trigger Upload_File (`cliche --upload-file`, the tray): the system's dialog; the Upload node takes a picture, a file or a text | done (WP5) | – | – |
+| Upload from the clipboard (image, text, files) | trigger Clipboard (`cliche --upload-clipboard`, the tray): a picture, else files, else a text, on the Capture node's output of its kind | done (WP5) | – | – |
 | Drag and drop to upload | no | missing | P3 | M; drop target on the main window |
 | Upload from URL, watch folder | no | missing | P3 | M |
 
@@ -163,9 +163,9 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | History list and image history with thumbnails | grid and list `history_view.odin:1-20` | none | – | – |
 | Search, filter by type | `history_view.odin:1-5` | none | – | – |
 | Open, show in folder, copy image / path / URL, edit, upload again, delete file, remove | `History_Action` `history_view.odin:157` | none | – | – |
-| Filter by date, host | no | missing | P3 | S |
-| Open URL of an entry | Copy URL only | partial | P2 | S; action Open URL |
-| Recent tasks in the tray menu | no (check `tray`) | missing | P2 | S; last 5 entries as tray items |
+| Filter by date, host | the calendar button: today, the last 7 days, the last 30 days (`history_period_start`); a host's name is found by the search (it is in the URL) | done (WP5) | – | – |
+| Open URL of an entry | action Open the URL (Shift+Enter) | done (WP5) | – | – |
+| Recent tasks in the tray menu | the tray's Recent submenu: the last 5 entries; a click opens the address, else the file | done (WP5) | – | – |
 
 ### 1.9 Settings and hotkeys
 
@@ -221,7 +221,12 @@ Files: `editor_model.odin`, `editor.odin`, `editor_export.odin`, tests in `edito
 
 ### WP2: editor output actions (P1, P2)
 
-Files: `editor.odin`, `worker.odin`, `save.odin`, `uploader.odin`, a new `pin.odin`.
+Status: written (Save as with the format and a quality setting, Upload, Pin on the toolkit's overlay window, JPEG /
+WebP / BMP files and a file dropped on the editor, Print through the portal or PrintDlgW and GDI). Left: the history's
+"Pin" action (`pin_picture(app, path)` is there for it) and a Pin workflow node (WP5); Print has no preview, no
+scaling choice and one page; a JPEG's EXIF orientation is not applied.
+
+Files: `editor.odin`, `editor_output.odin`, `worker.odin`, `save.odin`, a new `pin.odin`.
 
 1. Save as: system dialog, format and quality (the `Save_Format` of `workflow_nodes.odin:55`).
 2. Upload (Ctrl+U): default uploader, the URL goes to the clipboard and the history.
@@ -259,10 +264,36 @@ Files: `editor_model.odin`, `editor_export.odin`, `editor.odin`; `gt:draw` for d
 
 ### WP5: workflow nodes, uploads, tools (P2, P3)
 
-Files: `workflow_nodes.odin`, `workflow_ops.odin`, `workflow_app.odin`, `uploader.odin`, `history_view.odin`.
+Status: written, but for the decisions below.
 
-1. Nodes: Shorten URL, Open (URL or file), Delete file, Ask (Yes/No action ports), Pin.
-2. Triggers: clipboard upload; upload a file (Upload node accepts `PORT_FILE`).
-3. Notification click opens the file or the URL.
-4. History: Open URL action, recent entries in the tray menu, date filter.
-5. Scrolling capture (L, Windows first), auto capture, image combiner from the history selection, QR generator, ruler.
+Files: `workflow_nodes.odin`, `workflow_ops.odin`, `workflow_app.odin`, `workflow_run.odin`, `uploader.odin`,
+`history_view.odin`; `gt:image` `combine` in the toolkit.
+
+1. Nodes: Shorten URL (is.gd, v.gd, a `.sxcu` shortener), Open (an address or a file), Delete file, Ask (Yes/No action
+   ports), Pin to the screen (a picture), Make QR code. Upload has a "done" action output, for a Delete file after it.
+2. Triggers: Clipboard (`--upload-clipboard`) and Upload_File (`--upload-file`), both in the tray. The Capture node gives
+   a picture, a file or a text, each on its own output; the Upload node takes any of them. The default workflow
+   "Upload" runs for both.
+3. A click on a run's notification opens its address, else its file. The toolkit had the click already (Linux: the
+   "default" action; Windows: the toast's activation).
+4. History: Open the URL, the tray's Recent submenu, the filter by date (a menu: today, 7 days, 30 days).
+5. Image combiner (the history's selection), QR code generator (the Make QR code node). Scrolling capture, auto capture
+   and the ruler: the decisions below.
+
+#### Decisions
+
+- **Scrolling capture: not now (L).** It takes three parts. (1) A stitcher, generic, in `gt:image`: frames of the same
+  width, the overlap of each with the one before found by comparing rows (a hash per row, the longest run that
+  matches), a fixed header and footer detected as rows that do not move, then one tall picture; tested on synthetic
+  frames. (2) Scrolling the window under the pointer by a step, per system: Windows `SendInput` with `MOUSEEVENTF_WHEEL`;
+  X11 XTest; Wayland only through the RemoteDesktop portal (libei), which asks the person each session. (3) A flow in
+  cliche: the window chosen, scroll, `capture.window`, until two frames are the same or a count is reached, on the
+  worker. Windows first; Wayland when the portal is worth its question.
+- **Auto capture: not now (S).** It takes a thread that sleeps the interval and puts a trigger in the app's inbox (as a
+  second start's command does: `app_message`), two preferences (the interval, the trigger) on the Capture page, and a
+  tray item that starts and stops it. The loop needs no timeout: the thread wakes it. Nobody asked for it yet.
+- **Ruler: not now (S).** The region overlay already says a rectangle's size while it is drawn. A ruler is a source as
+  the colour picker is (`Source.Color`): the overlay with no rectangle, a drag draws a line with its length in pixels
+  and its angle, Escape ends, nothing is captured. It touches `overlay.odin` and `flow.odin`, outside this lot.
+- **Share URL (URLSharingService): not now (S).** The Shorten URL request already sends an address to a `.sxcu`; a
+  sharing service is the same request with no address to read back.

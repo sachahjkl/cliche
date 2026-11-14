@@ -110,14 +110,14 @@ a_broken_or_missing_file_gives_the_defaults :: proc(t: ^testing.T) {
 
 	missing, problem := workflows_load_from(path)
 	testing.expect_value(t, problem, "")
-	testing.expect_value(t, len(missing.set.list), 4)
+	testing.expect_value(t, len(missing.set.list), 5)
 	workflows_free(&missing)
 
 	_ = os.write_entire_file(path, "[1, 2")
 	broken, why_broken := workflows_load_from(path)
 	defer delete(why_broken)
 	testing.expect(t, why_broken != "")
-	testing.expect_value(t, len(broken.set.list), 4)
+	testing.expect_value(t, len(broken.set.list), 5)
 	testing.expect(t, os.exists(aside))   // (kept aside, not lost)
 	testing.expect(t, !os.exists(path))
 	workflows_free(&broken)
@@ -208,6 +208,11 @@ a_node_says_what_it_does :: proc(t: ^testing.T) {
 	check(t, &g, .Condition, "width > 1920")
 	check(t, &g, .Watermark, "\"cliche\", bottom right")
 	check(t, &g, .Copy_Image, "")
+	check(t, &g, .Ask, "\"Go on?\"")
+	check(t, &g, .Ask, "\"Upload it?\"", proc(n: ^flowgraph.Node) { param(n, "question").text = strings.clone("Upload it?") })
+	check(t, &g, .Shorten_Url, "with is.gd")
+	check(t, &g, .Make_Qr, "squares of 8 px")
+	check(t, &g, .Delete_File, "")
 	// (a value out of its range, as a hand-edited file may hold, is read clamped)
 	check(t, &g, .Threshold, "level 255", proc(n: ^flowgraph.Node) { param(n, "level").number = 9000 })
 }

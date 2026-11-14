@@ -41,7 +41,10 @@ import "gt:ui"
 PROGRAM_CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
 
 // The tray menu's items. The first ten are Shortcut_Action's, in its order.
-Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit }
+Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit, Upload_Clipboard, Upload_File }
+
+// The ids of the tray's recent entries: TRAY_RECENT_ID + their place in App.tray_recent (past Tray_Item's).
+TRAY_RECENT_ID :: 1000
 
 // A command another start handed over (token owned).
 Inbox_Item :: struct { verb: Verb, token: string }
@@ -65,6 +68,9 @@ App :: struct {
 	editors:    [dynamic]^Editor,                          // editor.odin: one per picture, and one kept hidden for the next
 	editor_next_id: u64,
 	record_overlay: Record_Overlay,                        // record_overlay.odin
+	pins:       [dynamic]^Pin,                             // pin.odin: the pictures pinned over the other windows
+	pin_loads:  [dynamic]^Pin_Load,                        // the files being read for a pin (pin_picture)
+	pin_fallback_said: bool,                               // said once: no window stays on top on this desktop
 	prewarmed:  bool,                                      // an editor was opened ahead (app_prewarm)
 	notice_entry: u64,                                     // the history's entry of the last notification (a click shows it)
 
@@ -82,6 +88,7 @@ App :: struct {
 	workflows_save_due: bool,                              // a change is not written yet
 	runs:       [dynamic]^Run,                             // the runs in flight (workflow_app.odin)
 	run_next_id: u64,
+	desk:       Workflow_Desk,                             // the runs' questions, the clipboard's read, the files chosen (workflow_app.odin)
 	record:     Record_Flow,                               // the recording's state (record.odin)
 	recorder:   Recorder,                                  // its thread, while one runs
 	record_region: Rect,                                   // its region, logical
@@ -101,6 +108,8 @@ App :: struct {
 	tray_edit_keys: string,                                // the keys of "Capture a region and edit": its workflow's own (owned)
 	tray_menu:  Tray_Menu,                                 // the menu shown
 	tray_language: u32,                                    // i18n.version() of its texts: the system keeps what it was given
+	tray_recent: [TRAY_RECENT_MAX]u64,                     // the history's entries its Recent submenu shows (0: none), newest first
+	tray_recent_version: u64,                              // the history's version they were read at (+1: 0 is "never")
 	default_folder: string,                                // where screenshots go when save.folder is empty (the worker's, owned)
 	integrated: [2]bool,                                   // general.menu and general.autostart as applied last
 	install:    prefs_page.Install,                        // the install: its offer, its dialog, the settings' page (integration.odin)
@@ -169,6 +178,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 		app_inbox(app)
 		app_tray(app)
 		app_results(app)
+		workflow_files_take(app)
 		app_shortcuts_take(app)
 		app_record_messages(app)
 		app_tray_follow(app)
@@ -243,6 +253,7 @@ app_wait :: proc(app: ^App) {
 	if app.history_window.visible { append(&shown, &app.history_window.host) }
 	for ed in app.editors { if ed.visible { append(&shown, &ed.host) } }
 	if app.record_overlay.visible { append(&shown, &app.record_overlay.host) }
+	pins_shown(app, &shown)
 	if len(shown) > 0 { host.hosts_wait(shown[:]) } else { platform.wait_event(app.anchor, 0) }
 }
 
@@ -272,6 +283,7 @@ app_frames :: proc(app: ^App) {
 		host.host_frame(&app.record_overlay.host)
 		record_overlay_after_frame(app)
 	}
+	pins_frame(app)
 }
 
 // The windows with a renderer close in the order the host asks: the renderer's own window last.
@@ -285,7 +297,8 @@ app_windows_close :: proc(app: ^App) {
 	// (the install's thread waited for while the main window's State is there)
 	prefs_page.install_end(&app.install)
 	crash_bar.destroy(&app.crash_bar)
-	// (textures go while the renderer is there: before any host closes)
+	// (textures go while the renderer is there: before any host closes; the pins are never the renderer's own window)
+	pins_close_all(app)
 	history_window_free(app)
 	for ed in app.editors { editor_destroy(ed) }
 	hosts := make([dynamic]^host.Host, 0, 3 + len(app.editors), context.temp_allocator)
@@ -392,6 +405,8 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Record:     app_record_trigger(app, .Mp4)
 	case .Record_Gif: app_record_trigger(app, .Gif)
 	case .Edit:     app_trigger(app, .Edit)
+	case .Upload_Clipboard: workflow_from_clipboard(app)
+	case .Upload_File: workflow_from_files(app)
 	case .Workflows: workflows_show(app)
 	case .History:  history_window_show(app)
 	case .Settings: settings_show(app)
@@ -474,6 +489,10 @@ app_results :: proc(app: ^App) {
 			if v.error != .None { log.errorf("no capture here: %s", FLOW_ERROR_TEXT[flow_error_of(v.error)]) }
 		case Result_Node:
 			workflow_node_result(app, v)
+		case Result_Run_Input:
+			workflow_run_input_result(app, v)
+		case Result_Combined:
+			history_combined(app, v)
 		case Result_Workflows:
 			workflows_loaded(app, v)
 		case Result_Picture:
@@ -499,6 +518,8 @@ app_results :: proc(app: ^App) {
 			app_shot(app, v)
 		case Result_Saved:
 			editor_saved(app, v)
+		case Result_Uploaded:
+			editor_uploaded(app, v)
 		case Result_Written:
 			if !v.ok { log.errorf("%s cannot be written", v.path) }
 			delete(v.path)
@@ -622,6 +643,8 @@ app_chain :: proc(app: ^App, shot: Shot) {
 // system, else a toast of `window` (where it was asked: an editor; nil: the main window when it is shown). With no
 // window to show a toast in, the console only.
 app_announce :: proc(app: ^App, kind: ui.Toast_Kind, title: string, body := "", window: ^host.Host = nil) {
+	// (this notification replaces the one before: a click on it opens nothing of the last run's, but its history)
+	workflow_notice_forget(app)
 	h := window
 	if h == nil && app.history_window.visible { h = &app.history_window.host }
 	if h == nil { h = app.shared.main }   // (hidden: a toast there waits for it; the system's notification is what is seen)
@@ -664,6 +687,8 @@ app_outcome :: proc(app: ^App) {
 app_anchor_events :: proc(app: ^App) {
 	for e in platform.poll_events(app.anchor, false) {
 		if shortcuts.feed(app.shortcuts, e) { continue }
+		// (a clipboard read for a run, an Ask node's answer, a click on the last run's notification)
+		if workflow_anchor_event(app, e) { continue }
 		if e.kind == .Notification_Click {
 			// (the notification's activation token lets the history's window come to the front on Wayland)
 			delete(app.token)
@@ -724,8 +749,14 @@ app_tray_menu :: proc(app: ^App) {
 			append(&items, platform.Tray_Menu_Item{id = int(item), text = i18n.tr(TRAY_SHORTCUT_TEXT[a]), default = item == default_item, shortcut = app.tray_keys[a]})
 		}
 		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Edit), text = i18n.tr("Capture a region and edit"), shortcut = app.tray_edit_keys})
+		append(&items, platform.Tray_Menu_Item{kind = .Separator})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Upload_Clipboard), text = i18n.tr("Upload the clipboard")})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Upload_File), text = i18n.tr("Upload files…")})
 	}
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
+	if recent := tray_recent_items(app); len(recent) > 0 {
+		append(&items, platform.Tray_Menu_Item{text = i18n.tr("Recent"), children = recent})
+	}
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.History), text = i18n.tr("History"), default = app.tray_menu == .Rest && app.settings.tray_click == .History})
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Workflows), text = i18n.tr("Workflows")})
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
@@ -774,7 +805,7 @@ app_tray_follow :: proc(app: ^App) {
 	}
 	menu := Tray_Menu.Rest
 	if record_running(app.record) { menu = .Recording } else if record_ready(app.record) { menu = .Ready }
-	if changed || menu != app.tray_menu || app.tray_language != i18n.version() { app_tray_menu(app) }
+	if changed || menu != app.tray_menu || app.tray_language != i18n.version() || tray_recent_due(app) { app_tray_menu(app) }
 }
 
 @(private = "file")
@@ -797,10 +828,16 @@ app_tray :: proc(app: ^App) {
 			case .Settings: settings_show(app)
 			}
 		case .Menu_Item:
+			if e.item >= TRAY_RECENT_ID {
+				tray_recent_chosen(app, e.item - TRAY_RECENT_ID)
+				continue
+			}
 			switch Tray_Item(e.item) {
 			case .Screen, .Region, .Record, .Record_Gif, .Window, .Ocr, .Qr, .All_Screens, .Last_Region, .Color:
 				app_shortcut_run(app, Shortcut_Action(e.item - int(Tray_Item.Screen)))
 			case .Edit:          app_trigger(app, .Edit)
+			case .Upload_Clipboard: workflow_from_clipboard(app)
+			case .Upload_File:   workflow_from_files(app)
 			case .Workflows:     workflows_show(app)
 			case .Record_Start:  app_record_start(app)
 			case .Record_Stop:   app_record_stop(app)

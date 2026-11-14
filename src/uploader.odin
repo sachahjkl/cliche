@@ -2,8 +2,9 @@ package cliche
 
 // The Upload action: the picture sent to a host, the URL it answers given back. An uploader is described as ShareX's
 // custom uploaders are, in a .sxcu file (JSON; https://getsharex.com/docs/custom-uploader), so a file made for ShareX
-// works here as it is. The uploaders are the built-in one (Litterbox) and the .sxcu files of
-// <config dir>/cliche/uploaders. Everything here that reads a file or the network runs on the worker.
+// works here as it is. The uploaders are the built-in ones (Litterbox; the URL shorteners is.gd and v.gd, which the
+// Shorten URL node uses) and the .sxcu files of <config dir>/cliche/uploaders. Everything here that reads a file or the
+// network runs on the worker.
 
 import "core:encoding/json"
 import "core:fmt"
@@ -97,6 +98,51 @@ BUILTIN_UPLOADER :: `{
   },
   "FileFormName": "fileToUpload"
 }`
+
+// The built-in URL shorteners: is.gd and v.gd, the same service under two names (v.gd's addresses go to a page that
+// shows where they lead first). Anonymous, no key, an answer of the short address as text. A ShareX URL shortener
+// (.sxcu) in the uploaders' folder is offered beside them.
+BUILTIN_SHORTENER_NAME :: "is.gd"
+
+BUILTIN_SHORTENERS :: [?]string{`{
+  "Version": "17.0.0",
+  "Name": "is.gd",
+  "DestinationType": "URLShortener",
+  "RequestMethod": "GET",
+  "RequestURL": "https://is.gd/create.php",
+  "Parameters": {
+    "format": "simple",
+    "url": "{input}"
+  },
+  "Body": "None"
+}`, `{
+  "Version": "17.0.0",
+  "Name": "v.gd",
+  "DestinationType": "URLShortener",
+  "RequestMethod": "GET",
+  "RequestURL": "https://v.gd/create.php",
+  "Parameters": {
+    "format": "simple",
+    "url": "{input}"
+  },
+  "Body": "None"
+}`}
+
+// Whether `u` shortens addresses, and whether it takes files: a file that says neither is a picture's host.
+uploader_shortens :: proc(u: Uploader) -> bool { return .Url_Shortener in u.destinations }
+
+uploader_uploads :: proc(u: Uploader) -> bool {
+	return u.destinations & {.Image_Uploader, .Text_Uploader, .File_Uploader} != {} || u.destinations == {}
+}
+
+// The names of the uploaders that upload (or, `shorteners`, that shorten), in the list's order (allocator).
+uploaders_names :: proc(list: []Uploader, shorteners: bool, allocator := context.allocator) -> []string {
+	out := make([dynamic]string, 0, len(list), allocator)
+	for u in list {
+		if shorteners ? uploader_shortens(u) : uploader_uploads(u) { append(&out, strings.clone(u.name, allocator)) }
+	}
+	return out[:]
+}
 
 // The answer's body kept at most, and the time an upload may take.
 UPLOAD_ANSWER_MAX :: 1 << 20
@@ -290,11 +336,11 @@ Upload_Request :: struct {
 	body:    []u8,
 }
 
-// The request that uploads `file` (named file_name) with `u`, its syntax expanded. problem: why it cannot be made (temp
-// allocator; "": none).
-uploader_request :: proc(u: Uploader, file: []u8, file_name: string) -> (r: Upload_Request, problem: string) {
-	in_url := Syntax{file_name = file_name, url_encode = true}
-	in_text := Syntax{file_name = file_name}
+// The request that uploads `file` (named file_name) with `u`, its syntax expanded; or, with no file, the one that sends
+// `input` (an address to shorten: {input}). problem: why it cannot be made (temp allocator; "": none).
+uploader_request :: proc(u: Uploader, file: []u8, file_name: string, input := "") -> (r: Upload_Request, problem: string) {
+	in_url := Syntax{file_name = file_name, input = input, url_encode = true}
+	in_text := Syntax{file_name = file_name, input = input}
 	r.method = u.method
 	url, why := syntax_expand(u.request_url, in_url)
 	if why != "" { return {}, why }
@@ -316,6 +362,38 @@ uploader_request :: proc(u: Uploader, file: []u8, file_name: string) -> (r: Uplo
 	}
 	_, has_type := http.header_value(headers[:], "Content-Type")
 	content_type := ""
+	if input != "" {
+		// (a text sent, not a file: a URL shortener's request, whose body is any of ShareX's but a file's)
+		#partial switch u.body {
+		case .None:
+		case .Multipart_Form_Data, .Form_Url_Encoded:
+			fields := make([dynamic]http.Form_Field, context.temp_allocator)
+			pairs := strings.builder_make(context.temp_allocator)
+			for a in u.arguments {
+				value, bad := syntax_expand(a.value, in_text)
+				if bad != "" { return {}, bad }
+				append(&fields, http.form_text(a.name, value))
+				if strings.builder_len(pairs) > 0 { strings.write_byte(&pairs, '&') }
+				strings.write_string(&pairs, http.form_encode(a.name, context.temp_allocator))
+				strings.write_byte(&pairs, '=')
+				strings.write_string(&pairs, http.form_encode(value, context.temp_allocator))
+			}
+			if u.body == .Multipart_Form_Data {
+				r.body, content_type = http.multipart(fields[:], context.temp_allocator)
+			} else {
+				r.body, content_type = transmute([]u8)strings.to_string(pairs), "application/x-www-form-urlencoded"
+			}
+		case .Json, .Xml:
+			data, bad := syntax_expand(u.data, in_text)
+			if bad != "" { return {}, bad }
+			r.body, content_type = transmute([]u8)data, u.body == .Json ? "application/json" : "application/xml"
+		case:
+			return {}, fmt.tprintf(i18n.tr("the uploader's body is %s: it sends a file, not an address"), UPLOADER_BODY_NAMES[u.body])
+		}
+		if content_type != "" && !has_type { append(&headers, http.Header{"Content-Type", content_type}) }
+		r.headers = headers[:]
+		return r, ""
+	}
 	#partial switch u.body {
 	case .Multipart_Form_Data:
 		if u.file_form_name == "" { return {}, i18n.tr("the uploader has no FileFormName: the form field of the file") }
@@ -397,6 +475,26 @@ upload_shot :: proc(u: Uploader, png: []u8, file_name: string, allocator := cont
 	return strings.clone(link, allocator), ""
 }
 
+// An address shortened by `u` (a URL shortener), on the worker: it blocks for as long as the service takes. short and
+// problem are the allocator's ("": none).
+shorten_url :: proc(u: Uploader, address: string, allocator := context.allocator) -> (short: string, problem: string) {
+	r, why := uploader_request(u, nil, "", input = address)
+	if why != "" { return "", strings.clone(why, allocator) }
+	req := http.Request{
+		max_bytes = UPLOAD_ANSWER_MAX, user_agent = APP_NAME, timeout = UPLOAD_TIMEOUT,
+		headers = r.headers, body = r.body,
+	}
+	res, err := http.request(r.method, r.url, req, context.temp_allocator)
+	if err != .None { return "", fmt.aprintf("%s: %s", u.name, http.error_text(err), allocator = allocator) }
+	link, failed := uploader_answer(u, {status = res.status, text = string(res.body), url = res.url, headers = res.headers}, "")
+	if failed != "" { return "", strings.clone(failed, allocator) }
+	// (is.gd answers an error as text with a 200 on some failures: an answer that is no address is one)
+	if !strings.has_prefix(link, "http://") && !strings.has_prefix(link, "https://") {
+		return "", fmt.aprintf(i18n.tr("%s answered: %s"), u.name, link, allocator = allocator)
+	}
+	return strings.clone(link, allocator), ""
+}
+
 // Where the uploaders are kept
 
 UPLOADER_EXTENSION :: ".sxcu"
@@ -406,7 +504,7 @@ uploaders_folder :: proc(allocator := context.temp_allocator) -> string {
 	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/uploaders"}, allocator)
 }
 
-// The built-in uploader, then those of the folder, sorted by file name. problems: one line per file that cannot be used
+// The built-in uploader and shorteners, then those of the folder, sorted by file name. problems: one line per file that cannot be used
 // ("name.sxcu: why"). All of it is the allocator's (uploaders_destroy, and each problem). It reads the disk: the worker
 // calls it.
 uploaders_load :: proc(allocator := context.allocator) -> (list: []Uploader, problems: []string) {
@@ -414,6 +512,11 @@ uploaders_load :: proc(allocator := context.allocator) -> (list: []Uploader, pro
 	bad := make([dynamic]string, allocator)
 	builtin, _ := uploader_parse(transmute([]u8)string(BUILTIN_UPLOADER), "", allocator)
 	append(&out, builtin)
+	shorteners := BUILTIN_SHORTENERS
+	for text in shorteners {
+		s, _ := uploader_parse(transmute([]u8)string(text), "", allocator)
+		append(&out, s)
+	}
 	folder := uploaders_folder()
 	entries, err := os.read_directory_by_path(folder, 0, context.temp_allocator)
 	if err == nil {
@@ -431,10 +534,12 @@ uploaders_load :: proc(allocator := context.allocator) -> (list: []Uploader, pro
 	return out[:], bad[:]
 }
 
-// The uploader named `name` in the list; the built-in one when none has that name (a file removed since).
-uploader_find :: proc(list: []Uploader, name: string) -> (u: ^Uploader, found: bool) {
-	for &x in list { if x.name == name { return &x, true } }
-	for &x in list { if x.file == "" { return &x, false } }
+// The uploader named `name` in the list that uploads (or, `shortener`, that shortens addresses); the first built-in one
+// of that use when none has that name (a file removed since, or "": the default).
+uploader_find :: proc(list: []Uploader, name: string, shortener := false) -> (u: ^Uploader, found: bool) {
+	fits :: proc(u: Uploader, shortener: bool) -> bool { return shortener ? uploader_shortens(u) : uploader_uploads(u) }
+	for &x in list { if x.name == name && fits(x, shortener) { return &x, true } }
+	for &x in list { if x.file == "" && fits(x, shortener) { return &x, false } }
 	return nil, false
 }
 

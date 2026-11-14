@@ -23,6 +23,7 @@ import desktop "gt:desktop"
 import "gt:fsx"
 import "gt:platform"
 import png "gt:png"
+import timefmt "gt:timefmt"
 import i18n "gt:i18n"
 
 HISTORY_HEADER :: "cliche history 1"
@@ -33,21 +34,51 @@ HISTORY_TEXT_MAX :: 4000
 // The entries kept when the preference is not read yet.
 HISTORY_SIZE_DEFAULT :: 1000
 
-// What an entry is.
-History_Kind :: enum u8 { Region, Screen, Window, Video, Gif, Qr, Text }
+// What an entry is. Picture: one that is no capture (the clipboard's, the history's pictures combined); File: a file
+// uploaded as it is.
+History_Kind :: enum u8 { Region, Screen, Window, Video, Gif, Qr, Text, Picture, File }
 
 HISTORY_KIND_NAMES := [History_Kind]string{
 	.Region = "region", .Screen = "screen", .Window = "window", .Video = "video", .Gif = "gif", .Qr = "qr", .Text = "text",
+	.Picture = "picture", .File = "file",
 }
 
 // The words the window shows for a kind (the Kind column, the search finds them too), in English: history_kind_text
 // gives them in the language in use.
 HISTORY_KIND_TEXT := [History_Kind]string{
 	.Region = i18n.later("Region"), .Screen = i18n.later("Screen"), .Window = i18n.later("Window"), .Video = i18n.later("Video"), .Gif = "GIF", .Qr = i18n.later("QR code"), .Text = i18n.later("Text"),
+	.Picture = i18n.later("Picture"), .File = i18n.later("File"),
 }
 
 // A kind's words in the language in use.
 history_kind_text :: proc(k: History_Kind) -> string { return i18n.tr(HISTORY_KIND_TEXT[k]) }
+
+// Whether an entry of the kind is a still picture (it is shown, copied, edited, combined).
+history_kind_picture :: proc(k: History_Kind) -> bool {
+	return k == .Region || k == .Screen || k == .Window || k == .Picture
+}
+
+// The window's filter by date: since the start of today, of the last 7 days, of the last 30 days.
+History_Period :: enum u8 { Any, Today, Week, Month }
+
+HISTORY_PERIOD_TEXT := [History_Period]string{
+	.Any = i18n.later("Any time"), .Today = i18n.later("Today"), .Week = i18n.later("The last 7 days"), .Month = i18n.later("The last 30 days"),
+}
+
+// The first moment `period` keeps, in ms since 1970 UTC: the start of a local day (`offset_minutes`: the local time's).
+// 0 for Any.
+history_period_start :: proc(period: History_Period, now_ms: i64, offset_minutes: int) -> i64 {
+	DAY_MS :: 86_400_000
+	days := 0
+	switch period {
+	case .Any:   return 0
+	case .Today: days = 0
+	case .Week:  days = 6
+	case .Month: days = 29
+	}
+	today := timefmt.local_day(f64(now_ms), offset_minutes)
+	return i64(today - days) * DAY_MS - i64(offset_minutes) * 60_000
+}
 
 // The window's filter by kind.
 History_Filter :: enum u8 { All, Screenshots, Recordings, Uploads, Text }
@@ -254,7 +285,7 @@ history_first_words :: proc(text: string, most: int, allocator := context.temp_a
 history_in_filter :: proc(e: History_Entry, f: History_Filter) -> bool {
 	switch f {
 	case .All:         return true
-	case .Screenshots: return e.kind == .Region || e.kind == .Screen || e.kind == .Window
+	case .Screenshots: return history_kind_picture(e.kind)
 	case .Recordings:  return e.kind == .Video || e.kind == .Gif
 	case .Uploads:     return e.url != ""
 	case .Text:        return e.kind == .Qr || e.kind == .Text
@@ -276,12 +307,13 @@ history_matches :: proc(e: History_Entry, query: string) -> bool {
 	return true
 }
 
-// The places in `h.entries` of the entries shown: filtered, searched, sorted by `column` (ties: the newest first).
-// It passes over every entry: call it when the entries, the query, the filter or the sort change, never per frame.
-history_shown :: proc(h: ^History, query: string, filter: History_Filter, column: History_Column, descending: bool, allocator := context.allocator) -> [dynamic]int {
+// The places in `h.entries` of the entries shown: filtered, made at `since_ms` or later, searched, sorted by `column`
+// (ties: the newest first). It passes over every entry: call it when the entries, the query, the filters or the sort
+// change, never per frame.
+history_shown :: proc(h: ^History, query: string, filter: History_Filter, column: History_Column, descending: bool, allocator := context.allocator, since_ms: i64 = 0) -> [dynamic]int {
 	out := make([dynamic]int, 0, len(h.entries), allocator)
 	for e, i in h.entries {
-		if history_in_filter(e, filter) && history_matches(e, query) { append(&out, i) }
+		if e.time_ms >= since_ms && history_in_filter(e, filter) && history_matches(e, query) { append(&out, i) }
 	}
 	Sort :: struct { h: ^History, column: History_Column, descending: bool }
 	s := Sort{h, column, descending}

@@ -395,3 +395,171 @@ the_summary_says_what_the_run_did :: proc(t: ^testing.T) {
 	testing.expect_value(t, s.title, "QR code copied")
 	testing.expect_value(t, s.body, "https://example.org")
 }
+
+// What is no capture's starts a run too: the Capture node gives it on the output of its kind, and what hangs on the
+// others is skipped. The default Upload workflow takes each kind.
+@(test)
+a_run_starts_from_a_file_or_a_text :: proc(t: ^testing.T) {
+	ws := workflows_default()
+	defer workflows_free(&ws)
+	wf := workflows_for(&ws, .Clipboard)
+	testing.expect(t, wf != nil && wf == workflows_for(&ws, .Upload_File), "the clipboard and the files run one workflow")
+	if wf == nil { return }
+	upload := -1
+	for n, i in wf.graph.nodes { if Node_Kind(n.kind) == .Upload { upload = i } }
+	testing.expect(t, upload >= 0, "it uploads")
+	values := []flowgraph.Value{
+		run_value(PORT_FILE, {text = strings.clone("/tmp/a.zip"), bytes = 3}),
+		run_value(PORT_TEXT, {text = strings.clone("hello")}),
+		run_value(PORT_IMAGE, {shot = picture(2, 2)}),
+	}
+	for v, i in values {
+		run: Run
+		run_start_value(&run, wf.graph, v, {id = u64(i + 1), origin = .Clipboard})
+		tasks := run_tasks(&run)
+		testing.expect_value(t, len(tasks), 1)
+		if len(tasks) == 1 {
+			testing.expect_value(t, tasks[0].node, upload)
+			in_, _ := flowgraph.task_input(tasks[0], 0)
+			testing.expect_value(t, in_.kind, v.kind)
+		}
+		// (one output made, the one of its kind)
+		made := 0
+		for o in run.flow.nodes[0].outputs { if o.made { made += 1 } }
+		testing.expect_value(t, made, 1)
+		testing.expect(t, run.flow.nodes[0].outputs[capture_port_of(v.kind)].made)
+		run_free(&run)
+	}
+
+	// (a picture of the clipboard has no source: a Condition on the source says no)
+	g: flowgraph.Graph
+	defer flowgraph.graph_destroy(&g)
+	capture := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Capture), {})
+	condition := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Condition), {})
+	yes := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Copy_Image), {})
+	flowgraph.link(&g, &CATALOG, {capture, 0, condition, 0})
+	flowgraph.link(&g, &CATALOG, {condition, 0, yes, 0})
+	test := flowgraph.param(&CATALOG, flowgraph.graph_node(&g, condition), "test")
+	test.number = f64(Condition_Test.Source)
+	run: Run
+	run_start(&run, g, picture(2, 2), {id = 9, origin = .Clipboard})
+	defer run_free(&run)
+	testing.expect_value(t, len(run_tasks(&run)), 0)
+	testing.expect_value(t, state(&run, 2), flowgraph.Node_State.Skipped)
+}
+
+// An Ask node waits for its answer: Yes runs what hangs on "yes", No what hangs on "no"; a preview says Yes.
+@(test)
+ask_waits_for_its_answer :: proc(t: ^testing.T) {
+	g: flowgraph.Graph
+	defer flowgraph.graph_destroy(&g)
+	capture := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Capture), {})
+	ask := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Ask), {})
+	upload := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Upload), {})
+	notify := flowgraph.node_add(&g, &CATALOG, int(Node_Kind.Notify), {})
+	YES, NO :: u32(0), u32(1)   // (Ask's outputs)
+	WHEN :: u32(1)               // (Upload's and Notify's action input)
+	_, linked := flowgraph.link(&g, &CATALOG, {capture, 0, upload, 0})
+	testing.expect(t, linked)
+	_, linked = flowgraph.link(&g, &CATALOG, {capture, 0, notify, 0})
+	testing.expect(t, linked)
+	_, linked = flowgraph.link(&g, &CATALOG, {ask, YES, upload, WHEN})
+	testing.expect(t, linked)
+	_, linked = flowgraph.link(&g, &CATALOG, {ask, NO, notify, WHEN})
+	testing.expect(t, linked)
+	for answer in ([]Question_Answer{.Yes, .No}) {
+		run: Run
+		run_start(&run, g, picture(2, 2), {id = 1})
+		defer run_free(&run)
+		tasks := run_tasks(&run)
+		// (nothing comes into Ask: it asks at once; the effects wait for its answer)
+		testing.expect(t, slice.equal(ids(tasks), []u64{ask}))
+		testing.expect_value(t, Node_Place(CATALOG.nodes[tasks[0].kind].place), Node_Place.Question)
+		if answer == .Yes {
+			testing.expect(t, flowgraph.run_finish(&run.flow, 1, {}))
+			testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{upload}))
+			testing.expect_value(t, state(&run, 3), flowgraph.Node_State.Skipped)
+		} else {
+			testing.expect(t, flowgraph.run_cancel(&run.flow, 1, "answered No"))
+			testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{notify}))
+			testing.expect_value(t, state(&run, 2), flowgraph.Node_State.Skipped)
+		}
+	}
+	{
+		run: Run
+		run_start(&run, g, picture(2, 2), {id = 2, preview = true})
+		defer run_free(&run)
+		testing.expect_value(t, len(run_tasks(&run)), 0)   // (the effects are off in a preview)
+		testing.expect_value(t, state(&run, 1), flowgraph.Node_State.Done)
+	}
+}
+
+// The questions in flight: an answer finds its question by the notification's id once the system gave it.
+@(test)
+questions_find_their_answer :: proc(t: ^testing.T) {
+	q: Questions
+	defer questions_destroy(&q)
+	a := questions_ask(&q, 1, 4)
+	b := questions_ask(&q, 2, 5)
+	// (before the system's answer no event is about it)
+	_, answer := questions_event(&q, .Notification_Action, {id = 7, action = QUESTION_YES})
+	testing.expect_value(t, answer, Question_Answer.None)
+	_, failed := questions_shown(&q, a, 7, true)
+	testing.expect(t, !failed)
+	asked: Question
+	asked, answer = questions_event(&q, .Notification_Action, {id = 7, action = QUESTION_YES})
+	testing.expect_value(t, answer, Question_Answer.Yes)
+	testing.expect(t, asked.run == 1 && asked.node == 4)
+	// (the Closed that follows the answer is about no question now)
+	_, answer = questions_event(&q, .Notification_Closed, {id = 7, reason = .Dismissed})
+	testing.expect_value(t, answer, Question_Answer.None)
+	_, _ = questions_shown(&q, b, 8, true)
+	asked, answer = questions_event(&q, .Notification_Closed, {id = 8, reason = .Expired})
+	testing.expect(t, answer == .No && asked.run == 2, "closed is No")
+	// (a question the system could not show is dropped, for its node to fail)
+	c := questions_ask(&q, 3, 6)
+	dropped: Question
+	dropped, failed = questions_shown(&q, c, 0, false)
+	testing.expect(t, failed && dropped.run == 3)
+	_, failed = questions_shown(&q, c, 0, false)
+	testing.expect(t, !failed, "once")
+	questions_ask(&q, 4, 1)
+	questions_forget_run(&q, 4)
+	testing.expect_value(t, len(q.list), 0)
+}
+
+@(test)
+the_clipboard_is_read_picture_first :: proc(t: ^testing.T) {
+	f, ok := clipboard_next({.Text, .Image}, {})
+	testing.expect(t, ok && f == .Image)
+	f, ok = clipboard_next({.Text, .Image}, {.Image})
+	testing.expect(t, ok && f == .Text)
+	f, ok = clipboard_next({.Html}, {})
+	testing.expect(t, ok && f == .Text, "an HTML fragment is read as its text")
+	_, ok = clipboard_next({.Text}, {.Text})
+	testing.expect(t, !ok)
+	// (a system that does not say: each in turn)
+	f, ok = clipboard_next({}, {.Image})
+	testing.expect(t, ok && f == .Files)
+}
+
+// A shortened address is the one said and the one a click opens; a file deleted is not opened.
+@(test)
+the_summary_gives_the_short_address :: proc(t: ^testing.T) {
+	g := graph({.Capture, .Upload, .Shorten_Url, .Save_File, .Delete_File}, {{0, 1}, {1, 2}, {0, 3}, {3, 4}})
+	defer flowgraph.graph_destroy(&g)
+	run: Run
+	run_start(&run, g, picture(2, 2), {id = 1})
+	defer run_free(&run)
+	testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{2, 4}))
+	testing.expect(t, done_with_text(&run, 1, PORT_URL, "https://host/long-address", .Upload))
+	testing.expect(t, done_with_text(&run, 3, PORT_FILE, "/tmp/a.png", .Save_File))
+	testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{3, 5}))
+	testing.expect(t, done_with_text(&run, 2, PORT_URL, "https://is.gd/x", .Shorten_Url))
+	testing.expect(t, flowgraph.run_finish(&run.flow, 4, {}))
+	testing.expect(t, flowgraph.run_over(&run.flow))
+	s := run_summary(&run)
+	testing.expect_value(t, s.body, "https://is.gd/x")
+	testing.expect_value(t, s.open, "https://is.gd/x")
+	testing.expect(t, s.open_url)
+}

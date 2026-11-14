@@ -573,3 +573,98 @@ editor_blur_copy_is_small_and_soft :: proc(t: ^testing.T) {
 	middle := pixels[8 * 4]
 	testing.expect(t, middle > 20 && middle < 235)
 }
+
+////////////////////////////////
+// The editor's outputs: Save as, the files dropped, the pins
+
+// Save as: the extension typed decides the format; with none, the filter chosen does and its extension is added.
+@(test)
+save_as_takes_the_format_typed_else_the_filter :: proc(t: ^testing.T) {
+	path, format := save_as_choice("/home/a/shot.JPG", 0)
+	testing.expect(t, path == "/home/a/shot.JPG" && format == .Jpeg, "the extension typed wins over the PNG filter")
+	path, format = save_as_choice("/home/a/shot.webp", 1)
+	testing.expect(t, path == "/home/a/shot.webp" && format == .Webp, ".webp")
+	path, format = save_as_choice("/home/a/shot", 1)
+	testing.expect(t, path == "/home/a/shot.jpg" && format == .Jpeg, "no extension: the filter's, added")
+	path, format = save_as_choice("/home/a.b/shot", 2)
+	testing.expect(t, path == "/home/a.b/shot.webp" && format == .Webp, "a dot of a folder is not an extension")
+	path, format = save_as_choice("/home/a/notes.txt", 0)
+	testing.expect(t, path == "/home/a/notes.txt" && format == .Png_Small, "another extension: kept, the filter's format")
+	_, format = save_as_choice("/home/a/x", 99)
+	testing.expect_value(t, format, Save_Format.Webp)
+}
+
+// The format kept in save.as_format reads back; a word it does not know is PNG.
+@(test)
+save_as_format_names_read_back :: proc(t: ^testing.T) {
+	for f, i in SAVE_AS_FORMATS {
+		testing.expect_value(t, save_as_format_named(SAVE_AS_NAMES[i]), f)
+		testing.expect_value(t, save_as_index(f), i)
+	}
+	testing.expect_value(t, save_as_format_named("gif"), Save_Format.Png_Small)
+	testing.expect_value(t, save_as_index(.Webp_Lossless), 0)
+}
+
+// A drop opens its pictures, each in an editor, at most EDITOR_DROP_MOST; the rest is said to be left out.
+@(test)
+a_drop_opens_its_pictures :: proc(t: ^testing.T) {
+	testing.expect(t, picture_file("/a/b.PNG") && picture_file("C:\\a\\b.jpeg") && picture_file("/a/b.webp") && picture_file("/a/b.bmp"))
+	testing.expect(t, !picture_file("/a/b.txt") && !picture_file("/a.png/b") && !picture_file("/a/png"))
+	open, left_out := drop_pictures([]string{"/a/1.png", "/a/notes.txt", "/a/2.jpg"})
+	testing.expect(t, len(open) == 2 && open[0] == "/a/1.png" && open[1] == "/a/2.jpg" && left_out)
+	many: [EDITOR_DROP_MOST + 2]string
+	for &m in many { m = "/a/x.png" }
+	open, left_out = drop_pictures(many[:])
+	testing.expect(t, len(open) == EDITOR_DROP_MOST && left_out, "past the most: left out")
+	open, left_out = drop_pictures([]string{"/a/1.png"})
+	testing.expect(t, len(open) == 1 && !left_out)
+}
+
+// A pin first shows as large as on its screen, centred; a picture larger than the output is made smaller.
+@(test)
+a_pin_first_shows_centred :: proc(t: ^testing.T) {
+	p := pin_place_first({400, 200}, 2, {1920, 1080})
+	testing.expect_value(t, p.zoom, f32(1))
+	testing.expect_value(t, pin_size({400, 200}, 2, p.zoom), [2]f32{200, 100})
+	testing.expect_value(t, p.at, [2]f32{860, 490})
+	big := pin_place_first({3840, 2160}, 1, {1920, 1080})
+	size := pin_size({3840, 2160}, 1, big.zoom)
+	testing.expect(t, size.x <= 1920 * PIN_FIRST_MOST + 0.01 && size.y <= 1080 * PIN_FIRST_MOST + 0.01, "within the output")
+	testing.expect(t, big.at.x >= 0 && big.at.y >= 0, "on it")
+}
+
+// The wheel zooms around the pointer: the point under it stays; the zoom has its bounds.
+@(test)
+a_pin_zooms_around_the_pointer :: proc(t: ^testing.T) {
+	p := Pin_Place{at = {100, 100}, zoom = 1}
+	pointer := [2]f32{150, 120}
+	before := (pointer - p.at) / p.zoom   // (the picture's point under the pointer)
+	z := pin_zoom_at(p, pointer, 3)
+	testing.expect(t, z.zoom > 1)
+	after := (pointer - z.at) / z.zoom
+	testing.expect(t, abs(after.x - before.x) < 0.001 && abs(after.y - before.y) < 0.001, "the same point under the pointer")
+	far := pin_zoom_at(p, pointer, 1000)
+	testing.expect_value(t, far.zoom, f32(PIN_ZOOM_MAX))
+	near := pin_zoom_at(p, pointer, -1000)
+	testing.expect_value(t, near.zoom, f32(PIN_ZOOM_MIN))
+}
+
+// A drag moves the picture with the pointer, and never past where PIN_KEEP_PX of it stays on the output.
+@(test)
+a_pin_drag_keeps_it_on_the_output :: proc(t: ^testing.T) {
+	p := Pin_Place{at = {100, 100}, zoom = 1}
+	window := [2]f32{800, 600}
+	moved := pin_drag_to(p, {200, 100}, 1, {300, 250}, {10, 10}, window)
+	testing.expect_value(t, moved.at, [2]f32{290, 240})
+	gone := pin_drag_to(p, {200, 100}, 1, {5000, -5000}, {10, 10}, window)
+	testing.expect_value(t, gone.at, [2]f32{800 - PIN_KEEP_PX, PIN_KEEP_PX - 100})
+	left := pin_drag_to(p, {200, 100}, 1, {-5000, 5000}, {10, 10}, window)
+	testing.expect_value(t, left.at, [2]f32{PIN_KEEP_PX - 200, 600 - PIN_KEEP_PX})
+}
+
+// The input region covers the picture, its edges rounded outwards.
+@(test)
+a_pin_takes_the_pointer_on_its_picture :: proc(t: ^testing.T) {
+	r := pin_input_rect({at = {10.5, 20.25}, zoom = 0.5}, {101, 41}, 1)
+	testing.expect_value(t, r, [4]int{10, 20, 51, 21})
+}

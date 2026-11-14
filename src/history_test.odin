@@ -85,6 +85,32 @@ the_search_finds_names_texts_addresses_and_kinds :: proc(t: ^testing.T) {
 	testing.expect(t, slice_is(find(&h, "", .Text), {5, 3}))
 }
 
+// The filter by date keeps what was made since the start of a local day: today, the last 7 or 30 days.
+@(test)
+the_date_filter_starts_at_a_local_midnight :: proc(t: ^testing.T) {
+	DAY :: i64(86_400_000)
+	HOUR :: i64(3_600_000)
+	now := 20_000 * DAY + 10 * HOUR   // (10:00 UTC)
+	testing.expect_value(t, history_period_start(.Any, now, 0), 0)
+	testing.expect_value(t, history_period_start(.Today, now, 0), 20_000 * DAY)
+	testing.expect_value(t, history_period_start(.Week, now, 0), 19_994 * DAY)
+	testing.expect_value(t, history_period_start(.Month, now, 0), 19_971 * DAY)
+	// (at UTC+2 it is 12:00, the day began at 22:00 UTC the day before; at UTC-11, 23:00 of the day before)
+	testing.expect_value(t, history_period_start(.Today, now, 120), 20_000 * DAY - 2 * HOUR)
+	testing.expect_value(t, history_period_start(.Today, now, -660), 19_999 * DAY + 11 * HOUR)
+
+	h: History
+	defer history_destroy(&h)
+	history_add(&h, entry(1, now - 2 * DAY, .Region, path = "/p/a.png"), 100)
+	history_add(&h, entry(2, now - HOUR, .Picture, path = "/p/b.png"), 100)
+	history_add(&h, entry(3, now, .File, path = "/p/c.zip"), 100)
+	shown := history_shown(&h, "", .All, .Date, true, context.temp_allocator, since_ms = history_period_start(.Today, now, 0))
+	testing.expect(t, slice_is(ids_of(&h, shown[:]), {3, 2}))
+	// (a picture that is no capture is a screenshot's kind for the filter; a file is not)
+	shown = history_shown(&h, "", .Screenshots, .Date, true, context.temp_allocator)
+	testing.expect(t, slice_is(ids_of(&h, shown[:]), {2, 1}))
+}
+
 @(test)
 the_sort_goes_by_the_column :: proc(t: ^testing.T) {
 	h: History

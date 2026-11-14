@@ -67,6 +67,15 @@ fr Annuler l'enregistrement
 en Capture a region and edit
 fr Capturer une zone et la modifier
 
+en Upload the clipboard
+fr Mettre en ligne le presse-papiers
+
+en Upload files…
+fr Mettre en ligne des fichiers…
+
+en Recent
+fr Récents
+
 en History
 fr Historique
 
@@ -190,6 +199,18 @@ fr Image
 en Save the picture
 fr Enregistrer l'image
 
+en Save the picture as…
+fr Enregistrer l'image sous…
+
+en Upload the picture
+fr Mettre l'image en ligne
+
+en Pin the picture to the screen
+fr Épingler l'image à l'écran
+
+en Print the picture
+fr Imprimer l'image
+
 en Done: the workflow goes on
 fr Terminé : le scénario continue
 
@@ -238,8 +259,8 @@ fr L'image ne peut pas être lue.
 en cliche editor
 fr éditeur de cliche
 
-en The picture cannot be read: it is not a PNG file, or it is gone.
-fr L'image ne peut pas être lue : ce n'est pas un fichier PNG, ou il n'existe plus.
+en The picture cannot be read: it is not a PNG, JPEG, WebP or BMP file, or it is gone.
+fr L'image ne peut pas être lue : ce n'est pas un fichier PNG, JPEG, WebP ou BMP, ou il n'existe plus.
 
 en Not saved
 fr Non enregistrée
@@ -256,11 +277,20 @@ fr Le presse-papiers ne contient ni image ni texte.
 en The clipboard's picture cannot be read
 fr L'image du presse-papiers ne peut pas être lue
 
+en Only pictures open here
+fr Seules les images s'ouvrent ici
+
+en PNG, JPEG, WebP and BMP files, each in an editor of its own.
+fr Les fichiers PNG, JPEG, WebP et BMP, chacun dans son propre éditeur.
+
 en The picture could not be made
 fr L'image n'a pas pu être créée
 
 en Nothing was done with it.
 fr Rien n'en a été fait.
+
+en Uploading…
+fr Mise en ligne…
 
 en Reading the picture…
 fr Lecture de l'image…
@@ -386,6 +416,45 @@ fr Copiée dans le presse-papiers
 en The picture cannot go to the clipboard
 fr L'image ne peut pas aller dans le presse-papiers
 
+en Save the picture as
+fr Enregistrer l'image sous
+
+en The save dialog cannot open
+fr La fenêtre d'enregistrement ne peut pas s'ouvrir
+
+en Ctrl+S saves to the default folder.
+fr Ctrl+S enregistre dans le dossier par défaut.
+
+en no uploader is set up
+fr aucun hébergeur n'est configuré
+
+en Not uploaded
+fr Non mise en ligne
+
+en Uploaded: the address is on the clipboard
+fr En ligne : l'adresse est dans le presse-papiers
+
+en Uploaded
+fr En ligne
+
+en Screenshot
+fr Capture d'écran
+
+en Sent to the printer
+fr Envoyée à l'imprimante
+
+en Printing is not available here
+fr L'impression n'est pas disponible ici
+
+en The desktop has no print dialog cliche can use (Linux: the print portal).
+fr Le bureau n'a pas de fenêtre d'impression que cliche peut utiliser (Linux : le portail d'impression).
+
+en Not printed
+fr Non imprimée
+
+en The printer or its dialog refused the page.
+fr L'imprimante ou sa fenêtre a refusé la page.
+
 en this desktop offers no way to capture this
 fr ce bureau ne permet pas de capturer ceci
 
@@ -431,6 +500,21 @@ fr Vidéo
 en QR code
 fr Code QR
 
+en File
+fr Fichier
+
+en Any time
+fr N'importe quand
+
+en Today
+fr Aujourd'hui
+
+en The last 7 days
+fr Les 7 derniers jours
+
+en The last 30 days
+fr Les 30 derniers jours
+
 en All
 fr Tout
 
@@ -445,9 +529,6 @@ fr Mises en ligne
 
 en the file cannot be read
 fr le fichier ne peut pas être lu
-
-en no uploader is set up
-fr aucun hébergeur n'est configuré
 
 en Name
 fr Nom
@@ -470,6 +551,9 @@ fr Ouvrir
 en Capture
 fr Capture
 
+en Open the URL
+fr Ouvrir l'URL
+
 en Open the folder
 fr Ouvrir le dossier
 
@@ -482,8 +566,17 @@ fr Copier l'URL
 en Copy the text
 fr Copier le texte
 
+en Pin to the screen
+fr Épingler à l'écran
+
 en Upload again
 fr Remettre en ligne
+
+en Combine side by side
+fr Combiner côte à côte
+
+en Combine stacked
+fr Combiner l'une sous l'autre
 
 en Delete the file…
 fr Supprimer le fichier…
@@ -500,6 +593,9 @@ fr Tout sélectionner
 en Search
 fr Rechercher
 
+en Show by date…
+fr Afficher par date…
+
 en Show a grid
 fr Afficher une grille
 
@@ -512,11 +608,11 @@ fr Ouvrir le dossier des captures
 en Close the window
 fr Fermer la fenêtre
 
-en Uploaded: the address is on the clipboard
-fr En ligne : l'adresse est dans le presse-papiers
+en Not combined
+fr Non combinées
 
-en Not uploaded
-fr Non mise en ligne
+en Pictures combined
+fr Images combinées
 
 en The picture cannot be read
 fr L'image ne peut pas être lue
@@ -648,8 +744,8 @@ fr Le texte est dans le presse-papiers
 en The texts are on the clipboard
 fr Les textes sont dans le presse-papiers
 
-en Uploading…
-fr Mise en ligne…
+en Combining the pictures…
+fr Combinaison des images…
 
 en Removed from the history
 fr Retirée de l'historique
@@ -662,6 +758,27 @@ fr Le fichier reste.
 
 en The files stay.
 fr Les fichiers restent.
+
+en Pinned picture
+fr Image épinglée
+
+en The picture cannot be pinned
+fr L'image ne peut pas être épinglée
+
+en No window can open.
+fr Aucune fenêtre ne peut s'ouvrir.
+
+en Pinned in a normal window
+fr Épinglée dans une fenêtre normale
+
+en This desktop lets no window stay above the others.
+fr Ce bureau ne laisse aucune fenêtre rester au-dessus des autres.
+
+en The file is not a picture cliche reads, or it is gone.
+fr Le fichier n'est pas une image que cliche lit, ou il n'existe plus.
+
+en Close the pinned picture
+fr Fermer l'image épinglée
 
 en this desktop offers no way to record this
 fr ce bureau ne permet pas d'enregistrer ceci
@@ -747,6 +864,12 @@ fr Arrêter et sauvegarder
 
 en Cancel: the recording is deleted
 fr Annuler : l'enregistrement est supprimé
+
+en no picture came in
+fr aucune image n'est arrivée
+
+en this system has no WebP encoder (install libwebp)
+fr ce système n'a pas d'encodeur WebP (installez libwebp)
 
 en A click on the icon
 fr Un clic sur l'icône
@@ -852,6 +975,12 @@ fr Dossier par défaut
 
 en The folder of a workflow's Save step that names none, of the editor's Save, and of recordings. Empty: Pictures/Screenshots when it exists, else Pictures/cliche.
 fr Le dossier de l'étape Enregistrer le fichier d'un scénario qui n'en nomme aucun, de l'enregistrement de l'éditeur, et des enregistrements vidéo. Vide : Pictures/Screenshots s'il existe, sinon Pictures/cliche.
+
+en Quality of JPEG and WebP files
+fr Qualité des fichiers JPEG et WebP
+
+en The quality of a JPEG or WebP file the editor saves as (Save as…). Less makes smaller files that lose detail. A workflow's Save file step has its own.
+fr La qualité d'un fichier JPEG ou WebP que l'éditeur enregistre (Enregistrer sous…). Moins donne des fichiers plus petits qui perdent des détails. L'étape « Enregistrer le fichier » d'un scénario a la sienne.
 
 en Default file name
 fr Nom de fichier par défaut
@@ -1048,6 +1177,9 @@ fr le Body %q n'est pas un de ceux de ShareX
 en the Body is not one of ShareX's
 fr le Body n'est pas un de ceux de ShareX
 
+en the uploader's body is %s: it sends a file, not an address
+fr le corps de l'hébergeur est %s : il envoie un fichier, pas une adresse
+
 en the uploader has no FileFormName: the form field of the file
 fr l'hébergeur n'a pas de FileFormName : le champ de formulaire du fichier
 
@@ -1144,6 +1276,15 @@ fr tous les écrans
 en last region
 fr dernière zone
 
+en clipboard
+fr presse-papiers
+
+en files
+fr fichiers
+
+en Upload files
+fr Mettre en ligne des fichiers
+
 en A region
 fr Une zone
 
@@ -1162,14 +1303,14 @@ fr La dernière zone
 en A colour
 fr Une couleur
 
-en Screenshot
-fr Capture d'écran
-
 en Edit then share
 fr Modifier puis partager
 
 en the text cannot go to the clipboard
 fr le texte ne peut pas aller dans le presse-papiers
+
+en the picture cannot be pinned
+fr l'image ne peut pas être épinglée
 
 en this step cannot run here
 fr cette étape ne peut pas s'exécuter ici
@@ -1180,9 +1321,6 @@ fr l'image ne peut pas aller dans le presse-papiers
 en The newest capture of the history cannot be read.
 fr La capture la plus récente de l'historique ne peut pas être lue.
 
-en no picture came in
-fr aucune image n'est arrivée
-
 en the editor cannot open
 fr l'éditeur ne peut pas s'ouvrir
 
@@ -1191,6 +1329,33 @@ fr annulé dans l'éditeur
 
 en Nothing ran
 fr Rien ne s'est exécuté
+
+en Go on?
+fr Continuer ?
+
+en Yes
+fr Oui
+
+en No
+fr Non
+
+en cliche waits for your answer.
+fr cliche attend votre réponse.
+
+en the question cannot be shown: no notification
+fr la question ne peut pas être posée : aucune notification
+
+en answered No
+fr réponse : Non
+
+en Nothing to upload
+fr Rien à mettre en ligne
+
+en The clipboard holds no picture, no file and no text.
+fr Le presse-papiers ne contient ni image, ni fichier, ni texte.
+
+en Files to upload
+fr Fichiers à mettre en ligne
 
 en New workflow
 fr Nouveau scénario
@@ -1222,11 +1387,17 @@ fr Par défaut : %s
 en Reset
 fr Réinitialiser
 
-en Where the workflow starts: the picture of the capture. Its own shortcut captures what it says, then runs this workflow; the delay (counted down in a notification) and the pointer apply to every capture that runs it.
-fr Le début du scénario : l'image de la capture. Son propre raccourci capture ce qu'il indique, puis exécute ce scénario ; le délai (décompté dans une notification) et le pointeur valent pour chaque capture qui l'exécute.
+en Where the workflow starts: the picture of the capture; for an upload of the clipboard or of files, its picture, its file or its text, on the output of its kind. Its own shortcut captures what it says, then runs this workflow; the delay (counted down in a notification) and the pointer apply to every capture that runs it.
+fr Le début du scénario : l'image de la capture ; pour une mise en ligne du presse-papiers ou de fichiers, son image, son fichier ou son texte, sur la sortie de son genre. Son propre raccourci capture ce qu'il indique, puis exécute ce scénario ; le délai (décompté dans une notification) et le pointeur valent pour chaque capture qui l'exécute.
 
 en Opens the picture in the editor. Done sends its picture on and fires "done"; Cancel stops this branch and fires "cancelled".
 fr Ouvre l'image dans l'éditeur. Terminé transmet son image et déclenche « terminé » ; Annuler arrête cette branche et déclenche « annulé ».
+
+en Asks its question in a notification. Yes, or a click on it, fires "yes"; No, or the notification closed, fires "no". Link an effect's "when" to one of them.
+fr Pose sa question dans une notification. Oui, ou un clic dessus, déclenche « oui » ; Non, ou la notification fermée, déclenche « non ». Reliez le « quand » d'un effet à l'un des deux.
+
+en Sends a picture as a PNG file, a file as it is, a text as a .txt file, to the host. "done" fires once it is online: link a Delete file's "when" to it. Off in a preview.
+fr Envoie une image en fichier PNG, un fichier tel quel, un texte en fichier .txt, à l'hébergeur. « terminé » se déclenche une fois en ligne : reliez-y le « quand » d'un « Supprimer le fichier ». Désactivé dans un aperçu.
 
 en Sends the picture to "yes" or to "no".
 fr Envoie l'image vers « oui » ou vers « non ».
@@ -1492,17 +1663,29 @@ fr terminé
 en cancelled
 fr annulé
 
-en Condition
-fr Condition
+en Ask
+fr Demander
 
-en Flow control
-fr Contrôle du flux
+en when
+fr quand
 
 en yes
 fr oui
 
 en no
 fr non
+
+en Question
+fr Question
+
+en Said for you: "Go on?"
+fr Écrit pour vous : « Continuer ? »
+
+en Condition
+fr Condition
+
+en Flow control
+fr Contrôle du flux
 
 en When
 fr Quand
@@ -1540,9 +1723,6 @@ fr Copier l'image
 en Outputs
 fr Sorties
 
-en when
-fr quand
-
 en Save file
 fr Enregistrer le fichier
 
@@ -1579,8 +1759,17 @@ fr WebP, sans perte
 en Quality
 fr Qualité
 
+en what
+fr quoi
+
 en Host
 fr Hébergeur
+
+en Shorten URL
+fr Raccourcir l'URL
+
+en Shortener
+fr Raccourcisseur
 
 en Copy text
 fr Copier le texte
@@ -1597,8 +1786,17 @@ fr Langues
 en The default languages (Settings, Capture)
 fr Les langues par défaut (Réglages, Capture)
 
-en what
-fr quoi
+en Make QR code
+fr Créer un code QR
+
+en Square
+fr Carré
+
+en Dark colour
+fr Couleur sombre
+
+en Light colour
+fr Couleur claire
 
 en Title
 fr Titre
@@ -1618,8 +1816,17 @@ fr Un résumé de l'exécution
 en Show in folder
 fr Afficher dans le dossier
 
+en Delete file
+fr Supprimer le fichier
+
 en Add to history
 fr Ajouter à l'historique
+
+en with %s
+fr avec %s
+
+en squares of %d px
+fr carrés de %d px
 
 en after %d s
 fr après %d s
@@ -1696,14 +1903,53 @@ fr ce qui arrive
 en transparent
 fr transparent
 
+en no address came in
+fr aucune adresse n'est arrivée
+
+en no URL shortener is set up
+fr aucun raccourcisseur d'URL n'est configuré
+
+en nothing came in to open
+fr rien n'est arrivé à ouvrir
+
+en the system cannot open it
+fr le système ne peut pas l'ouvrir
+
+en no file came in
+fr aucun fichier n'est arrivé
+
+en the file cannot be deleted
+fr le fichier ne peut pas être supprimé
+
 en the file cannot be shown in its folder
 fr le fichier ne peut pas être affiché dans son dossier
 
 en the picture could not be made
 fr l'image n'a pas pu être créée
 
-en this system has no WebP encoder (install libwebp)
-fr ce système n'a pas d'encodeur WebP (installez libwebp)
+en nothing came in
+fr rien n'est arrivé
+
+en the file is too large to upload
+fr le fichier est trop lourd pour être mis en ligne
+
+en no text came in
+fr aucun texte n'est arrivé
+
+en the text is too long for a QR code
+fr le texte est trop long pour un code QR
+
+en the clipboard's picture cannot be read
+fr l'image du presse-papiers ne peut pas être lue
+
+en no file can be read
+fr aucun fichier ne peut être lu
+
+en the clipboard holds nothing to use
+fr le presse-papiers ne contient rien d'utilisable
+
+en two pictures or more must be read to combine them
+fr il faut lire au moins deux images pour les combiner
 
 en a step failed
 fr une étape a échoué

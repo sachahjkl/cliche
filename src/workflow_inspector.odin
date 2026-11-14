@@ -214,10 +214,11 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		res = ui.node_inspector("###wf_params", &m.inspector, &CATALOG, n, {
 			user = app,
+			// (the Lists: the Upload node's host, the Shorten URL node's shortener)
 			lists = proc(user: rawptr, n: ^flowgraph.Node, param: flowgraph.Param_Def) -> []string {
-				return (^App)(user).uploaders.names   // (the only List: the Upload node's host)
+				return Node_Kind(n.kind) == .Shorten_Url ? (^App)(user).uploaders.shorteners : (^App)(user).uploaders.names
 			},
-			default_text = fmt.tprintf(i18n.tr("The default: %s"), app.settings.uploader),
+			default_text = fmt.tprintf(i18n.tr("The default: %s"), Node_Kind(n.kind) == .Shorten_Url ? BUILTIN_SHORTENER_NAME : app.settings.uploader),
 		})
 		ui.spacer(ui.px(em * 0.8))
 	}
@@ -257,8 +258,10 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 node_what :: proc(n: ^flowgraph.Node) -> string {
 	def := &CATALOG.nodes[n.kind]
 	#partial switch Node_Kind(n.kind) {
-	case .Capture:        return i18n.tr("Where the workflow starts: the picture of the capture. Its own shortcut captures what it says, then runs this workflow; the delay (counted down in a notification) and the pointer apply to every capture that runs it.")
+	case .Capture:        return i18n.tr("Where the workflow starts: the picture of the capture; for an upload of the clipboard or of files, its picture, its file or its text, on the output of its kind. Its own shortcut captures what it says, then runs this workflow; the delay (counted down in a notification) and the pointer apply to every capture that runs it.")
 	case .Annotate:       return i18n.tr("Opens the picture in the editor. Done sends its picture on and fires \"done\"; Cancel stops this branch and fires \"cancelled\".")
+	case .Ask:            return i18n.tr("Asks its question in a notification. Yes, or a click on it, fires \"yes\"; No, or the notification closed, fires \"no\". Link an effect's \"when\" to one of them.")
+	case .Upload:         return i18n.tr("Sends a picture as a PNG file, a file as it is, a text as a .txt file, to the host. \"done\" fires once it is online: link a Delete file's \"when\" to it. Off in a preview.")
 	case .Condition:      return i18n.tr("Sends the picture to \"yes\" or to \"no\".")
 	case .Notify:         return i18n.tr("One notification at the end of the run: its title, and what comes in or a summary. Linked to \"when\", it waits for that action.")
 	case .Add_To_History: return i18n.tr("Keeps the file, the address or the text that comes in, in the history.")
@@ -318,6 +321,7 @@ trigger_keys_text :: proc(app: ^App, t: Trigger) -> string {
 	case .All_Screens: action = .All_Screens
 	case .Last_Region: action = .Last_Region
 	case .Edit:   return command   // (no fixed keys: a workflow's own shortcut takes its place)
+	case .Clipboard, .Upload_File: return command   // (the tray and the command: no shortcut of their own)
 	}
 	if keys := shortcut_keys(app, action); keys != "" { return fmt.tprintf("%s, %s", keys, command) }
 	return command

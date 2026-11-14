@@ -12,6 +12,7 @@ import "gt:font"
 import "gt:platform"
 import pic "gt:image"
 import png "gt:png"
+import qr "gt:qr"
 import i18n "gt:i18n"
 
 // The largest side of a node's thumbnail in the Workflows mode, in pixels.
@@ -99,9 +100,37 @@ node_work :: proc(j: ^Job_Node, fonts: ^Worker_Fonts) -> (out: Result_Node) {
 		if err != "" { return node_failed(out, err) }
 		out.result.outputs[0] = run_value(PORT_FILE, {text = path, size = size, bytes = bytes, origin = .Save_File})
 	case .Upload:
-		url, problem := node_upload(n, shot, j.defaults)
+		url, problem := node_upload(n, out.input, j.defaults)
 		if problem != "" { return node_failed(out, problem) }
 		out.result.outputs[0] = run_value(PORT_URL, {text = url, origin = .Upload})
+	case .Shorten_Url:
+		address := strings.trim_space(in_text)
+		if address == "" { return node_failed(out, i18n.tr("no address came in")) }
+		list, _ := uploaders_load(context.temp_allocator)
+		u, _ := uploader_find(list, flowgraph.param_text(&CATALOG, n, "shortener"), shortener = true)
+		if u == nil { return node_failed(out, i18n.tr("no URL shortener is set up")) }
+		short, problem := shorten_url(u^, address)
+		if problem != "" {
+			message := strings.clone(problem, context.temp_allocator)
+			delete(problem)
+			return node_failed(out, message)
+		}
+		out.result.outputs[0] = run_value(PORT_URL, {text = short, origin = .Shorten_Url})
+	case .Open:
+		target := strings.trim_space(in_text)
+		if target == "" { return node_failed(out, i18n.tr("nothing came in to open")) }
+		// (an address in the browser; a path, or a text that names none, with the system's program for it)
+		opened := text_is_address(out.input, target) ? platform.open_url(target) : platform.open_path(target)
+		if !opened { return node_failed(out, i18n.tr("the system cannot open it")) }
+	case .Delete_File:
+		if in_text == "" { return node_failed(out, i18n.tr("no file came in")) }
+		if os.remove(in_text) != nil && os.exists(in_text) { return node_failed(out, i18n.tr("the file cannot be deleted")) }
+	case .Make_Qr:
+		made, problem := qr_picture(n, in_text)
+		if problem != "" { return node_failed(out, problem) }
+		out.result.outputs[0] = run_value(PORT_IMAGE, {shot = made, origin = .Make_Qr})
+		if j.thumbnail { out.thumbnail, out.thumbnail_size = thumbnail_of(made) }
+		return
 	case .Read_Qr:
 		text, ok := qr_read(shot)
 		if !ok { return node_failed(out, i18n.tr(FLOW_ERROR_TEXT[.No_Qr])) }
@@ -203,7 +232,7 @@ node_transform :: proc(n: ^flowgraph.Node, shot: Shot, fonts: ^Worker_Fonts = ni
 	case .Pixelate:
 		made = pic.clone(src)
 		pic.pixelate(made, flowgraph.param_int(&CATALOG, n, "cell"))
-	case .Capture, .Annotate, .Condition, .Copy_Image, .Save_File, .Upload, .Copy_Text, .Read_Qr, .Read_Text, .Notify, .Show_In_Folder, .Add_To_History:
+	case .Capture, .Annotate, .Ask, .Condition, .Copy_Image, .Save_File, .Upload, .Shorten_Url, .Copy_Text, .Read_Qr, .Read_Text, .Make_Qr, .Notify, .Show_In_Folder, .Open, .Pin, .Delete_File, .Add_To_History:
 		return
 	}
 	if made.pixels == nil || made.width <= 0 || made.height <= 0 { return }
@@ -274,19 +303,42 @@ node_save :: proc(n: ^flowgraph.Node, shot: Shot, d: Node_Defaults) -> (path: st
 	return p, shot.size, i64(len(file)), ""
 }
 
-// The picture sent to the node's host (empty: the default one). url: owned.
+// The largest file an Upload node sends: a host refuses more long before (Litterbox: 1 GB), and the file is held whole.
+UPLOAD_FILE_MAX :: 1 << 30
+
+// What came in sent to the node's host (empty: the default one): a picture as a PNG file named by the pattern, a file
+// as it is under its own name, a text as a .txt file. url: owned.
 @(private = "file")
-node_upload :: proc(n: ^flowgraph.Node, shot: Shot, d: Node_Defaults) -> (url: string, problem: string) {
-	if shot.rgba == nil { return "", i18n.tr("no picture came in") }
-	file := png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
+node_upload :: proc(n: ^flowgraph.Node, input: flowgraph.Value, d: Node_Defaults) -> (url: string, problem: string) {
+	data := run_data(input)
+	if data == nil { return "", i18n.tr("nothing came in") }
+	file: []u8
+	file_name: string
+	switch input.kind {
+	case PORT_IMAGE:
+		shot := data.shot
+		if shot.rgba == nil { return "", i18n.tr("no picture came in") }
+		file = png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
+		file_name = name_expand(d.pattern != "" ? d.pattern : DEFAULT_NAME_PATTERN, stamp_now(), shot.source, context.temp_allocator)
+	case PORT_FILE:
+		if info, err := os.stat(data.text, context.temp_allocator); err == nil && info.size > UPLOAD_FILE_MAX { return "", i18n.tr("the file is too large to upload") }
+		read, err := os.read_entire_file(data.text, context.allocator)
+		if err != nil { return "", i18n.tr("the file cannot be read") }
+		file = read
+		file_name = data.text[strings.last_index_any(data.text, "/\\") + 1:]
+	case:
+		if data.text == "" { return "", i18n.tr("no text came in") }
+		file = make([]u8, len(data.text))
+		copy(file, data.text)
+		file_name = name_with_extension(name_expand(d.pattern != "" ? d.pattern : DEFAULT_NAME_PATTERN, stamp_now(), .Region, context.temp_allocator), ".txt")
+	}
 	defer delete(file)
-	if file == nil { return "", i18n.tr(FLOW_ERROR_TEXT[.Empty]) }
+	if len(file) == 0 { return "", i18n.tr(FLOW_ERROR_TEXT[.Empty]) }
 	list, _ := uploaders_load(context.temp_allocator)
 	name := flowgraph.param_text(&CATALOG, n, "uploader")
 	if name == "" { name = d.uploader }
 	u, _ := uploader_find(list, name)
 	if u == nil { return "", i18n.tr("no uploader is set up") }
-	file_name := name_expand(d.pattern != "" ? d.pattern : DEFAULT_NAME_PATTERN, stamp_now(), shot.source, context.temp_allocator)
 	url, problem = upload_shot(u^, file, file_name)
 	if problem != "" {
 		delete(url)
@@ -295,6 +347,193 @@ node_upload :: proc(n: ^flowgraph.Node, shot: Shot, d: Node_Defaults) -> (url: s
 		return "", p
 	}
 	return url, ""
+}
+
+// Whether the text of `v` is a web address (an upload's, or a text that starts as one), not a file's path.
+text_is_address :: proc(v: flowgraph.Value, text: string) -> bool {
+	if v.kind == PORT_URL { return true }
+	if v.kind == PORT_FILE { return false }
+	return strings.has_prefix(text, "http://") || strings.has_prefix(text, "https://") || strings.has_prefix(text, "www.")
+}
+
+// The text as a QR code's picture: squares of the node's size, its margin of light squares around (owned). problem: why
+// there is none (temp allocator).
+@(private = "file")
+qr_picture :: proc(n: ^flowgraph.Node, text: string) -> (shot: Shot, problem: string) {
+	if text == "" { return {}, i18n.tr("no text came in") }
+	code, err := qr.encode(text, .Medium, context.temp_allocator)
+	if err != .None { return {}, i18n.tr("the text is too long for a QR code") }
+	side := max(flowgraph.param_int(&CATALOG, n, "module"), 1)
+	margin := max(flowgraph.param_int(&CATALOG, n, "margin"), 0)
+	dark, light := flowgraph.param_color(&CATALOG, n, "dark"), flowgraph.param_color(&CATALOG, n, "light")
+	squares := code.size + 2 * margin
+	px := squares * side
+	img := pic.create(px, px, light)
+	if img.pixels == nil { return {}, i18n.tr("the picture could not be made") }
+	for y in 0 ..< code.size {
+		for x in 0 ..< code.size {
+			if !qr.module(code, x, y) { continue }
+			pic.fill_rect(img, {(x + margin) * side, (y + margin) * side, side, side}, dark)
+		}
+	}
+	return {rgba = img.pixels, size = {px, px}, source = .Region, scale = 1}, ""
+}
+
+// The pixels of a picture file, by its first bytes: PNG, JPEG, BMP (the clipboard's decoders), WebP (libwebp). Owned.
+picture_decode :: proc(data: []u8) -> (rgba: []u8, size: [2]int, ok: bool) {
+	mime := ""
+	switch {
+	case len(data) >= 8 && data[0] == 0x89 && string(data[1:4]) == "PNG":  mime = "image/png"
+	case len(data) >= 3 && data[0] == 0xFF && data[1] == 0xD8:             mime = "image/jpeg"
+	case len(data) >= 2 && data[0] == 'B' && data[1] == 'M':                mime = "image/bmp"
+	case len(data) >= 12 && string(data[0:4]) == "RIFF" && string(data[8:12]) == "WEBP":
+		img, decoded := pic.webp_decode(data)
+		if !decoded { return }
+		return img.pixels, {img.width, img.height}, true
+	case:
+		return
+	}
+	img, decoded := platform.clipboard_image_decode(mime, data)
+	if !decoded { return }
+	delete(img.png)
+	return img.rgba, img.size, true
+}
+
+////////////////////////////////
+// A run that is no capture's: what it starts from, made here
+
+// What the clipboard held, or the files chosen, for runs of `workflow`: one run per value (owned).
+Job_Run_Input :: struct {
+	workflow: u64,
+	origin:   Run_Origin,
+	image:    []u8,       // a picture as its owner gave it, still encoded (`mime`)
+	mime:     string,
+	paths:    []string,   // files
+	text:     string,
+}
+
+// The values the runs start from (a reference each, owned), or why there are none (owned).
+Result_Run_Input :: struct {
+	workflow: u64,
+	origin:   Run_Origin,
+	values:   []flowgraph.Value,
+	problem:  string,
+}
+
+job_run_input_free :: proc(j: ^Job_Run_Input) {
+	delete(j.image)
+	delete(j.mime)
+	for p in j.paths { delete(p) }
+	delete(j.paths)
+	delete(j.text)
+	j^ = {}
+}
+
+result_run_input_free :: proc(r: ^Result_Run_Input) {
+	for &v in r.values { flowgraph.value_release(&v) }
+	delete(r.values)
+	delete(r.problem)
+	r^ = {}
+}
+
+// The picture decoded, each file looked at (its size and bytes, for the history), the text as it is. On the worker.
+run_input_work :: proc(j: ^Job_Run_Input) -> (out: Result_Run_Input) {
+	defer job_run_input_free(j)
+	out = {workflow = j.workflow, origin = j.origin}
+	values := make([dynamic]flowgraph.Value, 0, max(len(j.paths), 1))
+	switch {
+	case j.image != nil:
+		img, ok := platform.clipboard_image_decode(j.mime, j.image)
+		if !ok || img.rgba == nil {
+			out.problem = strings.clone(i18n.tr("the clipboard's picture cannot be read"))
+			break
+		}
+		delete(img.png)
+		append(&values, run_value(PORT_IMAGE, {shot = {rgba = img.rgba, size = img.size, source = .Region, scale = 1}, origin = .Capture}))
+	case len(j.paths) > 0:
+		for p in j.paths {
+			info, err := os.stat(p, context.temp_allocator)
+			if err != nil || info.type == .Directory { continue }   // (a folder is no file to upload)
+			append(&values, run_value(PORT_FILE, {text = strings.clone(p), bytes = info.size, origin = .Capture}))
+		}
+		if len(values) == 0 { out.problem = strings.clone(i18n.tr("no file can be read")) }
+	case j.text != "":
+		append(&values, run_value(PORT_TEXT, {text = strings.clone(j.text), origin = .Capture}))
+	case:
+		out.problem = strings.clone(i18n.tr("the clipboard holds nothing to use"))
+	}
+	out.values = values[:]
+	return
+}
+
+////////////////////////////////
+// The image combiner (the history's selection)
+
+// The pictures of `paths`, side by side (or stacked), saved as a new PNG in the folder with the name pattern (owned).
+Job_Combine :: struct {
+	paths:           []string,
+	vertical:        bool,
+	folder, pattern: string,
+}
+
+// The picture made (path owned), or why not (owned).
+Result_Combined :: struct {
+	path:    string,
+	size:    [2]int,
+	bytes:   i64,
+	problem: string,
+}
+
+// The gap between the pictures combined, in pixels: they read as several, not as one.
+COMBINE_GAP :: 16
+
+job_combine_free :: proc(j: ^Job_Combine) {
+	for p in j.paths { delete(p) }
+	delete(j.paths)
+	delete(j.folder)
+	delete(j.pattern)
+	j^ = {}
+}
+
+result_combined_free :: proc(r: ^Result_Combined) {
+	delete(r.path)
+	delete(r.problem)
+	r^ = {}
+}
+
+// On the worker: each file decoded, the pictures combined on a transparent ground, the PNG written.
+combine_work :: proc(j: ^Job_Combine) -> (out: Result_Combined) {
+	defer job_combine_free(j)
+	images := make([dynamic]pic.Image, 0, len(j.paths), context.temp_allocator)
+	defer {
+		for &img in images { pic.destroy(&img) }
+	}
+	for p in j.paths {
+		data, err := os.read_entire_file(p, context.allocator)
+		if err != nil { continue }
+		rgba, size, ok := picture_decode(data)
+		delete(data)
+		if ok { append(&images, pic.Image{pixels = rgba, width = size.x, height = size.y}) }
+	}
+	if len(images) < 2 {
+		out.problem = strings.clone(i18n.tr("two pictures or more must be read to combine them"))
+		return
+	}
+	made := pic.combine(images[:], vertical = j.vertical, gap = COMBINE_GAP)
+	defer pic.destroy(&made)
+	file := png.encode(made.pixels, made.width, made.height, .Small)
+	defer delete(file)
+	if file == nil {
+		out.problem = strings.clone(i18n.tr(FLOW_ERROR_TEXT[.Empty]))
+		return
+	}
+	name := name_with_extension(name_expand(j.pattern != "" ? j.pattern : DEFAULT_NAME_PATTERN, stamp_now(), .Region, context.temp_allocator), ".png")
+	path, e := save_file(file, j.folder, name)
+	if e != .None {
+		out.problem = strings.clone(i18n.tr(FLOW_ERROR_TEXT[e]))
+		return
+	}
+	return {path = path, size = {made.width, made.height}, bytes = i64(len(file))}
 }
 
 // A small copy of `shot` (its largest side THUMBNAIL_SIDE) for the node in the Workflows mode. Owned.
@@ -308,14 +547,14 @@ thumbnail_of :: proc(shot: Shot) -> (rgba: []u8, size: [2]int) {
 	return out.pixels, {out.width, out.height}
 }
 
-// A PNG file of the history decoded (on the worker), for a preview run of `workflow`.
+// A picture file of the history decoded (on the worker), for a preview run of `workflow`.
 picture_load :: proc(path: string, workflow: u64) -> Result_Picture {
 	data, err := os.read_entire_file(path, context.allocator)
 	if err != nil { return {workflow = workflow} }
 	defer delete(data)
-	rgba, w, h, ok := png.decode(data)
+	rgba, size, ok := picture_decode(data)
 	if !ok { return {workflow = workflow} }
-	return {shot = {rgba = rgba, size = {w, h}, source = .Region, scale = 1}, workflow = workflow, ok = true}
+	return {shot = {rgba = rgba, size = size, source = .Region, scale = 1}, workflow = workflow, ok = true}
 }
 
 // A font for the text a watermark draws, on the worker's thread (a font.State is one thread's): made at the first

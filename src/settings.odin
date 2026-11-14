@@ -57,6 +57,8 @@ PREF_DEFS := [?]config.Def{
 
 	// Save
 	{name = "save.folder", title = i18n.later("Default folder"), description = i18n.later("The folder of a workflow's Save step that names none, of the editor's Save, and of recordings. Empty: Pictures/Screenshots when it exists, else Pictures/cliche."), kind = .String, default = {s = ""}, tags = {"directory", "path", "where"}},
+	{name = "save.quality", title = i18n.later("Quality of JPEG and WebP files"), description = i18n.later("The quality of a JPEG or WebP file the editor saves as (Save as…). Less makes smaller files that lose detail. A workflow's Save file step has its own."), kind = .Int, default = {i = 90}, min = 1, max = 100, bounded = true, unit = "%", tags = {"jpeg", "jpg", "webp", "compression", "size", "lossy"}},
+	{name = "save.as_format", title = "Save as format", description = "The format the editor's Save as… chose last: png, jpeg or webp.", kind = .String, default = {s = "png"}, hidden = true},
 	{name = "save.name", title = i18n.later("Default file name"), description = i18n.later("The name of a saved file when its Save step names none: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets \" (2)\"."), kind = .String, default = {s = DEFAULT_NAME_PATTERN}, tags = {"file name", "pattern", "format"}},
 
 	// Shortcuts: in the order of the tray's menu (Shortcut_Action's)
@@ -99,6 +101,8 @@ Settings :: struct {
 	uploader:           string,   // the default host of an Upload step
 	folder:             string,   // the default folder of a Save step ("": save_folder_default)
 	name_pattern:       string,   // the default name of a Save step
+	quality:            int,      // of a JPEG or WebP the editor saves as (save.quality), 1 to 100
+	save_as_format:     Save_Format,   // the format of the editor's last Save as (save.as_format)
 	shortcuts:          [Shortcut_Action]string,   // as platform.hotkey_parse reads them; "": none
 }
 
@@ -159,6 +163,8 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.uploader = strings.clone(config.string_of(p, "upload.uploader"), allocator)
 	s.folder = strings.clone(strings.trim_space(config.string_of(p, "save.folder")), allocator)
 	s.name_pattern = strings.clone(config.string_of(p, "save.name"), allocator)
+	s.quality = clamp(int(config.int_of(p, "save.quality")), 1, 100)
+	s.save_as_format = save_as_format_named(config.string_of(p, "save.as_format"))
 	for pref, a in SHORTCUT_PREFS { s.shortcuts[a] = strings.clone(strings.trim_space(config.string_of(p, pref)), allocator) }
 	return
 }

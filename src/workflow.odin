@@ -19,33 +19,37 @@ import i18n "gt:i18n"
 
 // What starts a workflow: the captures of the shortcuts, the tray and the commands (cliche --region...). A trigger is a
 // capture source and the workflow it runs; Edit, Qr and Ocr take a region. A workflow may also have a shortcut of its
-// own, on its Capture node (Capture_Options): its keys capture that node's source and run that workflow.
-Trigger :: enum u8 { Region, Screen, Window, Edit, Qr, Ocr, All_Screens, Last_Region }
+// own, on its Capture node (Capture_Options): its keys capture that node's source and run that workflow. Two triggers
+// capture nothing: Clipboard runs its workflow on what the clipboard holds, Upload_File on files chosen in the system's
+// dialog (workflow_app.odin); their Capture node gives a picture, a file or a text.
+Trigger :: enum u8 { Region, Screen, Window, Edit, Qr, Ocr, All_Screens, Last_Region, Clipboard, Upload_File }
 
-Trigger_Set :: bit_set[Trigger; u8]
+Trigger_Set :: bit_set[Trigger; u16]
 
 // A trigger's word: in the file (a workflow's labels), in `cliche --<word>`.
 TRIGGER_NAMES := [Trigger]string{
 	.Region = "region", .Screen = "screen", .Window = "window", .Edit = "edit", .Qr = "qr", .Ocr = "ocr",
-	.All_Screens = "all-screens", .Last_Region = "last-region",
+	.All_Screens = "all-screens", .Last_Region = "last-region", .Clipboard = "upload-clipboard", .Upload_File = "upload-file",
 }
 
 // A trigger's word where a list of them is shown (the Capture node, the workflows' list): TRIGGER_NAMES' words, in the
 // language in use (i18n.tr where shown).
 TRIGGER_WORDS := [Trigger]string{
 	.Region = i18n.later("region"), .Screen = i18n.later("screen"), .Window = i18n.later("window"), .Edit = i18n.later("edit"), .Qr = i18n.later("qr"), .Ocr = i18n.later("ocr"),
-	.All_Screens = i18n.later("all screens"), .Last_Region = i18n.later("last region"),
+	.All_Screens = i18n.later("all screens"), .Last_Region = i18n.later("last region"), .Clipboard = i18n.later("clipboard"), .Upload_File = i18n.later("files"),
 }
 
 TRIGGER_TEXT := [Trigger]string{
 	.Region = i18n.later("Capture a region"), .Screen = i18n.later("Capture the screen"), .Window = i18n.later("Capture the window"),
 	.Edit = i18n.later("Capture a region and edit"), .Qr = i18n.later("Read a QR code"), .Ocr = i18n.later("Read the text"),
 	.All_Screens = i18n.later("Capture all the screens"), .Last_Region = i18n.later("Capture the last region again"),
+	.Clipboard = i18n.later("Upload the clipboard"), .Upload_File = i18n.later("Upload files"),
 }
 
+// (Clipboard and Upload_File capture nothing: their source is never read)
 TRIGGER_SOURCE := [Trigger]Source{
 	.Region = .Region, .Screen = .Screen, .Window = .Window, .Edit = .Region, .Qr = .Region, .Ocr = .Region,
-	.All_Screens = .All_Screens, .Last_Region = .Last_Region,
+	.All_Screens = .All_Screens, .Last_Region = .Last_Region, .Clipboard = .Region, .Upload_File = .Region,
 }
 
 // What a source captures, as the Capture node's choices say it (the same words: one translation).
@@ -305,6 +309,25 @@ workflows_default :: proc() -> (ws: Workflows) {
 		link(g, copy_text, notify)
 		id := workflows_add(&ws, wf)
 		workflows_bind(&ws, id, r.trigger, true)
+	}
+	{
+		// (the clipboard's and the files' runs: whichever of the Capture node's outputs a run gives is uploaded)
+		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("Upload"))}
+		g := &wf.graph
+		capture := add(g, .Capture, {0, 70})
+		upload := add(g, .Upload, {230, 70})
+		copy_text := add(g, .Copy_Text, {460, 0})
+		history := add(g, .Add_To_History, {460, 140})
+		notify := add(g, .Notify, {690, 0})
+		for port in ([]u32{CAPTURE_PORT_PICTURE, CAPTURE_PORT_FILE, CAPTURE_PORT_TEXT}) {
+			_, _ = flowgraph.link(g, &CATALOG, {capture, port, upload, 0})
+		}
+		link(g, upload, copy_text)
+		link(g, upload, history)
+		link(g, copy_text, notify)
+		id := workflows_add(&ws, wf)
+		workflows_bind(&ws, id, .Clipboard, true)
+		workflows_bind(&ws, id, .Upload_File, true)
 	}
 	return
 }

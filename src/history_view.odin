@@ -1,8 +1,9 @@
 package cliche
 
 // cliche's main window, the history: the captures kept (history.odin), in a grid of thumbnails or in a list, with a
-// search, a filter by kind, a preview of the picture selected (Space) and the usual actions: open, show in its folder,
-// copy, edit, upload again, delete the file, forget the entry. The settings show in it, in place of the history
+// search, a filter by kind and one by date, a preview of the picture selected (Space) and the usual actions: open, open
+// the address, show in its folder, copy, edit, upload again, combine pictures into one, delete the file, forget the
+// entry. The tray's Recent submenu is made here too (tray_recent_items). The settings show in it, in place of the history
 // (settings_view.odin): the gear of the toolbar and Ctrl+, open them, the back bar and Escape go back. Made at its first
 // show, hidden at a close, in the theme of appearance.theme, with the command palette (Ctrl+K) and the sheet of keys
 // (F1) of both modes.
@@ -110,6 +111,7 @@ History_Window :: struct {
 	search_focused: bool,
 	query:       string,          // the search the entries shown were made with (owned)
 	filter:      History_Filter,
+	period:      History_Period,  // the filter by date
 	sort:        History_Column,
 	descending:  bool,
 	shown:       [dynamic]int,    // places in history.entries, in the order shown
@@ -155,24 +157,30 @@ History_Window :: struct {
 
 // The actions of the palette, the menu, the sheet of keys.
 History_Action :: enum u8 {
-	Open, Reveal, Copy_Picture, Copy_Path, Copy_Url, Copy_Text, Edit, Upload, Delete_File, Remove,
-	Preview, Select_All, Search, Grid, List, Open_Folder, Capture_Region, Workflows, Settings, Palette, Keys, Close, Quit,
+	Open, Open_Url, Reveal, Copy_Picture, Copy_Path, Copy_Url, Copy_Text, Edit, Pin, Upload, Combine_Side, Combine_Stack, Delete_File, Remove,
+	Preview, Select_All, Search, Period, Grid, List, Open_Folder, Capture_Region, Workflows, Settings, Palette, Keys, Close, Quit,
 }
 
 HISTORY_ACTIONS := [History_Action]ui.Command{
 	.Open           = {label = i18n.later("Open"), group = i18n.later("Capture"), keys = {{.Return, {}}}, icon = lucide.EXTERNAL_LINK, tags = {"view", "launch"}},
+	.Open_Url       = {label = i18n.later("Open the URL"), group = i18n.later("Capture"), keys = {{.Return, {.Shift}}}, icon = lucide.LINK, tags = {"browser", "address", "link", "upload", "web"}},
 	.Reveal         = {label = i18n.later("Open the folder"), group = i18n.later("Capture"), keys = {{.Return, {.Ctrl}}}, icon = lucide.FOLDER_OPEN, tags = {"reveal", "show", "file manager", "explorer"}},
 	.Copy_Picture   = {label = i18n.later("Copy the picture"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl}}}, icon = lucide.COPY, tags = {"clipboard", "image"}},
 	.Copy_Path      = {label = i18n.later("Copy the path"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl, .Shift}}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "file", "location"}},
 	.Copy_Url       = {label = i18n.later("Copy the URL"), group = i18n.later("Capture"), keys = {{.L, {.Ctrl}}}, icon = lucide.LINK, tags = {"clipboard", "address", "link", "upload"}},
 	.Copy_Text      = {label = i18n.later("Copy the text"), group = i18n.later("Capture"), keys = {{.T, {.Ctrl}}}, icon = lucide.FILE_TEXT, tags = {"clipboard", "ocr", "qr"}},
 	.Edit           = {label = i18n.later("Edit"), group = i18n.later("Capture"), keys = {{.E, {.Ctrl}}}, icon = lucide.PENCIL, tags = {"editor", "annotate", "draw"}},
+	// (no key: Ctrl+T is Copy the text here; the editor's Pin keeps Ctrl+T)
+	.Pin            = {label = i18n.later("Pin to the screen"), group = i18n.later("Capture"), icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep", "window"}},
 	.Upload         = {label = i18n.later("Upload again"), group = i18n.later("Capture"), keys = {{.U, {.Ctrl}}}, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link"}},
+	.Combine_Side   = {label = i18n.later("Combine side by side"), group = i18n.later("Capture"), icon = lucide.COLUMNS_2, tags = {"join", "merge", "stitch", "horizontal", "together"}},
+	.Combine_Stack  = {label = i18n.later("Combine stacked"), group = i18n.later("Capture"), icon = lucide.ROWS_2, tags = {"join", "merge", "stitch", "vertical", "together"}},
 	.Delete_File    = {label = i18n.later("Delete the file…"), group = i18n.later("Capture"), keys = {{.Delete, {.Shift}}}, icon = lucide.TRASH_2, tags = {"erase", "remove", "disk"}},
 	.Remove         = {label = i18n.later("Remove from the history"), group = i18n.later("Capture"), keys = {{.Delete, {}}}, icon = lucide.X, tags = {"forget", "clear"}},
 	.Preview        = {label = i18n.later("Preview"), group = i18n.later("View"), keys = {{.Space, {}}}, icon = lucide.EYE, tags = {"zoom", "look"}},
 	.Select_All     = {label = i18n.later("Select all"), group = i18n.later("View"), keys = {{.A, {.Ctrl}}}, icon = lucide.LIST_CHECKS, tags = {"every"}},
 	.Search         = {label = i18n.later("Search"), group = i18n.later("View"), keys = {{.F, {.Ctrl}}}, icon = lucide.SEARCH, tags = {"find", "filter"}},
+	.Period         = {label = i18n.later("Show by date…"), group = i18n.later("View"), icon = lucide.CALENDAR, tags = {"date", "today", "week", "month", "filter", "when"}},
 	.Grid           = {label = i18n.later("Show a grid"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}}, icon = lucide.LAYOUT_GRID, tags = {"thumbnails", "pictures"}},
 	.List           = {label = i18n.later("Show a list"), group = i18n.later("View"), keys = {{.N2, {.Ctrl}}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
 	.Open_Folder    = {label = i18n.later("Open the save folder"), group = i18n.later("View"), icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
@@ -188,12 +196,18 @@ HISTORY_ACTIONS := [History_Action]ui.Command{
 History_Actions :: bit_set[History_Action]
 
 // The actions whose keys a text field keeps while it has the keyboard (Enter, Space, Ctrl+C, Delete, Ctrl+A...).
-HISTORY_FIELD_KEYS :: History_Actions{.Open, .Copy_Picture, .Copy_Path, .Delete_File, .Remove, .Preview, .Select_All}
+HISTORY_FIELD_KEYS :: History_Actions{.Open, .Open_Url, .Copy_Picture, .Copy_Path, .Delete_File, .Remove, .Preview, .Select_All}
 
 // The context menu, in its order; a separator before each of HISTORY_MENU_BREAKS.
 @(rodata)
-HISTORY_MENU := [?]History_Action{.Open, .Reveal, .Edit, .Copy_Picture, .Copy_Path, .Copy_Url, .Copy_Text, .Upload, .Delete_File, .Remove}
-HISTORY_MENU_BREAKS :: History_Actions{.Copy_Picture, .Upload, .Delete_File}
+HISTORY_MENU := [?]History_Action{.Open, .Open_Url, .Reveal, .Edit, .Pin, .Copy_Picture, .Copy_Path, .Copy_Url, .Copy_Text, .Upload, .Combine_Side, .Combine_Stack, .Delete_File, .Remove}
+HISTORY_MENU_BREAKS :: History_Actions{.Copy_Picture, .Upload, .Combine_Side, .Delete_File}
+
+// The menu of the dates (the toolbar's calendar button).
+HISTORY_PERIOD_MENU_ID :: "history_period"
+
+// The newest entries the tray's Recent submenu shows.
+TRAY_RECENT_MAX :: 5
 
 ////////////////////////////////
 // What the app calls
@@ -224,6 +238,57 @@ history_note :: proc(app: ^App, e: History_Entry) -> u64 {
 	if !history_add(&hw.history, e, app.settings.history_size) { return 0 }
 	worker_send(&app.worker, Job_History(History_Add{entry = history_entry_clone(e), cap = app.settings.history_size}))
 	return e.id
+}
+
+// The pictures combined (Combine side by side, stacked): the new picture kept and selected, or why there is none.
+history_combined :: proc(app: ^App, r: Result_Combined) {
+	r := r
+	defer result_combined_free(&r)
+	hw := &app.history_window
+	history_status(hw, "")
+	if r.problem != "" {
+		app_announce(app, .Bad, i18n.tr("Not combined"), r.problem, history_window_of(app))
+		return
+	}
+	id := history_note(app, {kind = .Picture, path = r.path, size = r.size, bytes = r.bytes})
+	if id != 0 && hw.visible {
+		history_select_one(&hw.selection, id)
+		hw.table_give = true
+		hw.grid_reveal = true
+	}
+	app_announce(app, .Good, i18n.tr("Pictures combined"), r.path, history_window_of(app))
+}
+
+// The tray's Recent submenu is out of date: the history changed since it was made.
+tray_recent_due :: proc(app: ^App) -> bool {
+	return app.tray_recent_version != app.history_window.history.version + 1
+}
+
+// The tray's Recent submenu: the newest entries, each by its name and kind (temp allocator; empty: none yet). Their ids
+// are kept in app.tray_recent, in the items' order.
+tray_recent_items :: proc(app: ^App) -> []platform.Tray_Menu_Item {
+	h := &app.history_window.history
+	app.tray_recent_version = h.version + 1
+	app.tray_recent = {}
+	out := make([dynamic]platform.Tray_Menu_Item, 0, TRAY_RECENT_MAX, context.temp_allocator)
+	for i := len(h.entries) - 1; i >= 0 && len(out) < TRAY_RECENT_MAX; i -= 1 {
+		e := h.entries[i]
+		app.tray_recent[len(out)] = e.id
+		append(&out, platform.Tray_Menu_Item{id = TRAY_RECENT_ID + len(out), text = fmt.tprintf("%s (%s)", history_first_words(history_name(e), 48), history_kind_text(e.kind))})
+	}
+	return out[:]
+}
+
+// A recent entry chosen in the tray: its address opened, else its file, else it is shown in the history (a text).
+tray_recent_chosen :: proc(app: ^App, place: int) {
+	if place < 0 || place >= TRAY_RECENT_MAX || app.tray_recent[place] == 0 { return }
+	e := history_find(&app.history_window.history, app.tray_recent[place])
+	switch {
+	case e == nil:                     return   // (removed since)
+	case e.url != "":                  ui.open(e.url, .Url)
+	case e.path != "" && !e.missing:   ui.open(e.path, .Path)
+	case:                              history_window_show(app, e.id)
+	}
 }
 
 // The preferences changed: fewer entries kept, another view, another size of thumbnails.
@@ -526,7 +591,8 @@ history_refresh :: proc(app: ^App) {
 	delete(hw.query)
 	hw.query = strings.clone(query)
 	delete(hw.shown)
-	hw.shown = history_shown(&hw.history, hw.query, hw.filter, hw.sort, hw.descending)
+	since := history_period_start(hw.period, i64(time.to_unix_nanoseconds(time.now()) / 1_000_000), hw.offset_minutes)
+	hw.shown = history_shown(&hw.history, hw.query, hw.filter, hw.sort, hw.descending, since_ms = since)
 	resize(&hw.shown_ids, len(hw.shown))
 	for p, i in hw.shown { hw.shown_ids[i] = hw.history.entries[p].id }
 	hw.shown_version = hw.history.version
@@ -546,7 +612,7 @@ history_toolbar :: proc(app: ^App, em: f32) {
 	views := [2]string{i18n.tr("Grid"), i18n.tr("List")}
 	// (each segmented control is as wide as its words need, ui.segmented's own width: the layout reads it first)
 	segments_w := ui.segmented_width(slice.enumerated_array(&filters)) + ui.segmented_width(sizes[:]) + ui.segmented_width(views[:])
-	tools_w := segments_w + em * (0.8 + 0.8 + 0.6 + 0.6 + 5 * 2.1 + 0.6)
+	tools_w := segments_w + em * (0.8 + 0.8 + 0.6 + 0.6 + 6 * 2.1 + 0.6)
 	placeholder := i18n.tr("Search names, texts, URLs")
 	search_min := max(em * HISTORY_SEARCH_MIN_EM, ui.text_width(ui.top_style().font, em, placeholder) + em * 2.5)
 	// (the search beside the tools while its placeholder fits, as the last layout measured the window; else the tools go
@@ -604,6 +670,8 @@ history_tools :: proc(app: ^App, filters, sizes, views: []string, em: f32) {
 		if view == 0 { history_action(app, .Grid) } else { history_action(app, .List) }
 	}
 	ui.spacer(ui.px(em * 0.6))
+	// (the date's filter in a menu: four choices would make the bar too wide; the tip says the one in use)
+	if history_icon_button("period", lucide.CALENDAR, fmt.tprintf("%s: %s", i18n.tr("Date"), i18n.tr(HISTORY_PERIOD_TEXT[hw.period])), em) { history_action(app, .Period) }
 	// (the keys in the tooltips as the keyboards of the language name them)
 	if history_icon_button("preview", lucide.EYE, ui.key_tip(hw.preview_open ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}}), em) { history_action(app, .Preview) }
 	if history_icon_button("folder", lucide.FOLDER_OPEN, i18n.tr("Open the save folder"), em) { history_action(app, .Open_Folder) }
@@ -635,7 +703,7 @@ history_main :: proc(app: ^App, em: f32) {
 	if len(hw.shown_ids) == 0 {
 		if ui.empty_state("nothing", {icon = lucide.SEARCH, title = i18n.tr("Nothing matches"), note = i18n.tr("No capture has these words, or is of this kind."), actions = {{text = i18n.tr("Clear the search"), icon = lucide.X}}}) == 0 {
 			ui.line_edit_set(&hw.search, "")
-			hw.filter = .All
+			hw.filter, hw.period = .All, .Any
 			hw.shown_due = true
 		}
 		return
@@ -774,7 +842,7 @@ history_cell_picture :: proc(app: ^App, e: History_Entry, cell, em: f32) {
 		return
 	}
 	glyph := e.kind == .Video || e.kind == .Gif ? lucide.FILM : lucide.IMAGE
-	if e.missing { glyph = lucide.FILE }
+	if e.missing || e.kind == .File { glyph = lucide.FILE }
 	ui.next({width = ui.px(cell), height = ui.px(cell), font = hw.icons, font_size = math.round(em * 2.4), text_align = .Center, fg = ui.color("weak text")})
 	ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###thumb", glyph))
 }
@@ -804,7 +872,7 @@ history_thumb :: proc(app: ^App, e: History_Entry) -> ^History_Texture {
 	if e.path == "" || e.missing || hw.thumbs_asked >= HISTORY_THUMBS_IN_FLIGHT { return nil }
 	hw.thumbs[e.id] = {state = .Asked, seen = hw.frame}
 	hw.thumbs_asked += 1
-	picture := e.kind == .Region || e.kind == .Screen || e.kind == .Window
+	picture := history_kind_picture(e.kind)
 	worker_send(&app.worker, Job_History(History_Thumb_Ask{id = e.id, path = strings.clone(e.path), size = HISTORY_THUMB_ASK, picture = picture}))
 	return &hw.thumbs[e.id]
 }
@@ -915,10 +983,11 @@ history_table_lead :: proc(t: ^ui.Table, row: int, size: f32) {
 	}
 	glyph := lucide.IMAGE
 	switch e.kind {
-	case .Region, .Screen, .Window: glyph = lucide.IMAGE
-	case .Video, .Gif:              glyph = lucide.FILM
-	case .Qr:                       glyph = lucide.QR_CODE
-	case .Text:                     glyph = lucide.FILE_TEXT
+	case .Region, .Screen, .Window, .Picture: glyph = lucide.IMAGE
+	case .Video, .Gif:                        glyph = lucide.FILM
+	case .Qr:                                 glyph = lucide.QR_CODE
+	case .Text:                               glyph = lucide.FILE_TEXT
+	case .File:                               glyph = lucide.FILE
 	}
 	if e.missing { glyph = lucide.FILE }
 	// (no thumbnail, or not yet: the kind's icon where it will be, so the text does not move when it comes)
@@ -939,7 +1008,7 @@ history_preview_pane :: proc(app: ^App, em: f32) {
 			ui.empty_state("no_preview", {icon = lucide.EYE, title = i18n.tr("Nothing selected"), note = i18n.tr("Select a capture to see it here.")})
 			return
 		}
-		picture := e.kind == .Region || e.kind == .Screen || e.kind == .Window
+		picture := history_kind_picture(e.kind)
 		ui.next({width = ui.fill(), height = ui.fill()})
 		switch {
 		case picture && !e.missing:
@@ -1061,6 +1130,14 @@ history_menu :: proc(app: ^App, em: f32) {
 			if ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), false, c.icon, a not_in enabled, icon_font = hw.icons).clicked { history_action(app, a) }
 		}
 	}
+	if ui.menu(HISTORY_PERIOD_MENU_ID, em * 13) {
+		for text, p in HISTORY_PERIOD_TEXT {
+			if ui.menu_item(i18n.tr(text), "", p == hw.period, "", false, icon_font = hw.icons).clicked && p != hw.period {
+				hw.period = p
+				hw.shown_due = true
+			}
+		}
+	}
 }
 
 // The palette's table: the history's actions, the settings' actions, every setting, then the Workflows mode's actions
@@ -1154,27 +1231,30 @@ history_enabled :: proc(app: ^App) -> History_Actions {
 		hw.enabled = window
 		return window
 	}
-	out := window + {.Preview, .Search}
+	out := window + {.Preview, .Search, .Period}
 	if app.settings.history_view == .Grid { out += {.List} } else { out += {.Grid} }
 	if len(hw.shown_ids) > 0 { out += {.Select_All} }
 	if len(hw.selection.marked) > 0 { out += {.Remove} }
+	pictures := 0
 	for id in hw.selection.marked {
 		e := history_find(&hw.history, id)
 		if e == nil { continue }
 		if e.path != "" { out += {.Copy_Path} }
-		if e.path != "" && !e.missing { out += {.Open, .Reveal, .Delete_File} }
-		if history_is_picture(e^) && !e.missing { out += {.Upload} }
-		if e.url != "" { out += {.Copy_Url} }
+		// (any file goes up again as it is: the host's answer, not cliche, says whether it takes it)
+		if e.path != "" && !e.missing { out += {.Open, .Reveal, .Delete_File, .Upload} }
+		if e.url != "" { out += {.Copy_Url, .Open_Url} }
 		if e.text != "" { out += {.Copy_Text} }
+		if history_is_picture(e^) && !e.missing { pictures += 1 }
 	}
-	if e := history_find(&hw.history, hw.selection.focus); e != nil && history_is_picture(e^) && !e.missing { out += {.Copy_Picture, .Edit} }
+	if pictures >= 2 { out += {.Combine_Side, .Combine_Stack} }
+	if e := history_find(&hw.history, hw.selection.focus); e != nil && history_is_picture(e^) && !e.missing { out += {.Copy_Picture, .Edit, .Pin} }
 	hw.enabled = out
 	return out
 }
 
 @(private = "file")
 history_is_picture :: proc(e: History_Entry) -> bool {
-	return e.path != "" && (e.kind == .Region || e.kind == .Screen || e.kind == .Window)
+	return e.path != "" && history_kind_picture(e.kind)
 }
 
 @(private = "file")
@@ -1210,13 +1290,34 @@ history_action :: proc(app: ^App, a: History_Action) {
 		history_copy_text(app, ids, proc(e: ^History_Entry) -> string { return e.text }, "\n\n", i18n.tr("The text is on the clipboard"), i18n.tr("The texts are on the clipboard"))
 	case .Edit:
 		editor_open_file(app, focus.path)
+	case .Pin:
+		pin_picture(app, focus.path)
+	case .Open_Url:
+		opened := 0
+		for id in ids {
+			e := history_find(&hw.history, id)
+			if e == nil || e.url == "" { continue }
+			ui.open(e.url, .Url)
+			opened += 1
+			if opened == HISTORY_OPEN_MAX { break }
+		}
 	case .Upload:
 		for id in ids {
 			e := history_find(&hw.history, id)
-			if e == nil || !history_is_picture(e^) || e.missing { continue }
+			if e == nil || e.path == "" || e.missing { continue }
 			worker_send(&app.worker, Job_History(History_Upload{id = e.id, path = strings.clone(e.path), uploader = strings.clone(app.settings.uploader)}))
 		}
 		history_status(hw, i18n.tr("Uploading…"))
+	case .Combine_Side, .Combine_Stack:
+		// (in the order shown: the person sees which comes first)
+		paths := make([dynamic]string, 0, len(ids))
+		for id in ids {
+			if e := history_find(&hw.history, id); e != nil && history_is_picture(e^) && !e.missing { append(&paths, strings.clone(e.path)) }
+		}
+		worker_send(&app.worker, Job_Combine{paths = paths[:], vertical = a == .Combine_Stack, folder = strings.clone(app.settings.folder), pattern = strings.clone(app.settings.name_pattern)})
+		history_status(hw, i18n.tr("Combining the pictures…"))
+	case .Period:
+		ui.menu_open(HISTORY_PERIOD_MENU_ID, ui.mouse_pos())
 	case .Delete_File:
 		clear(&hw.delete_ids)
 		for id in ids {

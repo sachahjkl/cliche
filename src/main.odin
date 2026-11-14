@@ -28,6 +28,8 @@ USAGE :: `cliche: screenshots
   cliche --record             record a region as an MP4 video; the same command again stops it
   cliche --record-gif         record a region as an animated GIF; the same command again stops it
   cliche --edit               capture a region and open it in the editor
+  cliche --upload-clipboard   upload what the clipboard holds (a picture, files or a text): its workflow runs
+  cliche --upload-file        choose files to upload: its workflow runs on each
   cliche --history            show the captures kept
   cliche --workflows          edit what happens after each capture
   cliche --settings           open the settings

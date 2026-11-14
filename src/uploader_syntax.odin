@@ -6,7 +6,7 @@ package cliche
 //
 // What each name gives here:
 //   filename                 the file's name (URL-encoded in an address)
-//   input                    "" (cliche uploads files: there is no text input)
+//   input                    the text sent: the address a URL shortener shortens ("" for a file; URL-encoded in an address)
 //   random:a|b|c             one of them
 //   select:a|b|c             the first (cliche shows no window to choose)
 //   inputbox:title|default   the default text (no window either)
@@ -43,6 +43,7 @@ Answer :: struct {
 // What the syntax of one text reads.
 Syntax :: struct {
 	file_name:  string,
+	input:      string,    // the text sent: the address a shortener shortens ("" for a file)
 	url_encode: bool,      // {filename} and {input} percent-encoded: the text is an address
 	answer:     ^Answer,   // nil: the request is being built, there is no answer yet
 }
@@ -122,7 +123,7 @@ call :: proc(e: ^Expander, name: string, params: []string) -> string {
 	}
 	switch n {
 	case "filename":    return s.url_encode ? url_encode(s.file_name) : s.file_name
-	case "input":       return ""
+	case "input":       return s.url_encode ? url_encode(s.input) : s.input
 	case "random":
 		if len(params) == 0 { return fail(e, i18n.tr("{random} needs values: {random:a|b}")) }
 		return rand.choice(params)

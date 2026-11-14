@@ -24,6 +24,11 @@ Job_Grab      :: struct { source: Source, delay_ms: int, cursor: bool, rect: Rec
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
 Job_Save      :: struct { editor: u64, shot: Shot, folder, pattern: string }   // an editor's Ctrl+S (Editor.id); owned by the job
 Job_Copy_Encode :: struct { editor: u64, shot: Shot }         // an editor's Ctrl+C (Editor.id): its PNG for the clipboard, made here (owned)
+// An editor's Save as (Editor.id): the picture to `path` in `format` (quality: JPEG and WebP); owned by the job.
+Job_Save_As   :: struct { editor: u64, shot: Shot, path: string, format: Save_Format, quality: int }
+// An editor's Upload (Editor.id): the picture to the host named `uploader` ("": the built-in one), the file's name from
+// `pattern`; owned by the job.
+Job_Upload    :: struct { editor: u64, shot: Shot, uploader, pattern: string }
 Job_Write     :: struct { path, text: string }                // a file written whole (the preferences, the workflows); owned
 Job_Workflows_Load :: struct {}                               // the workflows' file, read at the start (workflow_store.odin)
 Job_Picture_Load :: struct { path: string, workflow: u64 }    // a PNG of the history decoded, for a preview run of `workflow`; owned
@@ -34,7 +39,7 @@ Job_Integrate :: struct { menu, autostart: bool }             // cliche's launch
 Job_Setup_Facts :: struct {}                                  // whether this cliche is the installed copy (updates.odin)
 Job_Setup_Updated :: struct { version: string }               // an update in place: the install's manifest and record say it (owned)
 
-Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Setup_Facts, Job_Setup_Updated }
+Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Save_As, Job_Upload, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Setup_Facts, Job_Setup_Updated, Job_Run_Input, Job_Combine }
 
 // The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
@@ -56,8 +61,12 @@ Result_Shot :: struct { error: Flow_Error, shot: Shot }
 // An editor's Ctrl+C (`editor`: its Editor.id): the picture and its PNG, which the interface's thread puts on the clipboard (owned).
 Result_Copy_Encoded :: struct { editor: u64, shot: Shot, png: []u8 }
 
-// An editor's Ctrl+S is written (`editor`: its Editor.id; save.odin's Saved, its path owned).
+// An editor's Ctrl+S or Save as is written (`editor`: its Editor.id; save.odin's Saved, its strings owned).
 Result_Saved :: struct { editor: u64, using saved: Saved }
+
+// An editor's Upload is done (`editor`: its Editor.id): the address (owned, "" when it failed), why not (owned), the
+// picture's size and its source (the history's entry).
+Result_Uploaded :: struct { editor: u64, url, problem: string, size: [2]int, source: Source }
 
 // The workflows read (workflow_store.odin): the list (owned), and why the file could not be used ("" none; owned).
 Result_Workflows :: struct { workflows: Workflows, problem: string }
@@ -65,8 +74,9 @@ Result_Workflows :: struct { workflows: Workflows, problem: string }
 // A picture of the history decoded for a preview run of `workflow` (owned; ok false: it cannot be read).
 Result_Picture :: struct { shot: Shot, workflow: u64, ok: bool }
 
-// The uploaders found (owned) and what was wrong with the others; `imported`: the name of one just imported.
-Result_Uploaders :: struct { names: []string, problems: []string, imported: string, import_problem: string }
+// The uploaders found (owned): the hosts, the URL shorteners, and what was wrong with the others; `imported`: the name of
+// one just imported.
+Result_Uploaders :: struct { names: []string, shorteners: []string, problems: []string, imported: string, import_problem: string }
 
 Result_Written :: struct { ok: bool, path: string }   // (path owned)
 
@@ -79,7 +89,7 @@ Result_Setup_Facts :: struct { installed: bool }
 // A capture's delay counted down: `seconds` left before the picture (0: it is taken now, the countdown's notice goes).
 Result_Countdown :: struct { seconds: int }
 
-Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders, Result_Setup_Facts, Result_Countdown }
+Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Uploaded, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders, Result_Setup_Facts, Result_Countdown, Result_Run_Input, Result_Combined }
 
 Worker :: struct {
 	pool:      tasks.Pool,
@@ -202,6 +212,12 @@ worker_do :: proc(w: ^Worker, j: Job) {
 	case Job_Save:
 		job := v
 		worker_post(w, Result_Saved{editor = v.editor, saved = save_shot(&job)})
+	case Job_Save_As:
+		job := v
+		worker_post(w, Result_Saved{editor = v.editor, saved = save_as_shot(&job)})
+	case Job_Upload:
+		job := v
+		worker_post(w, editor_upload_work(&job))
 	case Job_Thumbnail:
 		job := v
 		worker_post(w, thumbnail_work(&job))
@@ -214,6 +230,12 @@ worker_do :: proc(w: ^Worker, j: Job) {
 	case Job_Node:
 		job := v
 		worker_post(w, node_work(&job, &w.fonts))
+	case Job_Run_Input:
+		job := v
+		worker_post(w, run_input_work(&job))
+	case Job_Combine:
+		job := v
+		worker_post(w, combine_work(&job))
 	case Job_Workflows_Load:
 		list, problem := workflows_load()
 		worker_post(w, Result_Workflows{list, problem})
@@ -300,11 +322,22 @@ job_free :: proc(j: ^Job) {
 		shot_free(&v.shot)
 		delete(v.folder)
 		delete(v.pattern)
+	case Job_Save_As:
+		shot_free(&v.shot)
+		delete(v.path)
+	case Job_Upload:
+		shot_free(&v.shot)
+		delete(v.uploader)
+		delete(v.pattern)
 	case Job_Write:
 		delete(v.path)
 		delete(v.text)
 	case Job_Node:
 		job_node_free(&v)
+	case Job_Run_Input:
+		job_run_input_free(&v)
+	case Job_Combine:
+		job_combine_free(&v)
 	case Job_Picture_Load:
 		delete(v.path)
 	case Job_Import_Uploader:
@@ -322,10 +355,13 @@ result_free :: proc(r: ^Result) {
 	#partial switch &v in r {
 	case Result_Desktop: desktop_free(&v)
 	case Result_Shot:    shot_free(&v.shot)
-	case Result_Saved:   delete(v.path)
+	case Result_Saved:   delete(v.path); delete(v.problem)
+	case Result_Uploaded: delete(v.url); delete(v.problem)
 	case Result_Copy_Encoded: shot_free(&v.shot); delete(v.png)
 	case Result_Thumbnail: delete(v.thumbnail)
 	case Result_Node:    result_node_free(&v)
+	case Result_Run_Input: result_run_input_free(&v)
+	case Result_Combined: result_combined_free(&v)
 	case Result_Workflows: workflows_free(&v.workflows); delete(v.problem)
 	case Result_Picture: shot_free(&v.shot)
 	case Result_Uploaders: uploaders_result_free(&v)
@@ -369,8 +405,7 @@ windows_clone :: proc(wins: []capture.Window) -> []capture.Window {
 @(private = "file")
 uploaders_result :: proc(imported, import_problem: string) -> Result_Uploaders {
 	list, problems := uploaders_load(context.temp_allocator)
-	r := Result_Uploaders{names = make([]string, len(list)), problems = make([]string, len(problems))}
-	for u, i in list { r.names[i] = strings.clone(u.name) }
+	r := Result_Uploaders{names = uploaders_names(list, shorteners = false), shorteners = uploaders_names(list, shorteners = true), problems = make([]string, len(problems))}
 	for p, i in problems { r.problems[i] = strings.clone(p) }
 	r.imported = strings.clone(imported)
 	r.import_problem = strings.clone(import_problem)
@@ -380,6 +415,8 @@ uploaders_result :: proc(imported, import_problem: string) -> Result_Uploaders {
 uploaders_result_free :: proc(r: ^Result_Uploaders) {
 	for n in r.names { delete(n) }
 	delete(r.names)
+	for n in r.shorteners { delete(n) }
+	delete(r.shorteners)
 	for p in r.problems { delete(p) }
 	delete(r.problems)
 	delete(r.imported)

@@ -352,8 +352,9 @@ paint_mosaic :: proc(dc: ^draw.Context, p: ^Edit_Paint, box: Edit_Box, cell_px: 
 ////////////////////////////////
 // The export
 
-// What the flattened picture is for.
-Edit_Export_Purpose :: enum u8 { Done, Copy, Save }
+// What the flattened picture is for: the workflow (Done), the clipboard, a file (Save: the default folder; Save_As: the
+// file chosen in the system's dialog), a host (Upload), a window over the others (Pin), paper (Print).
+Edit_Export_Purpose :: enum u8 { Done, Copy, Save, Save_As, Upload, Pin, Print }
 
 Edit_Tile :: struct {
 	id:     render.Readback_Id,

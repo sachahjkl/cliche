@@ -11,16 +11,18 @@ INSTANCE_NAME :: "cliche.main"
 SEND_WAIT_MS  :: 1000
 ACQUIRE_WAIT_MS :: 1500
 
-Verb :: enum u8 { Ping, Region, Screen, Window, All_Screens, Last_Region, Color, Qr, Ocr, Record, Record_Gif, Edit, History, Workflows, Settings, Setup, Quit }
+Verb :: enum u8 { Ping, Region, Screen, Window, All_Screens, Last_Region, Color, Qr, Ocr, Record, Record_Gif, Edit, Upload_Clipboard, Upload_File, History, Workflows, Settings, Setup, Quit }
 
+// (the two uploads' words are their triggers' too: TRIGGER_NAMES)
 VERB_NAMES := [Verb]string{
 	.Ping = "ping", .Region = "region", .Screen = "screen", .Window = "window", .All_Screens = "all-screens", .Last_Region = "last-region", .Color = "color",
-	.Qr = "qr", .Ocr = "ocr", .Record = "record", .Record_Gif = "record-gif", .Edit = "edit", .History = "history", .Workflows = "workflows", .Settings = "settings", .Setup = "setup", .Quit = "quit",
+	.Qr = "qr", .Ocr = "ocr", .Record = "record", .Record_Gif = "record-gif", .Edit = "edit", .Upload_Clipboard = "upload-clipboard", .Upload_File = "upload-file",
+	.History = "history", .Workflows = "workflows", .Settings = "settings", .Setup = "setup", .Quit = "quit",
 }
 
 // The verbs whose window takes the keyboard: the launcher's activation token goes with them (Wayland). (The last region
 // opens the region's overlay when none was chosen yet.)
-VERBS_WITH_TOKEN :: bit_set[Verb]{.Region, .Last_Region, .Color, .Qr, .Ocr, .Record, .Record_Gif, .Edit, .History, .Workflows, .Settings, .Setup}
+VERBS_WITH_TOKEN :: bit_set[Verb]{.Region, .Last_Region, .Color, .Qr, .Ocr, .Record, .Record_Gif, .Edit, .Upload_File, .History, .Workflows, .Settings, .Setup}
 
 Command :: struct {
 	verb:  Verb,
