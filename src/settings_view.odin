@@ -12,7 +12,6 @@ package cliche
 // its choices, the lines under the save folder's name and the file name, and what is under the pages (the folder, the
 // uploaders, the commands). The licence is the toolkit's Licence page.
 
-import "base:runtime"
 import "core:fmt"
 import "core:math"
 import "core:slice"
@@ -119,30 +118,8 @@ settings_build :: proc(app: ^App, em: f32) {
 	prefs_page.build(&m.page, &app.prefs, o)
 }
 
-// The palette's part of the settings: cliche's actions the history lacks, then every preference (`names`: the
-// preferences' names, in their order after the actions), in `allocator`. Its disabled actions: settings_palette_disable.
-settings_palette :: proc(app: ^App, allocator: runtime.Allocator) -> (commands: []ui.Command, names: []string) {
-	actions := slice.enumerated_array(&SETTINGS_ACTIONS)
-	prefs, pref_names := prefs_page.palette_commands(&app.prefs, settings_options(app), allocator)
-	commands = slice.concatenate([][]ui.Command{actions, prefs}, allocator)
-	names = make([]string, len(pref_names), allocator)
-	for n, i in pref_names { names[i] = strings.clone(n, allocator) }
-	return commands, names
-}
-
-// The settings' actions that cannot act now, in `disabled` (one per Settings_Action, first): the preferences after them
-// always can.
-settings_palette_disable :: proc(app: ^App, disabled: []bool) {
-	for a in Settings_Action { disabled[int(a)] = !settings_action_enabled(app, a) }
-}
-
-// The palette's choice `i` in settings_palette's list: an action, or a preference shown alone on the settings.
-settings_palette_chosen :: proc(app: ^App, i: int, names: []string) {
-	if i < len(Settings_Action) { settings_action(app, Settings_Action(i)); return }
-	settings_enter(app)
-	m := &app.history_window.settings_mode
-	prefs_page.show(&m.page, &app.prefs, settings_options(app), names[i - len(Settings_Action)])
-}
+// (the settings in the palette are the toolkit's settings source, prefs_page.palette_settings_add: history_palette_feed;
+// cliche's actions of the settings are commands of the window's palette)
 
 settings_action_enabled :: proc(app: ^App, a: Settings_Action) -> bool {
 	#partial switch a {

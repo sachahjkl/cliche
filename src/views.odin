@@ -34,22 +34,8 @@ views_start :: proc(app: ^App, path: string) {
 	editor_views_register(app)
 }
 
-// A window opened: its State builds its views from the program's.
+// A window opened: its State builds its views from the program's. (The moves of a window's views in its palette are
+// the toolkit's source, beside the commands: ui.palette_commands.)
 views_window :: proc(app: ^App, h: ^host.Host) {
 	ui.set_views(&h.state, &app.views)
-}
-
-// The moves of the views a window lists in its palette (float, dock, open in a window, re-attach, close): `vc` holds
-// those of the views that window owns (views_commands_update with its State). The palettes' own are left out: a
-// palette is open while it lists them. In `allocator`; their strings are vc's: the palette's table is made again when
-// vc is.
-views_moves :: proc(vc: ^ui.View_Commands, allocator := context.allocator) -> (commands: []ui.Command, acts: []ui.View_Command) {
-	out := make([dynamic]ui.Command, 0, len(vc.commands), allocator)
-	out_acts := make([dynamic]ui.View_Command, 0, len(vc.acts), allocator)
-	for c, i in vc.commands {
-		if vc.acts[i].id == ui.PALETTE_VIEW { continue }
-		append(&out, c)
-		append(&out_acts, vc.acts[i])
-	}
-	return out[:], out_acts[:]
 }

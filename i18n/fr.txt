@@ -271,9 +271,6 @@ fr Fermer l'éditeur
 en Window
 fr Fenêtre
 
-en Command palette
-fr Palette de commandes
-
 en Keyboard shortcuts
 fr Raccourcis clavier
 
@@ -997,6 +994,12 @@ fr Les fichiers restent.
 
 en cliche's keys
 fr Les touches de cliche
+
+en Captures
+fr Captures
+
+en Show
+fr Afficher
 
 en Pinned picture
 fr Image épinglée
@@ -2021,9 +2024,6 @@ fr Titre
 
 en Said for you: "Screenshot saved"
 fr Écrit pour vous : « Capture d'écran enregistrée »
-
-en Show
-fr Afficher
 
 en What comes in
 fr Ce qui arrive

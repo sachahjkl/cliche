@@ -25,6 +25,8 @@ documentation (`README.md` at the root) and not the map of the code (`docs/archi
   folds away
 - [features/history-selection.md](features/history-selection.md): the history's selection, the toolkit's, one for the
   grid and the list; what acts on several entries, what on the cursor's
+- [features/palette.md](features/palette.md): the command palettes, the toolkit's, fed by cliche's sources (`@` the
+  captures, `#` the workflows, the add palette as a chooser)
 - [features/title-bar.md](features/title-bar.md): cliche's own title bar on its normal windows, the system's as a
   setting; which windows have one
 - [features/views.md](features/views.md): the dialogs and the preview as gui_toolkit's views; several windows owning

@@ -75,7 +75,7 @@ Editor_Action :: enum u8 {
 	Rotate_Right, Rotate_Left, Rotate_Half, Flip_Across, Flip_Down, Resize, Canvas, Auto_Crop,
 	Zoom_In, Zoom_Out, Zoom_Fit, Zoom_Actual,
 	Copy, Save, Save_As, Upload, Pin, Print, Done,
-	Close, Palette, Keys,
+	Close, Keys,
 	Nudge,
 }
 
@@ -136,7 +136,6 @@ EDITOR_ACTIONS := [Editor_Action]ui.Command{
 	.Print            = {label = i18n.later("Print the picture"), group = i18n.later("Picture"), keys = {{.P, {.Ctrl}}}, icon = lucide.PRINTER, tags = {"paper", "printer", "page"}},
 	.Done             = {label = i18n.later("Done: the workflow goes on"), group = i18n.later("Picture"), keys = {{.Return, {}}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
 	.Close            = {label = i18n.later("Close the editor"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}, scope = .Window},
-	.Palette          = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}, scope = .Window},
 	.Keys             = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
 	.Nudge            = {label = i18n.later("Move the selection a pixel (arrows; with Shift, ten)"), group = i18n.later("Edit"), keys = {{.Left, {}}, {.Left, {.Shift}}}, icon = lucide.MOUSE_POINTER_2, tags = {"nudge"}},
 }
@@ -248,10 +247,11 @@ Editor :: struct {
 	visible:     bool,
 	icons:       font.Font_Id,
 	theme_shown: ui.Theme_Shown,
+	// the palette: its commands (every action but Nudge) and the moves of the editor's views, the toolkit's sources
 	palette:     ui.Command_Palette,
-	palette_table: Palette_Table,  // what the palette lists (editor_palette_keep)
-	palette_views: u64,            // the views' moves it was made with (View_Commands.serial)
-	view_cmds:   ui.View_Commands, // the views' moves, made again only when the views or the language change
+	palette_disabled: [len(Editor_Action) - 1]bool,   // what cannot act now, as the commands source was last given it
+	palette_can: bit_set[Editor_Action],               // what `palette_disabled` says
+	palette_version: u64,                              // raised when it changes
 	sheet:       ui.Shortcuts_Sheet,
 	drop_due:    bool,       // the question before the changes are dropped opens at the next build
 	close_due:   bool,       // closed in a frame: acted on after it (editor_after_frame)
@@ -445,6 +445,8 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 	}
 	app_standard_follow(app, &ed.host)
 	views_window(app, &ed.host)
+	// (the editors' choices in the palette, their Recent: one file for every editor)
+	ui.palette_memory_open(&ed.palette, &ed.host.state, palette_choices_path(EDITOR_PALETTE_CHOICES_FILE, headless))
 	ed.name = fmt.aprintf("%s%d", EDITOR_INSTANCE, ed.id)   // (its views' instances: two editors' dialogs side by side)
 	ed.host.input = editor_input
 	ed.host.close_asked = editor_host_close
@@ -589,19 +591,17 @@ editor_window :: proc(app: ^App, id: u64) -> ^host.Host {
 	return ed != nil && ed.visible ? &ed.host : nil
 }
 
-// The texture goes with the renderer: before the windows close.
+// The texture goes with the renderer, and the palette before its window's State: before the windows close.
 editor_destroy :: proc(ed: ^Editor) {
 	editor_picture_drop(ed)
 	if ed.tex != 0 { render.destroy_texture(&ed.app.shared.r, ed.tex) }
 	ed.tex = 0
+	ui.palette_destroy(&ed.palette)   // (its usage memory written)
 }
 
 editor_free :: proc(ed: ^Editor) {
 	editor_load_stop(ed)
 	editor_picture_drop(ed)
-	ui.palette_destroy(&ed.palette)
-	palette_table_destroy(&ed.palette_table)
-	ui.views_commands_destroy(&ed.view_cmds)
 	ui.shortcuts_sheet_destroy(&ed.sheet)
 	delete(ed.name)
 	ui.text_edit_destroy(&ed.field)
@@ -1302,7 +1302,7 @@ handle_cursor :: proc(h: Edit_Handle) -> platform.Cursor {
 @(private = "file")
 editor_action_enabled :: proc(ed: ^Editor, a: Editor_Action) -> bool {
 	m := &ed.model
-	if !ed.has_picture || ed.exporting || ed.export_wait || ed.done_due { return a == .Close || a == .Palette || a == .Keys }
+	if !ed.has_picture || ed.exporting || ed.export_wait || ed.done_due { return a == .Close || a == .Keys }
 	#partial switch a {
 	case .Undo:                         return edit_can_undo(m)
 	case .Redo:                         return edit_can_redo(m)
@@ -1363,7 +1363,6 @@ editor_action :: proc(ed: ^Editor, a: Editor_Action) {
 	case .Print:       editor_export_start(ed, .Print)
 	case .Done:        editor_export_start(ed, .Done)
 	case .Close:       editor_close_asked(ed)
-	case .Palette:     editor_palette_show(ed)
 	case .Keys:        ui.shortcuts_sheet_open(&ed.sheet, slice.enumerated_array(&EDITOR_ACTIONS), i18n.tr("The editor's keys"))
 	case .Nudge:       edit_nudge(m, {1, 0})
 	}
@@ -1483,7 +1482,10 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 
 	// (the window's commands first: the palette, the keys, close, whatever has the keyboard (a shape's text, the colour's
 	// field), during an export and over a dialog too; not while a menu is open: its keys are its own until it closes)
+	// (the palette given what can act now, then its keys: Ctrl+K and Ctrl+Shift+P are the toolkit's)
+	editor_palette_feed(ed)
 	if !ui.menu_any_open() {
+		ui.palette_keys(&ed.palette)
 		for a in Editor_Action {
 			if EDITOR_ACTIONS[a].scope != .Window { continue }
 			if ui.command_pressed(EDITOR_ACTIONS[a], !editor_action_enabled(ed, a)) { editor_action(ed, a); break }
@@ -2046,54 +2048,34 @@ editor_views_open :: proc(ed: ^Editor) -> bool {
 		ui.view_is_open(vs, EDITOR_DROP_VIEW, ed.name) || ui.view_is_open(vs, EDITOR_SIZE_VIEW, ed.name)
 }
 
-// The palette's table: every action but Nudge (its keys are the arrows), then the moves of the editor's own views
-// (another window's are not this one's). Made again only when the views or the language change. True: it was.
+// What the palette lists: every action but Nudge (its keys are the arrows), the toolkit's commands source, with the moves
+// of the editor's own views beside it. At the top of each build: the source compares a version only, raised when what can
+// act changes (a set compared, no pass over the table). (The editor's selection is its shapes', not an Item_Selection:
+// what can act is a fixed number of checks of the model, made each build.) The palette's own command is the toolkit's,
+// in the sheet and in the palette: the table has no line of it.
 @(private = "file")
-editor_palette_keep :: proc(ed: ^Editor) -> bool {
-	_ = ui.views_commands_update(&ed.view_cmds, &ed.app.views, owner = &ed.host.state)
-	t := &ed.palette_table
-	if t.version != 0 && ed.palette_views == ed.view_cmds.serial { return false }
-	ed.palette_views = ed.view_cmds.serial
-	a := palette_table_remake(t)
+editor_palette_feed :: proc(ed: ^Editor) {
+	can: bit_set[Editor_Action]
+	for a in Editor_Action { if editor_action_enabled(ed, a) { can += {a} } }
+	if can != ed.palette_can || ed.palette_version == 0 {
+		ed.palette_can = can
+		ed.palette_version += 1
+		for &d, i in ed.palette_disabled { d = Editor_Action(i) not_in can }
+	}
 	all := slice.enumerated_array(&EDITOR_ACTIONS)
-	moves, acts := views_moves(&ed.view_cmds, a)
-	t.commands = slice.concatenate([][]ui.Command{all[:len(all) - 1], moves}, a)
-	t.disabled = make([]bool, len(t.commands), a)
-	t.acts = acts
-	return true
+	ui.palette_commands(&ed.palette, all[:len(all) - 1], ed.palette_disabled[:], {version = ed.palette_version})
 }
 
-// What the palette lists, given to it when its table was made again, when what can act changed, or with `force`.
-@(private = "file")
-editor_palette_give :: proc(ed: ^Editor, force: bool) {
-	t := &ed.palette_table
-	made := editor_palette_keep(ed)
-	disabled := make([]bool, len(t.disabled), context.temp_allocator)
-	for i in 0 ..< len(Editor_Action) - 1 { disabled[i] = !editor_action_enabled(ed, Editor_Action(i)) }
-	if !made && !force && slice.equal(disabled, t.disabled) { return }
-	copy(t.disabled, disabled)
-	ui.palette_set(&ed.palette, t.commands, t.disabled, {version = t.version})
-}
-
-// The palette, on what can act now (Ctrl+K).
-@(private = "file")
-editor_palette_show :: proc(ed: ^Editor) {
-	editor_palette_give(ed, force = true)
-	ui.palette_open(&ed.palette)
-}
 
 // The answers of the editor's views (the palette's choice, the question before the changes are dropped, the size
-// dialog), its palette's table kept while it is open, and the question opened when a close asked for it.
+// dialog), and the question opened when a close asked for it.
 @(private = "file")
 editor_dialogs :: proc(ed: ^Editor) {
 	app := ed.app
-	t := &ed.palette_table
-	actions := len(Editor_Action) - 1
-	// (the choice is a line of the table it was made from: taken before the table is made again)
-	if i, _, ok := ui.palette_chosen(&ed.palette); ok && i < len(t.commands) {
-		if i < actions { editor_action(ed, Editor_Action(i)) } else { ui.views_command_run(&app.views, t.acts[i - actions]) }
+	// (a view's move acts in palette_chosen itself; a command is an index in the table: an action)
+	if c, ok := ui.palette_chosen(&ed.palette); ok {
+		if i, is := ui.palette_chosen_command(&ed.palette, c); is { editor_action(ed, Editor_Action(i)) }
 	}
-	if ui.palette_is_open(&ed.palette) { editor_palette_give(ed, force = false) }
 	if ed.drop_due {
 		ed.drop_due = false
 		ui.confirm_open(EDITOR_DROP_VIEW, {title = i18n.tr("Close the editor and drop the changes?"), note = i18n.tr("The annotations on this picture are lost. Nothing is copied or saved."), act = i18n.tr("Drop the changes")}, ed.name)

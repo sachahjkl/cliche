@@ -84,12 +84,14 @@ History_Texture :: struct {
 	seen:  u64,   // the last frame its entry was built
 }
 
-// What the main palette's table depends on.
-Palette_Key :: struct {
-	prefs:     u64,              // app.prefs.version + 1 (0: not made)
-	workflows: bool,             // the Workflows mode is shown: its actions are in the table
-	language:  u32,              // i18n.version(): a change of language makes it again
-	views:     u64,              // View_Commands.serial: the views' moves at its end
+// The palette's commands: the history's actions, the settings' actions, then the Workflows mode's (listed while it is
+// shown).
+HISTORY_PALETTE_COUNT :: len(History_Action) + len(Settings_Action) + len(Workflow_Action)
+
+// What can act now, as the palette's commands source was last given it: a change is a new version of the source.
+History_Palette_Can :: struct {
+	actions:  History_Actions,
+	settings: bit_set[Settings_Action],
 }
 
 History_Window :: struct {
@@ -99,12 +101,18 @@ History_Window :: struct {
 	hide_due:    bool,
 	icons:       font.Font_Id,
 	theme_shown: ui.Theme_Shown,
+	// the palette (src/palette.odin): the commands, the views' moves and the settings, the toolkit's; the captures and
+	// the workflows, cliche's
 	palette:     ui.Command_Palette,
-	palette_table: Palette_Table,     // the palette's commands (history_palette_keep)
-	palette_made:  Palette_Key,       // what they were made for
-	view_cmds:   ui.View_Commands,    // the views' moves, made again only when the views or the language change
+	palette_commands: [HISTORY_PALETTE_COUNT]ui.Command,   // the commands source's table (made once)
+	palette_disabled: [HISTORY_PALETTE_COUNT]bool,
+	palette_can:      History_Palette_Can,                 // what `palette_disabled` says
+	palette_version:  u64,                                 // raised when it changes
+	palette_settings: prefs_page.Palette_Settings,   // the settings source: its page options read when it reads
+	captures:    ui.Palette_Source,   // `@`
+	workflows_source: ui.Palette_Source,   // `#`
 	sheet:       ui.Shortcuts_Sheet,
-	sheet_table: Palette_Table,       // the sheet's commands (history_sheet_keep)
+	sheet_table: Command_Table,       // the sheet's commands (history_sheet_keep)
 	sheet_language: u32,          // i18n.version() they were made in
 
 	history:     History,         // the interface's copy (history.odin)
@@ -165,7 +173,7 @@ History_Window :: struct {
 // The actions of the palette, the menu, the sheet of keys.
 History_Action :: enum u8 {
 	Open, Open_Url, Reveal, Copy_Picture, Copy_Path, Copy_Url, Copy_Text, Edit, Pin, Upload, Combine_Side, Combine_Stack, Delete_File, Remove,
-	Preview, Select_All, Search, Period, Grid, List, Open_Folder, Capture_Region, Workflows, Settings, Palette, Keys, Close, Quit,
+	Preview, Select_All, Search, Period, Grid, List, Open_Folder, Capture_Region, Workflows, Settings, Keys, Close, Quit,
 }
 
 HISTORY_ACTIONS := [History_Action]ui.Command{
@@ -194,7 +202,6 @@ HISTORY_ACTIONS := [History_Action]ui.Command{
 	.Capture_Region = {label = i18n.later("Capture a region"), group = i18n.later("Window"), icon = lucide.IMAGE, tags = {"screenshot", "new"}},
 	.Workflows      = {label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}, scope = .Window},
 	.Settings       = {label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}, scope = .Window},
-	.Palette        = {label = i18n.later("Command palette"), group = i18n.later("Window"), keys = {{.K, {.Ctrl}}, {.P, {.Ctrl, .Shift}}}, icon = lucide.COMMAND, tags = {"actions", "search"}, scope = .Window},
 	.Keys           = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
 	.Close          = {label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"hide"}, scope = .Window},
 	.Quit           = {label = i18n.later("Quit cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}}, icon = lucide.POWER, tags = {"exit", "stop"}, scope = .Window},
@@ -381,6 +388,8 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw.grid.sel = -1
 	hw.grid.no_typeahead = true
 	hw.table.vl.no_typeahead = true
+	// (the palette remembers the choices of the commands, the settings, the captures and the workflows: its Recent)
+	ui.palette_memory_open(&hw.palette, &hw.host.state, palette_choices_path(PALETTE_CHOICES_FILE, headless))
 	app_wake_add(app, hw.host.win)
 	return true
 }
@@ -484,12 +493,13 @@ history_window_free :: proc(app: ^App) {
 	hw := &app.history_window
 	history_textures_drop(app)
 	delete(hw.thumbs)
-	ui.palette_destroy(&hw.palette)
+	ui.palette_destroy(&hw.palette)   // (its usage memory written)
+	// (the screenshots open the window again after this: its sources are added to the next palette)
+	hw.captures, hw.workflows_source, hw.palette_settings = {}, {}, {}
+	hw.palette_version = 0
 	ui.shortcuts_sheet_destroy(&hw.sheet)
-	ui.views_commands_destroy(&hw.view_cmds)
-	palette_table_destroy(&hw.palette_table)
-	palette_table_destroy(&hw.sheet_table)
-	hw.palette_made, hw.sheet_language = {}, 0   // (the screenshots open the window again after this)
+	command_table_destroy(&hw.sheet_table)
+	hw.sheet_language = 0
 	settings_mode_free(app)
 	workflow_mode_free(app)
 	ui.line_edit_destroy(&hw.search)
@@ -563,7 +573,12 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 			// (the window's own commands first, in every mode, whatever has the keyboard, over the window's views too (a
 			// question, the sheet, the palette); not while a menu is open: its keys, Escape and the letters that search
 			// it, are its own until it closes)
-			if !ui.menu_any_open() { history_window_keys(app) }
+			// (the palette's sources given what they list now, then its keys: Ctrl+K and Ctrl+Shift+P are the toolkit's)
+			history_palette_feed(app)
+			if !ui.menu_any_open() {
+				ui.palette_keys(&hw.palette)
+				history_window_keys(app)
+			}
 			if !dialog && workflows {
 				workflow_keys(app)
 			} else if !dialog && settings {
@@ -626,20 +641,92 @@ history_views_register :: proc(app: ^App) {
 
 // The palette's button at the right end of a mode's bar (the settings', the workflows'), as in the history's toolbar.
 history_palette_button :: proc(app: ^App, em: f32) {
-	if history_icon_button("palette", lucide.COMMAND, ui.key_tip(i18n.tr("Command palette"), {.K, {.Ctrl}}), em) { history_action(app, .Palette) }
+	if history_icon_button("palette", lucide.COMMAND, ui.command_tip(ui.palette_command()), em) { history_palette_show(app) }
 	ui.spacer(ui.px(em * 0.6))
 }
 
-// The palette's table as it is now, made again if what it lists changed (the tests read it).
-history_palette_commands :: proc(app: ^App) -> []ui.Command {
-	history_palette_keep(app)
-	return app.history_window.palette_table.commands
+// What the window's palette lists, given to its sources: at the top of each build, before its keys open it. The commands
+// source compares a version only, raised when what can act changes: two sets compared, the history's kept by
+// history_enabled on the selection's version (no pass over the table nor over the selection). The settings source is
+// added once: it reads its page options when it reads (settings_options).
+history_palette_feed :: proc(app: ^App) {
+	hw := &app.history_window
+	if hw.palette_commands[0].label == "" {
+		copy(hw.palette_commands[:], slice.enumerated_array(&HISTORY_ACTIONS))
+		copy(hw.palette_commands[len(History_Action):], slice.enumerated_array(&SETTINGS_ACTIONS))
+		copy(hw.palette_commands[len(History_Action) + len(Settings_Action):], slice.enumerated_array(&WORKFLOW_ACTIONS))
+	}
+	can := History_Palette_Can{actions = history_enabled(app)}
+	for a in Settings_Action { if settings_action_enabled(app, a) { can.settings += {a} } }
+	if can != hw.palette_can || hw.palette_version == 0 {
+		hw.palette_can = can
+		hw.palette_version += 1
+		for a in History_Action { hw.palette_disabled[int(a)] = a not_in can.actions }
+		for a in Settings_Action { hw.palette_disabled[len(History_Action) + int(a)] = a not_in can.settings }
+	}
+	// (the Workflows mode's commands while it is shown: the table's length is part of what the palette compares)
+	n := hw.workflow_mode.open ? HISTORY_PALETTE_COUNT : len(History_Action) + len(Settings_Action)
+	ui.palette_commands(&hw.palette, hw.palette_commands[:n], hw.palette_disabled[:n], {version = hw.palette_version})
+	if !ui.palette_has(&hw.palette, &hw.captures) {
+		hw.captures = captures_source(app)
+		ui.palette_add(&hw.palette, &hw.captures)
+	}
+	if !ui.palette_has(&hw.palette, &hw.workflows_source) {
+		hw.workflows_source = workflows_source(app)
+		ui.palette_add(&hw.palette, &hw.workflows_source)
+	}
+	if !ui.palette_has(&hw.palette, &hw.palette_settings.source) {
+		prefs_page.palette_settings_add(&hw.palette, &hw.palette_settings, &app.prefs, &hw.settings_mode.page,
+			proc(user: rawptr) -> prefs_page.Page_Options { return settings_options((^App)(user)) },
+			proc(user: rawptr) { settings_enter((^App)(user)) }, app)
+	}
 }
 
-// The history's palette, on what can act now (Ctrl+K, the toolbar's button).
+// The history's palette (the toolbar's button, the screenshots): opened, or closed when it is open.
 history_palette_show :: proc(app: ^App) {
-	history_palette_give(app, force = true)
-	ui.palette_open(&app.history_window.palette)
+	history_palette_feed(app)
+	ui.palette_toggle(&app.history_window.palette)
+}
+
+// The palette's choice of cliche's own sources: a command of the window (the history's, the settings', the workflows'),
+// a capture (shown selected in the history), a workflow (shown in the Workflows mode). The settings and the views' moves
+// act in palette_chosen itself.
+@(private = "file")
+history_palette_chosen :: proc(app: ^App) {
+	hw := &app.history_window
+	c, ok := ui.palette_chosen(&hw.palette)
+	if !ok { return }
+	if i, is := ui.palette_chosen_command(&hw.palette, c); is {
+		settings_at := len(History_Action)
+		flows_at := settings_at + len(Settings_Action)
+		switch {
+		case i < settings_at: history_action(app, History_Action(i))
+		case i < flows_at:    settings_action(app, Settings_Action(i - settings_at))
+		case:                 workflow_action(app, Workflow_Action(i - flows_at))
+		}
+		return
+	}
+	if c.source == &hw.captures {
+		history_go_to(app, palette_id_number(c.id))
+	} else if c.source == &hw.workflows_source {
+		id := palette_id_number(c.id)
+		workflows_show(app)
+		workflow_show(app, id)
+	}
+}
+
+// A capture chosen in the palette: the history shown, the search and the filters cleared (it may be hidden by them), the
+// entry selected alone and brought into view.
+@(private = "file")
+history_go_to :: proc(app: ^App, id: u64) {
+	hw := &app.history_window
+	if history_find(&hw.history, id) == nil { return }   // (removed since)
+	settings_leave(app)
+	workflow_mode_leave(app)
+	ui.line_edit_set(&hw.search, "")
+	hw.filter, hw.period = .All, .Any
+	hw.shown_due = true
+	hw.select_due = id
 }
 
 // The entries shown, made again when the history, the search, the filter or the sort changed (not per frame).
@@ -790,7 +877,7 @@ history_tools :: proc(app: ^App, filters, sizes, views: []string, em: f32) {
 	if history_icon_button("preview", lucide.EYE, ui.key_tip(ui.view_is_open(&app.views, PREVIEW_VIEW) ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}}), em) { history_action(app, .Preview) }
 	if history_icon_button("folder", lucide.FOLDER_OPEN, i18n.tr("Open the save folder"), em) { history_action(app, .Open_Folder) }
 	if history_icon_button("workflows", lucide.GIT_FORK, ui.key_tip(i18n.tr("Workflows: what happens after a capture"), {.W, {.Ctrl, .Shift}}), em) { history_action(app, .Workflows) }
-	if history_icon_button("palette", lucide.COMMAND, ui.key_tip(i18n.tr("Command palette"), {.K, {.Ctrl}}), em) { history_action(app, .Palette) }
+	if history_icon_button("palette", lucide.COMMAND, ui.command_tip(ui.palette_command()), em) { history_palette_show(app) }
 	if history_icon_button("settings", lucide.SETTINGS, ui.key_tip(i18n.tr("Settings"), {.Comma, {.Ctrl}}), em) { history_action(app, .Settings) }
 	ui.spacer(ui.px(em * 0.6))
 }
@@ -1265,44 +1352,6 @@ history_menu :: proc(app: ^App, em: f32) {
 	}
 }
 
-// The palette's table: the history's actions, the settings' actions, every setting, the Workflows mode's actions while
-// it is shown, then the moves of the window's views (float, dock, open in a window, re-attach, close). Made again only
-// when the preferences, the mode shown, the language or the views change. True: it was made again.
-@(private = "file")
-history_palette_keep :: proc(app: ^App) -> bool {
-	hw := &app.history_window
-	_ = ui.views_commands_update(&hw.view_cmds, &app.views, owner = &hw.host.state)
-	key := Palette_Key{prefs = app.prefs.version + 1, workflows = hw.workflow_mode.open, language = i18n.version(), views = hw.view_cmds.serial}
-	if hw.palette_made == key { return false }
-	hw.palette_made = key
-	t := &hw.palette_table
-	a := palette_table_remake(t)
-	theirs, names := settings_palette(app, a)
-	flows := key.workflows ? slice.enumerated_array(&WORKFLOW_ACTIONS) : nil
-	moves, acts := views_moves(&hw.view_cmds, a)
-	t.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), theirs, flows, moves}, a)
-	t.disabled = make([]bool, len(t.commands), a)
-	t.names = names
-	t.acts = acts
-	return true
-}
-
-// What the palette lists, given to it when its table was made again, when what can act changed, or with `force`. Only
-// the actions can be disabled, and they are first.
-@(private = "file")
-history_palette_give :: proc(app: ^App, force: bool) {
-	hw := &app.history_window
-	t := &hw.palette_table
-	made := history_palette_keep(app)
-	disabled := make([]bool, len(t.disabled), context.temp_allocator)
-	set := history_enabled(app)
-	for a in History_Action { disabled[int(a)] = a not_in set }
-	settings_palette_disable(app, disabled[len(History_Action):])
-	if !made && !force && slice.equal(disabled, t.disabled) { return }
-	copy(t.disabled, disabled)
-	ui.palette_set(&hw.palette, t.commands, t.disabled, {version = t.version})
-}
-
 // The sheet's table: every action of the window, from constant tables; made once, and again in another language. True:
 // it was made again.
 @(private = "file")
@@ -1310,29 +1359,17 @@ history_sheet_keep :: proc(app: ^App) -> bool {
 	hw := &app.history_window
 	if hw.sheet_table.version != 0 && hw.sheet_language == i18n.version() { return false }
 	hw.sheet_language = i18n.version()
-	a := palette_table_remake(&hw.sheet_table)
+	a := command_table_remake(&hw.sheet_table)
 	hw.sheet_table.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), slice.enumerated_array(&SETTINGS_ACTIONS), slice.enumerated_array(&WORKFLOW_ACTIONS)}, a)
 	return true
 }
 
-// The answers of the window's views: the palette's choice, the question before files are deleted; and the tables of the
-// palette and the sheet kept while they are open.
+// The answers of the window's views: the palette's choice, the question before files are deleted; and the sheet's table
+// kept while it is open.
 @(private = "file")
 history_dialogs :: proc(app: ^App) {
 	hw := &app.history_window
-	t := &hw.palette_table
-	// (the choice is a line of the table it was made from: taken before the table is made again)
-	if i, _, ok := ui.palette_chosen(&hw.palette); ok && i < len(t.commands) {
-		theirs := len(Settings_Action) + len(t.names)
-		flows := hw.palette_made.workflows ? len(Workflow_Action) : 0
-		switch {
-		case i < len(History_Action):                  history_action(app, History_Action(i))
-		case i < len(History_Action) + theirs:         settings_palette_chosen(app, i - len(History_Action), t.names)
-		case i < len(History_Action) + theirs + flows: workflow_action(app, Workflow_Action(i - len(History_Action) - theirs))
-		case:                                          ui.views_command_run(&app.views, t.acts[i - len(History_Action) - theirs - flows])
-		}
-	}
-	if ui.palette_is_open(&hw.palette) { history_palette_give(app, force = false) }
+	history_palette_chosen(app)
 	// (an open sheet lists from the table, which the making empties: it gets the new one at once)
 	if ui.shortcuts_sheet_is_open(&hw.sheet) && history_sheet_keep(app) {
 		hw.sheet.commands, hw.sheet.version = hw.sheet_table.commands, hw.sheet_table.version
@@ -1398,7 +1435,7 @@ history_enabled :: proc(app: ^App) -> History_Actions {
 	if stamp == hw.enabled_stamp && hw.enabled_made { return hw.enabled }
 	hw.enabled_stamp, hw.enabled_made = stamp, true
 	// (on the settings: what concerns the window alone; the history's actions wait for it)
-	window := History_Actions{.Open_Folder, .Capture_Region, .Workflows, .Settings, .Palette, .Keys, .Close, .Quit}
+	window := History_Actions{.Open_Folder, .Capture_Region, .Workflows, .Settings, .Keys, .Close, .Quit}
 	if settings {
 		hw.enabled = window
 		return window
@@ -1529,8 +1566,6 @@ history_action :: proc(app: ^App, a: History_Action) {
 	case .Settings:
 		workflow_mode_leave(app)
 		settings_enter(app)
-	case .Palette:
-		history_palette_show(app)
 	case .Keys:
 		history_sheet_keep(app)
 		ui.shortcuts_sheet_open(&hw.sheet, hw.sheet_table.commands, i18n.tr("cliche's keys"), hw.sheet_table.version)

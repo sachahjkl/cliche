@@ -40,9 +40,9 @@ docked. cliche keeps that choice per view, and which views were open, in `<state
 - **The window's keys wait while one of its views that takes keys is open**, in any presentation: its palettes, its
   sheet, a question, the size dialog, the setup. This is the rule of the dialogs that these views were. The preview is
   not one: it leaves the keys to the page.
-- **Each palette lists the moves of its own window's views**: one `ui.View_Commands` per window, made with that
-  window's State (`views_commands_update(..., owner)`), its sheet's included. The palettes' own moves are left out: a
-  palette is open while it lists them.
+- **Each palette lists the moves of its own window's views**: the toolkit's moves source, beside the commands
+  (`ui.palette_commands`), follows the views of the window the palette is open over; the palette's own view is left
+  out (`palette.md`).
 - **A view that asks about a window's content closes with it.** The editor's views close when the editor is kept for
   another picture. The history's palettes and questions close when the window hides; the preview stays. The workflows'
   add palette and question close when the mode is left.

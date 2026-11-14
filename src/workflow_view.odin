@@ -14,7 +14,6 @@ package cliche
 
 import "core:fmt"
 import "core:math"
-import "core:slice"
 import "core:strings"
 import "gt:draw"
 import flowgraph "gt:flowgraph"
@@ -41,13 +40,6 @@ Node_Last :: struct {
 	size:    [2]int,
 }
 
-// What the add palette's table depends on.
-Add_Key :: struct {
-	workflows: u64,                         // app.workflows.version + 1 (0: not made)
-	shown:     u64,
-	from:      Maybe(flowgraph.Port_Ref),
-}
-
 Workflow_Mode :: struct {
 	open:       bool,
 	shown:      u64,                  // the workflow shown (its id; 0: none)
@@ -65,9 +57,8 @@ Workflow_Mode :: struct {
 
 	history:    undo.Stack(flowgraph.Graph),   // the graph shown as it was before each change
 
-	add:        ui.Command_Palette,   // the node kinds, searched
-	add_table:  Palette_Table,        // its commands (workflow_add_keep)
-	add_made:   Add_Key,              // what they were made for
+	add:        ui.Command_Palette,   // the node kinds, searched: a chooser (its one source, no prefix)
+	add_flow:   ui.Flow_Palette,      // its source, the toolkit's (ui.flow_palette at each build; `flow` is the graph's nodes)
 	add_at:     [2]f32,               // where the node added goes (graph units)
 	add_from:   Maybe(flowgraph.Port_Ref),   // the port a link was dropped from: the node added is linked to it
 	menu_node:  u64,
@@ -181,8 +172,7 @@ workflow_mode_free :: proc(app: ^App) {
 	undo.destroy(&m.history, flowgraph.graph_destroy)
 	delete(m.selection)
 	ui.flow_nodes_destroy(&m.flow)
-	ui.palette_destroy(&m.add)
-	palette_table_destroy(&m.add_table)
+	ui.palette_destroy(&m.add)   // (before its source goes with m^ = {})
 	ui.line_edit_destroy(&m.rename)
 	ui.node_inspector_destroy(&m.inspector)
 	delete(m.status)
@@ -536,9 +526,19 @@ workflow_add_open :: proc(app: ^App, at: [2]f32, from: Maybe(flowgraph.Port_Ref)
 	wf := workflows_find(&app.workflows, m.shown)
 	if wf == nil { return }
 	m.add_at, m.add_from = at, from
-	workflow_add_keep(app, wf)
-	workflow_add_give(app)
+	// (a chooser: the kinds alone, no prefix, no hint row; given the port at once, read again when it or the graph
+	// changed: workflow_add_feed)
+	workflow_add_feed(app)
 	ui.palette_open(&m.add)
+}
+
+// The add palette's source, the toolkit's (ui.flow_palette): the graph shown, its catalog, the port a link was dropped
+// from, the workflows' version. At each build of the mode: it compares them only.
+@(private = "file")
+workflow_add_feed :: proc(app: ^App) {
+	m := &app.history_window.workflow_mode
+	wf := workflows_find(&app.workflows, m.shown)
+	ui.flow_palette(&m.add, &m.add_flow, wf != nil ? &wf.graph : nil, &CATALOG, m.add_from, app.workflows.version)
 }
 
 // A node of `kind` added where the palette was opened, linked to the port a link was dropped from (by its first port
@@ -595,45 +595,18 @@ workflow_undo :: proc(app: ^App, back: bool) {
 ////////////////////////////////
 // Dialogs
 
-// The add palette's table (ui.flow_palette: the catalog's kinds, those that cannot be added disabled), made again only
-// when the graph (workflows.version), the workflow shown or the port a link was dropped from change. The catalog is
-// constant. True: it was made again.
-@(private = "file")
-workflow_add_keep :: proc(app: ^App, wf: ^flowgraph.Graph_Entry) -> bool {
-	m := &app.history_window.workflow_mode
-	key := Add_Key{workflows = app.workflows.version + 1, shown = m.shown, from = m.add_from}
-	if m.add_made == key { return false }
-	m.add_made = key
-	t := &m.add_table
-	a := palette_table_remake(t)
-	commands, disabled := ui.flow_palette(&wf.graph, &CATALOG, m.add_from)
-	t.commands = slice.clone(commands, a)   // (its strings are the catalog's)
-	t.disabled = slice.clone(disabled, a)
-	return true
-}
-
-// The add palette's table, given to it (a node kind is a chooser's line: no view's move is listed there).
-@(private = "file")
-workflow_add_give :: proc(app: ^App) {
-	m := &app.history_window.workflow_mode
-	t := &m.add_table
-	ui.palette_set(&m.add, t.commands, t.disabled, {version = t.version})
-}
-
-// The answers of the mode's views (the add palette's kind, the question before a workflow is deleted), its add
-// palette's table kept while it is open, and the node's menu.
+// The answers of the mode's views (the add palette's kind, the question before a workflow is deleted), and the node's
+// menu.
 @(private = "file")
 workflow_dialogs :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
-	// (the kind chosen is a line of the table it was made from: taken before the table is made again)
-	if i, _, ok := ui.palette_chosen(&m.add); ok && i < len(m.add_table.commands) { workflow_add_chosen(app, i) }
-	if ui.palette_is_open(&m.add) {
-		if wf := workflows_find(&app.workflows, m.shown); wf != nil {
-			if workflow_add_keep(app, wf) { workflow_add_give(app) }
-		} else {
-			ui.palette_close(&m.add)
-		}
+	// (the add palette's source given what it lists now, at each build of the mode)
+	workflow_add_feed(app)
+	// (the kind chosen: its index, the catalog's order; its id is the kind's name)
+	if c, ok := ui.palette_chosen(&m.add); ok && c.source == &m.add_flow.source && c.index >= 0 && c.index < len(CATALOG.nodes) {
+		workflow_add_chosen(app, c.index)
 	}
+	if ui.palette_is_open(&m.add) && workflows_find(&app.workflows, m.shown) == nil { ui.palette_close(&m.add) }
 	if ui.menu(WORKFLOW_NODE_MENU_ID) {
 		wf := workflows_find(&app.workflows, m.shown)
 		n := wf != nil ? flowgraph.graph_node(&wf.graph, m.menu_node) : nil
