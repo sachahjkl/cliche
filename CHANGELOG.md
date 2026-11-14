@@ -3,6 +3,61 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-14
+
+### Added
+- **The history opens addresses, pins, combines and filters by date; the tray shows recent captures**:
+  - "Open the URL" (Shift+Enter) opens an upload's address in the browser.
+  - "Pin to the screen" keeps a picture over every other window.
+  - Select two pictures or more, then "Combine side by side" or "Combine stacked": cliche saves them as one new picture in the save folder.
+  - The calendar button shows today, the last 7 days or the last 30 days.
+  - "Upload again" (Ctrl+U) now takes any file, not only a picture.
+  - The tray's Recent submenu lists the last five entries; a click opens the address or the file.
+- **Upload the clipboard or files**: `cliche --upload-clipboard` and the tray send what the clipboard holds: a picture, files or a text. `cliche --upload-file` and the tray open a dialog to choose files. Each runs the new Upload workflow, which copies the address and keeps it in the history. The Upload step now takes a picture, a file or a text.
+- **New workflow steps: Shorten URL, Open, Delete file, Ask, Pin to the screen, Make QR code**:
+  - Shorten URL shortens an address with is.gd, v.gd or a ShareX URL shortener.
+  - Open opens an address in the browser, or a file with its program.
+  - Delete file deletes a file, for example once the Upload step's new "done" fires.
+  - Ask shows a question in a notification; its "yes" and "no" decide what runs next.
+  - Pin to the screen keeps a picture over the other windows.
+  - Make QR code makes the picture of a QR code from a text.
+- **A shortcut for each workflow**: a workflow's Capture step records keys of its own and what they capture: a region, the screen, the window in front, all the screens or the last region. "Edit then share" has Ctrl+Alt+E: a region, then the editor. The settings' Shortcuts page lists the keys of every workflow and what the system made of them, with a button to change them.
+- **Pick a colour on the screen**: `cliche --color` (Ctrl+Alt+C, the icon's menu, the command palette) shows the frozen screen with a magnifier and the colour under the pointer. A click copies it as `#rrggbb`, Shift and a click as `rgb(r, g, b)`, and a notification says it. The arrow keys move the pixel read, and Enter takes it.
+- **Capture the last region again, or all the screens**: `cliche --last-region` (Ctrl+Alt+R) captures the rectangle chosen last, with no overlay; the first time, you choose one. `cliche --all-screens` captures every screen in one picture. Both are in the icon's menu, the command palette and the workflows' triggers, and run the screenshot's workflow by default.
+- **Move and resize a region with the mouse**: with "Take the rectangle on release" off, the rectangle drawn has grips at its corners and edges. Drag a grip to resize it and drag its inside to move it; the pointer's shape says which. Enter or a double click inside takes it, and Escape gives it up. The arrow keys move it (with Ctrl, ten pixels), and with Shift they resize it.
+- **The editor opens JPEG, WebP and BMP, and files dropped on it**: the editor opens PNG, JPEG, WebP and BMP pictures, read by their content, not their name. A picture file dropped on an editor opens in an editor of its own.
+- **Pin a picture to the screen**: Ctrl+T, or the pin in the editor's bar, keeps the picture over every other window. Drag it to move it and use the wheel to zoom it. A right click offers copy, save and close; a double click or Escape closes it. The history and the workflows can pin a picture too. If the desktop lets no window stay on top (GNOME), the picture opens in a normal window.
+- **Save as, upload and print from the editor**:
+  - Ctrl+Shift+S opens the system's save dialog, with the name the default pattern gives. The file is PNG, JPEG or WebP, by the type chosen or the extension typed. The Save page sets the JPEG and WebP quality, and the dialog offers the format chosen last first.
+  - Ctrl+U, or its button in the bar, sends the picture to the default host. Its address goes to the clipboard and to the history, and a message says so.
+  - Ctrl+P opens the system's print dialog and prints the picture on one page, at its size on the screen, smaller when it does not fit. On Linux, cliche prints through the print portal.
+- **Turn, mirror, resize, add margins and trim the picture**: the editor's Picture menu turns the picture right (Ctrl+R) or left (Ctrl+Shift+R), mirrors it, resizes it with its ratio kept or not (Ctrl+Alt+R), adds margins of a colour (Ctrl+Alt+M) and trims its plain edges (Ctrl+Shift+X). The crop has handles to adjust it after it is drawn. The annotations follow the picture, and one undo reverses each change.
+- **Select, order, resize, paste and insert annotations**:
+  - With the Select tool, a drag on the picture selects what it touches, Shift and a click adds or removes an annotation, and Ctrl+A selects them all. A move, a property, the order and a delete apply to the whole selection.
+  - A right click on an annotation offers Delete, Duplicate (Ctrl+D), and Bring to front, Bring forward, Send backward, Send to back (Home, Page Up, Page Down, End). Ctrl+Shift+Delete deletes every annotation.
+  - A selected text, step number or drawing has a handle at its bottom right that makes it larger or smaller.
+  - Ctrl+V pastes the clipboard's picture on the picture, to move and resize, or its text as a text annotation.
+  - The Insert menu puts a picture from a file (Ctrl+I), the last screenshot of the history (Ctrl+Shift+I), a mouse pointer or an emoji on the picture. Each moves and scales as any annotation.
+- **New options for the editor's annotations**:
+  - Colours: past the swatches, the colour picker gives any colour. Boxes, ellipses, balloons, steps and texts have a fill colour apart from their outline's, with its opacity, or no fill.
+  - Lines: rectangles, ellipses, lines, arrows, drawings, balloons and magnifiers can be drawn in dashes or dots. A rectangle can have rounded corners.
+  - Arrow heads: an arrow has its head at the end, at the start or at both ends. A freehand drawing can have heads too.
+  - Texts: Shift+Enter starts a new line and Enter ends the text. A text can be bold, and shows its letters alone, with an outline, or on a box.
+  - Steps: the Step tool sets the next number, or a selected step's own, and writes it as 1, 2, 3; a, b, c; A, B, C; or i, ii, iii.
+  - Pixelate has four pixel sizes.
+- **New tools in the editor**:
+  - Blur (G) blurs a part of the picture, with four strengths.
+  - Speech balloon (Q) is a rounded box with a tail; the tail's tip has its own handle. You type its words as soon as it is drawn.
+  - Magnifier (M) shows the picture under it 1.5, 2, 3 or 4 times larger, in a circle or a rectangle, with an edge.
+  - Smart eraser (X) covers a part of the picture with the colour around it: a text or a detail on a plain background disappears.
+  - Cut out a band (K) removes a band of rows or columns and joins the rest.
+- **cliche does what ShareX's editor and capture do**: the editor has the tools and options of ShareX's (blur, speech balloons, magnifiers, a smart eraser, dashed lines, fill colours, a Picture menu) and saves, uploads, pins and prints the picture itself. The capture adds the last region, all the screens, a colour picker, a delay and the pointer, and each workflow can have its own shortcut. Workflows, the history and the tray menu do more with what was captured. The entries below give the details.
+
+### Changed
+- **A click on a workflow's notification opens what it made**: the address it uploaded opens in the browser, else the file it saved opens with its program. A notification with neither still shows the history.
+- **A delay and the pointer for each workflow**: the delay before a capture (0 to 30 s) is now a parameter of the workflow's Capture step, for every source, a region too. A notification counts it down and is gone before the picture is taken. The same step can show the pointer in the picture: on Wayland and Windows; the screenshot portal and X11 cannot. The setting "Delay before a screen or a window" is gone.
+- **The editor's zoom, and a bar that folds tool by tool**: the bar shows the zoom in percent; a click on it offers fit, 50, 100, 200 and 400 %, and Ctrl+1 shows the actual size. In a narrow window, the bar moves its buttons into its "…" panel one at a time: the rare tools and the menus first, the colours late, the everyday tools last. Cancel and Done always stay.
+
 ## [0.3.2] - 2026-11-14
 
 ### Fixed
@@ -121,6 +176,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.4.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.4.0
 [0.3.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.3.2
 [0.3.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.3.1
 [0.3.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.3.0
