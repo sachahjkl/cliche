@@ -29,7 +29,7 @@ app_record_trigger :: proc(app: ^App, format: Record_Format) {
 	}
 	if record_busy(app.record) { return }   // (its region being chosen, or its end being written)
 	if !app_record_step(app, Record_Trigger{format}) { return }
-	if !app_capture_start(app, .Region, .Region, record = true) {
+	if !app_capture_start(app, .Region, {trigger = .Region}, record = true) {
 		// (a screenshot is being taken: the recording waits for none)
 		app_record_step(app, Record_Cancelled{})
 	}

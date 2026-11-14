@@ -10,30 +10,118 @@ package cliche
 // min_count); this file binds the triggers and gives the default workflows. A run is workflow_run.odin, the file
 // workflow_store.odin.
 
+import "core:fmt"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 import flowgraph "gt:flowgraph"
 import i18n "gt:i18n"
 
 // What starts a workflow: the captures of the shortcuts, the tray and the commands (cliche --region...). A trigger is a
-// capture source and the workflow it runs; Edit, Qr and Ocr take a region.
-Trigger :: enum u8 { Region, Screen, Window, Edit, Qr, Ocr }
+// capture source and the workflow it runs; Edit, Qr and Ocr take a region. A workflow may also have a shortcut of its
+// own, on its Capture node (Capture_Options): its keys capture that node's source and run that workflow.
+Trigger :: enum u8 { Region, Screen, Window, Edit, Qr, Ocr, All_Screens, Last_Region }
 
 Trigger_Set :: bit_set[Trigger; u8]
 
 // A trigger's word: in the file (a workflow's labels), in `cliche --<word>`.
-TRIGGER_NAMES := [Trigger]string{.Region = "region", .Screen = "screen", .Window = "window", .Edit = "edit", .Qr = "qr", .Ocr = "ocr"}
+TRIGGER_NAMES := [Trigger]string{
+	.Region = "region", .Screen = "screen", .Window = "window", .Edit = "edit", .Qr = "qr", .Ocr = "ocr",
+	.All_Screens = "all-screens", .Last_Region = "last-region",
+}
 
 // A trigger's word where a list of them is shown (the Capture node, the workflows' list): TRIGGER_NAMES' words, in the
 // language in use (i18n.tr where shown).
-TRIGGER_WORDS := [Trigger]string{.Region = i18n.later("region"), .Screen = i18n.later("screen"), .Window = i18n.later("window"), .Edit = i18n.later("edit"), .Qr = i18n.later("qr"), .Ocr = i18n.later("ocr")}
+TRIGGER_WORDS := [Trigger]string{
+	.Region = i18n.later("region"), .Screen = i18n.later("screen"), .Window = i18n.later("window"), .Edit = i18n.later("edit"), .Qr = i18n.later("qr"), .Ocr = i18n.later("ocr"),
+	.All_Screens = i18n.later("all screens"), .Last_Region = i18n.later("last region"),
+}
 
 TRIGGER_TEXT := [Trigger]string{
 	.Region = i18n.later("Capture a region"), .Screen = i18n.later("Capture the screen"), .Window = i18n.later("Capture the window"),
 	.Edit = i18n.later("Capture a region and edit"), .Qr = i18n.later("Read a QR code"), .Ocr = i18n.later("Read the text"),
+	.All_Screens = i18n.later("Capture all the screens"), .Last_Region = i18n.later("Capture the last region again"),
 }
 
-TRIGGER_SOURCE := [Trigger]Source{.Region = .Region, .Screen = .Screen, .Window = .Window, .Edit = .Region, .Qr = .Region, .Ocr = .Region}
+TRIGGER_SOURCE := [Trigger]Source{
+	.Region = .Region, .Screen = .Screen, .Window = .Window, .Edit = .Region, .Qr = .Region, .Ocr = .Region,
+	.All_Screens = .All_Screens, .Last_Region = .Last_Region,
+}
+
+// What a source captures, as the Capture node's choices say it (the same words: one translation).
+CAPTURE_SOURCE_TEXT := [Source]string{
+	.Region = i18n.later("A region"), .Screen = i18n.later("The screen"), .Window = i18n.later("The window in front"),
+	.All_Screens = i18n.later("All the screens"), .Last_Region = i18n.later("The last region"), .Color = i18n.later("A colour"),
+}
+
+// What a capture runs: the workflow of a trigger, or (`workflow` not 0) a workflow named by its own shortcut.
+Capture_Target :: struct {
+	trigger:  Trigger,
+	workflow: u64,
+}
+
+// What a workflow's Capture node says of its captures (its parameters, workflow_nodes.odin): the source and the keys
+// of its own shortcut, and for every capture that runs it, a delay and the pointer.
+Capture_Options :: struct {
+	source:   Source,   // what its own shortcut captures (one of the first five)
+	shortcut: string,   // its own keys, as platform.hotkey_text words them ("": none); the node's
+	delay_s:  int,      // seconds before the picture is taken (a countdown is shown)
+	cursor:   bool,     // the pointer in the picture, where the system draws it (capture.cursor_support)
+}
+
+// The Capture node's options of `wf` (zero: no workflow, or no Capture node).
+capture_options :: proc(wf: ^flowgraph.Graph_Entry) -> (o: Capture_Options) {
+	if wf == nil { return }
+	for &n in wf.graph.nodes {
+		if Node_Kind(n.kind) != .Capture { continue }
+		o.source = Source(clamp(flowgraph.param_int(&CATALOG, &n, "source"), 0, int(Source.Last_Region)))
+		o.shortcut = flowgraph.param_text(&CATALOG, &n, "shortcut")
+		o.delay_s = max(flowgraph.param_int(&CATALOG, &n, "delay"), 0)
+		o.cursor = flowgraph.param_bool(&CATALOG, &n, "cursor")
+		return
+	}
+	return
+}
+
+// The workflow a capture runs (nil: none).
+workflows_target :: proc(ws: ^Workflows, target: Capture_Target) -> ^flowgraph.Graph_Entry {
+	if target.workflow != 0 { return workflows_find(ws, target.workflow) }
+	return workflows_for(ws, target.trigger)
+}
+
+// The id a workflow's own shortcut has in the shortcuts' service (and with the system, which keeps the user's keys
+// under it): stable while the workflow is there.
+WORKFLOW_SHORTCUT_PREFIX :: "workflow-"
+
+workflow_shortcut_id :: proc(id: u64, allocator := context.temp_allocator) -> string {
+	return fmt.aprintf("%s%d", WORKFLOW_SHORTCUT_PREFIX, id, allocator = allocator)
+}
+
+// The workflow of a shortcut's id; false: the id is not a workflow's.
+workflow_of_shortcut :: proc(shortcut_id: string) -> (id: u64, ok: bool) {
+	if !strings.has_prefix(shortcut_id, WORKFLOW_SHORTCUT_PREFIX) { return }
+	v, parsed := strconv.parse_u64_of_base(shortcut_id[len(WORKFLOW_SHORTCUT_PREFIX):], 10)
+	return v, parsed && v != 0
+}
+
+// A workflow with keys of its own, as the shortcuts' service is given it.
+Workflow_Shortcut :: struct {
+	workflow: u64,
+	name:     string,   // the workflow's (not owned)
+	keys:     string,   // as platform.hotkey_text words them (not owned)
+	source:   Source,
+}
+
+// The workflows that have keys of their own, in the list's order (temp allocator).
+workflows_shortcuts :: proc(ws: ^Workflows) -> []Workflow_Shortcut {
+	out := make([dynamic]Workflow_Shortcut, 0, len(ws.set.list), context.temp_allocator)
+	for &wf in ws.set.list {
+		o := capture_options(&wf)
+		if strings.trim_space(o.shortcut) == "" { continue }
+		append(&out, Workflow_Shortcut{wf.id, wf.name, o.shortcut, o.source})
+	}
+	return out[:]
+}
 
 Workflows :: struct {
 	set:     flowgraph.Graph_Set,
@@ -144,6 +232,9 @@ label_set :: proc(wf: ^flowgraph.Graph_Entry, name: string, on: bool) {
 // The default workflows: what cliche did before workflows, so nothing is lost. Also what a missing or broken file
 // gives.
 
+// The keys of "Edit then share" (a region, then the editor) in the default workflows.
+EDIT_SHORTCUT_DEFAULT :: "Ctrl+Alt+E"
+
 workflows_default :: proc() -> (ws: Workflows) {
 	add :: proc(g: ^flowgraph.Graph, kind: Node_Kind, pos: [2]f32) -> u64 {
 		return flowgraph.node_add(g, &CATALOG, int(kind), pos)
@@ -169,11 +260,20 @@ workflows_default :: proc() -> (ws: Workflows) {
 		workflows_bind(&ws, id, .Region, true)
 		workflows_bind(&ws, id, .Screen, true)
 		workflows_bind(&ws, id, .Window, true)
+		workflows_bind(&ws, id, .All_Screens, true)
+		workflows_bind(&ws, id, .Last_Region, true)
 	}
 	{
 		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("Edit then share"))}
 		g := &wf.graph
 		capture := add(g, .Capture, {0, 70})
+		// (its own keys: "Capture a region and edit" has a shortcut from the start)
+		if n := flowgraph.graph_node(g, capture); n != nil {
+			if keys := flowgraph.param(&CATALOG, n, "shortcut"); keys != nil {
+				delete(keys.text)
+				keys.text = strings.clone(EDIT_SHORTCUT_DEFAULT)
+			}
+		}
 		annotate := add(g, .Annotate, {230, 70})
 		copy_image := add(g, .Copy_Image, {460, 0})
 		save := add(g, .Save_File, {460, 140})

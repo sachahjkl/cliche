@@ -11,6 +11,7 @@ import "core:math"
 import "core:strings"
 import flowgraph "gt:flowgraph"
 import lucide "gt:lucide"
+import shortcuts "gt:shortcuts"
 import "gt:ui"
 import i18n "gt:i18n"
 
@@ -30,6 +31,23 @@ workflow_folder_chosen :: proc(app: ^App, workflow, node: u64, path: string) {
 	flowgraph.param_set(n, i, value)
 	m.inspector.node = 0   // (its field shows the new folder)
 	workflows_changed(app, now = true)
+}
+
+// The Workflows mode on workflow `id`, its Capture step selected: where its own shortcut, its source, its delay and the
+// pointer are set (the settings' Shortcuts page sends here).
+workflow_capture_show :: proc(app: ^App, id: u64) {
+	wf := workflows_find(&app.workflows, id)
+	if wf == nil { return }
+	workflow_mode_enter(app)
+	workflow_show(app, id)
+	m := &app.history_window.workflow_mode
+	for n in wf.graph.nodes {
+		if Node_Kind(n.kind) != .Capture { continue }
+		clear(&m.selection)
+		append(&m.selection, n.id)
+		m.inspector.node = 0
+		break
+	}
 }
 
 ////////////////////////////////
@@ -157,6 +175,8 @@ workflow_inspector :: proc(app: ^App, em: f32) {
 @(private = "file")
 workflow_inspector_body :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
+	// (a Capture step's own keys being recorded: the global shortcuts let theirs go, or the system takes the keys)
+	shortcuts.hold(app.shortcuts, ui.hotkey_recording())
 	wf := workflows_find(&app.workflows, m.shown)
 	if wf == nil { return }
 	n: ^flowgraph.Node
@@ -184,10 +204,6 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * 0.8})
 			ui.paragraph(fmt.tprintf("%s###wf_node_last", fmt.tprintf(i18n.tr("Last run: %s"), l.message)))
 		}
-	}
-	if Node_Kind(n.kind) == .Capture {
-		workflow_triggers_edit(app, wf, em)
-		return
 	}
 	if len(def.params) == 0 { return }
 	ui.spacer(ui.px(em * 0.5))
@@ -229,6 +245,11 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 			workflows_changed(app, now = true)
 		}
 	}
+	// (the Capture step: its own keys above, then the captures of the shortcuts, the tray and the commands that run it)
+	if Node_Kind(n.kind) == .Capture {
+		ui.spacer(ui.px(em * 1))
+		workflow_triggers_edit(app, wf, em)
+	}
 }
 
 // What a kind of node does, in a sentence.
@@ -236,7 +257,7 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 node_what :: proc(n: ^flowgraph.Node) -> string {
 	def := &CATALOG.nodes[n.kind]
 	#partial switch Node_Kind(n.kind) {
-	case .Capture:        return i18n.tr("Where the workflow starts: the picture of the capture.")
+	case .Capture:        return i18n.tr("Where the workflow starts: the picture of the capture. Its own shortcut captures what it says, then runs this workflow; the delay (counted down in a notification) and the pointer apply to every capture that runs it.")
 	case .Annotate:       return i18n.tr("Opens the picture in the editor. Done sends its picture on and fires \"done\"; Cancel stops this branch and fires \"cancelled\".")
 	case .Condition:      return i18n.tr("Sends the picture to \"yes\" or to \"no\".")
 	case .Notify:         return i18n.tr("One notification at the end of the run: its title, and what comes in or a summary. Linked to \"when\", it waits for that action.")
@@ -294,7 +315,9 @@ trigger_keys_text :: proc(app: ^App, t: Trigger) -> string {
 	case .Window: action = .Window
 	case .Qr:     action = .Qr
 	case .Ocr:    action = .Ocr
-	case .Edit:   return command
+	case .All_Screens: action = .All_Screens
+	case .Last_Region: action = .Last_Region
+	case .Edit:   return command   // (no fixed keys: a workflow's own shortcut takes its place)
 	}
 	if keys := shortcut_keys(app, action); keys != "" { return fmt.tprintf("%s, %s", keys, command) }
 	return command

@@ -147,6 +147,71 @@ a_condition_sends_the_picture_one_way :: proc(t: ^testing.T) {
 		defer run_free(&run)
 		testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{no}))
 	}
+	{
+		// (the new sources are the Condition's choices too, in Source's order)
+		source.number = f64(Source.Last_Region)
+		run: Run
+		run_start(&run, g, picture(50, 10), {id = 4, source = .Last_Region})
+		defer run_free(&run)
+		testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{yes}))
+	}
+}
+
+// The Capture node's choices of a source are Source's first five, in its order: capture_options reads one as the other.
+@(test)
+the_capture_node_says_its_shortcut_delay_and_pointer :: proc(t: ^testing.T) {
+	node := flowgraph.Node{kind = int(Node_Kind.Capture)}
+	def, _ := flowgraph.param_def(&CATALOG, &node, "source")
+	testing.expect_value(t, len(def.choices), int(Source.Last_Region) + 1)
+	ws := workflows_default()
+	defer workflows_free(&ws)
+	edit := workflows_for(&ws, .Edit)
+	testing.expect(t, edit != nil)
+	o := capture_options(edit)
+	testing.expect_value(t, o, Capture_Options{source = .Region, shortcut = EDIT_SHORTCUT_DEFAULT})
+	// set on its node: what it captures, a delay, the pointer
+	for &n in edit.graph.nodes {
+		if Node_Kind(n.kind) != .Capture { continue }
+		flowgraph.param(&CATALOG, &n, "source").number = f64(Source.All_Screens)
+		flowgraph.param(&CATALOG, &n, "delay").number = 3
+		flowgraph.param(&CATALOG, &n, "cursor").number = 1
+	}
+	o = capture_options(edit)
+	testing.expect_value(t, o.source, Source.All_Screens)
+	testing.expect_value(t, o.delay_s, 3)
+	testing.expect(t, o.cursor)
+	testing.expect_value(t, capture_options(nil), Capture_Options{})
+}
+
+// A workflow's own keys: listed for the shortcuts' service under an id that names it, and its capture runs it.
+@(test)
+a_workflow_has_a_shortcut_of_its_own :: proc(t: ^testing.T) {
+	ws := workflows_default()
+	defer workflows_free(&ws)
+	edit := workflows_for(&ws, .Edit)
+	list := workflows_shortcuts(&ws)
+	testing.expect_value(t, len(list), 1)   // (by default "Edit then share" alone)
+	if len(list) == 1 {
+		testing.expect_value(t, list[0].workflow, edit.id)
+		testing.expect_value(t, list[0].keys, EDIT_SHORTCUT_DEFAULT)
+		testing.expect_value(t, list[0].source, Source.Region)
+	}
+	id, ok := workflow_of_shortcut(workflow_shortcut_id(edit.id))
+	testing.expect(t, ok)
+	testing.expect_value(t, id, edit.id)
+	_, ok = workflow_of_shortcut("region")
+	testing.expect(t, !ok)
+	_, ok = workflow_of_shortcut("workflow-x")
+	testing.expect(t, !ok)
+	_, ok = workflow_of_shortcut("workflow-0")
+	testing.expect(t, !ok)
+	// a target with a workflow runs that one, whatever its trigger; without one, its trigger's
+	testing.expect(t, workflows_target(&ws, {trigger = .Qr, workflow = edit.id}) == edit)
+	testing.expect(t, workflows_target(&ws, {trigger = .Edit}) == edit)
+	testing.expect(t, workflows_target(&ws, {workflow = 999}) == nil)
+	// the last region and all the screens run the screenshot's workflow by default
+	testing.expect(t, workflows_for(&ws, .Last_Region) == workflows_for(&ws, .Region))
+	testing.expect(t, workflows_for(&ws, .All_Screens) == workflows_for(&ws, .Region))
 }
 
 @(test)

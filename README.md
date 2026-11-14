@@ -33,6 +33,9 @@ that branch of the workflow; a step linked to the editor's "cancelled" runs then
     cliche --region             choose a rectangle, a window or a screen on the frozen desktop
     cliche --screen             capture the screen under the pointer
     cliche --window             capture the window in front
+    cliche --all-screens        capture every screen in one picture
+    cliche --last-region        capture the last region chosen again, with no overlay
+    cliche --color              pick a colour on the screen: a click copies #rrggbb (Shift: rgb(r, g, b))
     cliche --qr                 read the QR code in a region
     cliche --ocr                read the text in a region (Tesseract on Linux)
     cliche --record             choose a region to record as an MP4 video; again: start, then stop
@@ -52,13 +55,23 @@ Shortcuts work in every program, and the icon's menu shows them:
     Alt+Print Screen            the window in front
     Ctrl+Alt+T                  read the text in a region
     Ctrl+Alt+Q                  read a QR code
+    Ctrl+Alt+R                  the last region again
+    Ctrl+Alt+C                  pick a colour on the screen
+    Ctrl+Alt+E                  a region, then the editor ("Edit then share"'s own shortcut)
 
-Change them in the settings. On Linux the desktop portal gives them to cliche
+Change them in the settings. A workflow can have a shortcut of its own: its Capture step sets the keys, what they
+capture (a region, the screen, the window in front, all the screens, the last region), a delay with a countdown, and
+whether the pointer is in the picture (Wayland and Windows draw it; the screenshot portal and X11 cannot). The settings'
+Shortcuts page lists every workflow's keys. On Linux the desktop portal gives them to cliche
 (KDE, GNOME, Hyprland, ShojiWM's desktop); where it gives none, bind a key to `cliche --region` in the compositor.
 
 In a region: drag a rectangle, it is taken when you release the button. A click takes the window under the pointer.
-Escape gives up. With "Confirm on release" off, the rectangle stays: arrows move it a pixel (Ctrl: ten), Shift with
-arrows resize it, and Enter or a click inside takes it.
+Escape gives up. With "Take the rectangle on release" off, the rectangle stays: drag its corners and edges to resize it,
+its inside to move it; arrows move it a pixel (Ctrl: ten), Shift with arrows resize it; Enter or a double click inside
+takes it.
+
+The colour picker (`cliche --color`) shows the frozen screen with a magnifier: a click copies the colour under the
+pointer as `#rrggbb`, Shift and a click as `rgb(r, g, b)`; the arrows move the pixel read, Enter takes it.
 
 The main window shows the captures kept, as a grid or a list, with a preview you can widen. Its gear (or Ctrl+,) shows
 the settings in its place, and its graph button (Ctrl+Shift+W) the workflows; Escape goes back. Ctrl+K opens the command

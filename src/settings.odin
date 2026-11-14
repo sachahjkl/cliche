@@ -25,8 +25,6 @@ PREF_DEFS := [?]config.Def{
 	{name = "general.tray_click", title = i18n.later("A click on the icon"), description = i18n.later("What a click on cliche's icon in the notification area does."), kind = .String, default = {s = "region"}, tags = {"tray", "icon", "notification area", "panel"}},
 
 	// Capture
-	{name = "capture.delay", title = i18n.later("Delay before a screen or a window"), description = i18n.later("Seconds to wait before a screen or a window is taken (a menu opened meanwhile is in the picture). A region's picture is taken at once, frozen while you choose."), kind = .Int, default = {i = 0}, min = 0, max = 10, bounded = true, unit = "s", tags = {"timer", "wait", "countdown", "menu"}},
-
 	{name = "capture.ocr_languages", title = i18n.later("Languages of the text read"), description = i18n.later("The languages of the text read in a region (cliche --ocr), as the engine names them, \"+\" between them (Tesseract: eng+fra). Empty: your languages."), kind = .String, default = {s = ""}, tags = {"ocr", "text", "language", "tesseract", "recognition"}},
 
 	// Recording
@@ -49,7 +47,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "editor.styles", title = "Editor styles", description = "Each tool's colour, width, shadow, fill and text size, as last used.", kind = .String, default = {s = ""}, hidden = true},
 
 	// Region
-	{name = "region.confirm_on_release", title = i18n.later("Take the rectangle on release"), description = i18n.later("Take the rectangle as soon as the button is released. Off: adjust it with the arrow keys (Shift: resize), then press Enter or click inside it."), kind = .Bool, default = {b = true}, tags = {"fast", "enter", "adjust"}},
+	{name = "region.confirm_on_release", title = i18n.later("Take the rectangle on release"), description = i18n.later("Take the rectangle as soon as the button is released. Off: drag its corners and edges to resize it and its inside to move it, or use the arrow keys (Shift: resize), then press Enter or double-click inside it."), kind = .Bool, default = {b = true}, tags = {"fast", "enter", "adjust", "handles", "resize", "move"}},
 	{name = "region.frame_windows", title = i18n.later("Frame the window under the pointer"), description = i18n.later("Frame the window under the pointer: a click takes it. Off: a click does nothing, only a drag chooses."), kind = .Bool, default = {b = true}, tags = {"window", "hover", "click", "snap"}},
 	{name = "region.magnifier", title = i18n.later("Magnifier"), description = i18n.later("Show a magnifier near the pointer, with the pointer's position and the selection's size."), kind = .Bool, default = {b = true}, tags = {"zoom", "loupe", "pixel"}},
 	{name = "region.dim", title = i18n.later("Shade around the selection"), description = i18n.later("How dark the screen is outside what is chosen."), kind = .Int, default = {i = 45}, min = 0, max = 90, bounded = true, unit = "%", tags = {"shade", "darken", "overlay", "opacity"}},
@@ -69,6 +67,9 @@ PREF_DEFS := [?]config.Def{
 	{name = "shortcut.window", title = i18n.later("Capture the window in front"), description = i18n.later("Capture the window in front."), kind = .String, default = {s = "Alt+Print"}, tags = {"hotkey", "keybinding", "keys", "active window", "print screen"}},
 	{name = "shortcut.ocr", title = i18n.later("Read the text"), description = i18n.later("Read the text in a region: it goes to the clipboard."), kind = .String, default = {s = "Ctrl+Alt+T"}, tags = {"hotkey", "keybinding", "keys", "ocr", "text"}},
 	{name = "shortcut.qr", title = i18n.later("Read a QR code"), description = i18n.later("Read a QR code in a region: its text goes to the clipboard."), kind = .String, default = {s = "Ctrl+Alt+Q"}, tags = {"hotkey", "keybinding", "keys", "barcode", "scan"}},
+	{name = "shortcut.all_screens", title = i18n.later("Capture all the screens"), description = i18n.later("Capture every screen in one picture."), kind = .String, default = {s = ""}, tags = {"hotkey", "keybinding", "keys", "monitors", "desktop", "full screen"}},
+	{name = "shortcut.last_region", title = i18n.later("Capture the last region again"), description = i18n.later("Capture the rectangle chosen last again, with no overlay. With none chosen yet: choose one."), kind = .String, default = {s = "Ctrl+Alt+R"}, tags = {"hotkey", "keybinding", "keys", "repeat", "same", "again"}},
+	{name = "shortcut.color", title = i18n.later("Pick a colour"), description = i18n.later("Pick a colour on the screen: a click copies it as #rrggbb, Shift and a click as rgb(r, g, b)."), kind = .String, default = {s = "Ctrl+Alt+C"}, tags = {"hotkey", "keybinding", "keys", "colour", "color", "eyedropper", "picker", "hex"}},
 }
 
 // What a click on the tray icon does (general.tray_click).
@@ -82,7 +83,6 @@ Settings :: struct {
 	update_auto:        bool,   // update.auto: the installed copy updates itself (updates.odin)
 	tray_click:         Tray_Click,
 	appearance:         prefs_page.Appearance,   // appearance.theme, mode, finish, font_size (theme owned)
-	delay_s:            int,
 	record_fps, gif_fps, gif_width, record_max_s: int,
 	record_cursor:      bool,
 	history_size:       int,
@@ -143,7 +143,6 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	click := config.string_of(p, "general.tray_click")
 	for name, c in TRAY_CLICK_NAMES { if name == click { s.tray_click = c } }
 	s.appearance = prefs_page.appearance_read(p, allocator)
-	s.delay_s = int(config.int_of(p, "capture.delay"))
 	s.record_fps = int(config.int_of(p, "record.fps"))
 	s.gif_fps = int(config.int_of(p, "record.gif_fps"))
 	s.gif_width = int(config.int_of(p, "record.gif_width"))

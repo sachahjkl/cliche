@@ -125,11 +125,11 @@ shots_editor :: proc(app: ^App, folder: string) -> int {
 	edit_add(m, {kind = .Text, a = {450, 190}, text = strings.clone("The best colours"), style = st})
 	edit_add(m, {kind = .Step, a = {140, 165}, b = {140, 165}, number = 1, style = st})
 	edit_add(m, {kind = .Step, a = {790, 320}, b = {790, 320}, number = 2, style = st})
-	edit_add(m, {kind = .Pixelate, a = {1010, 395}, b = {1190, 432}, style = {width = st.width, text_size = st.text_size}})
+	edit_add(m, {kind = .Pixelate, a = {1010, 395}, b = {1190, 432}, style = m.styles[.Pixelate]})
 	m.doc.selected = 0   // (the arrow: its properties in the bar)
 	// (the mosaic is made by a task: frames until it is there, bounded, or the pixelated box is a grey block)
 	deadline := time.tick_add(time.tick_now(), SHOTS_MOSAIC_WAIT)
-	for ed.mosaic_work != nil || len(ed.mosaic.colors) == 0 {
+	for editor_filters_pending(ed) {
 		if time.tick_diff(time.tick_now(), deadline) <= 0 { fmt.eprintln("shots: the editor's mosaic did not come"); return 1 }
 		ed.host.settle = 1
 		host.host_frame(&ed.host)

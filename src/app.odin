@@ -19,6 +19,7 @@ package cliche
 //   frames   a frame of each shown window
 // Every other thread wakes it through app_wake: the waits end on a wake of any of the windows.
 
+import "core:fmt"
 import "core:log"
 import "core:strings"
 import "core:sync"
@@ -39,8 +40,8 @@ import "gt:ui"
 // cliche's own texts in each language it has (i18n/<language>.txt, written by `clichetool i18n <language>`).
 PROGRAM_CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
 
-// The tray menu's items. The first seven are Shortcut_Action's, in its order.
-Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit }
+// The tray menu's items. The first ten are Shortcut_Action's, in its order.
+Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit }
 
 // A command another start handed over (token owned).
 Inbox_Item :: struct { verb: Verb, token: string }
@@ -70,8 +71,11 @@ App :: struct {
 	flow:       Flow,                                      // flow.odin
 	desktop:    Result_Desktop,                            // the region's desktop, from Selecting to its cut (owned)
 	has_desktop: bool,
-	capture_trigger: Trigger,                              // what started this capture: its workflow runs on its picture
+	capture_target: Capture_Target,                        // what started this capture: its workflow runs on its picture
 	capture_record: bool,                                  // this capture is a recording's region (record_app.odin)
+	last_region: Rect,                                     // the rectangle chosen last on the overlay (Source.Last_Region)
+	has_last_region: bool,
+	countdown_shown: bool,                                 // a capture's countdown is said now (Result_Countdown)
 	workflows:  Workflows,                                 // workflow.odin, workflow_store.odin
 	workflows_loaded: bool,
 	workflows_problem: string,                             // why the file was not used (owned; "" none)
@@ -91,7 +95,10 @@ App :: struct {
 	licence:    prefs_page.Licence,                        // licence.odin: the settings' Licence page
 	shortcuts:  ^shortcuts.Service,                        // shortcuts.odin
 	shortcuts_bound: [Shortcut_Action]string,              // the keys the service was given last (owned)
+	shortcuts_workflows: [dynamic]Bound_Workflow,          // the workflows' own keys the service was given last (owned)
+	shortcuts_workflows_version: u64,                      // the workflows' version they were read at
 	tray_keys:  [Shortcut_Action]string,                   // the keys the tray's menu shows (owned): built again when they change
+	tray_edit_keys: string,                                // the keys of "Capture a region and edit": its workflow's own (owned)
 	tray_menu:  Tray_Menu,                                 // the menu shown
 	tray_language: u32,                                    // i18n.version() of its texts: the system keeps what it was given
 	default_folder: string,                                // where screenshots go when save.folder is empty (the worker's, owned)
@@ -204,6 +211,7 @@ app_free :: proc(app: ^App) {
 	delete(app.token)
 	for k in app.shortcuts_bound { delete(k) }
 	for k in app.tray_keys { delete(k) }
+	delete(app.tray_edit_keys)
 	uploaders_result_free(&app.uploaders)
 	delete(app.default_folder)
 	settings_free(&app.settings)
@@ -376,6 +384,9 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Region:   app_trigger(app, .Region)
 	case .Screen:   app_trigger(app, .Screen)
 	case .Window:   app_trigger(app, .Window)
+	case .All_Screens: app_trigger(app, .All_Screens)
+	case .Last_Region: app_trigger(app, .Last_Region)
+	case .Color:    app_color_pick(app)
 	case .Qr:       app_trigger(app, .Qr)
 	case .Ocr:      app_trigger(app, .Ocr)
 	case .Record:     app_record_trigger(app, .Mp4)
@@ -405,20 +416,50 @@ app_step :: proc(app: ^App, e: Flow_Event) -> bool {
 
 // A capture for `t`'s workflow starts. False: one is already being taken (one at a time).
 app_trigger :: proc(app: ^App, t: Trigger) -> bool {
-	return app_capture_start(app, TRIGGER_SOURCE[t], t, record = false)
+	return app_capture_start(app, TRIGGER_SOURCE[t], {trigger = t}, record = false)
 }
 
-// A capture of `source` starts: for the workflow of `t`, or for a recording's region (`record`).
-app_capture_start :: proc(app: ^App, source: Source, t: Trigger, record: bool) -> bool {
+// A workflow's own shortcut: its Capture node's source, for that workflow. False: it is gone, or a capture is going on.
+app_workflow_shortcut :: proc(app: ^App, workflow: u64) -> bool {
+	wf := workflows_find(&app.workflows, workflow)
+	if wf == nil { return false }
+	return app_capture_start(app, capture_options(wf).source, {workflow = workflow}, record = false)
+}
+
+// The screen's colour picker: the frozen desktop with its magnifier; a click copies the colour (app_color_picked).
+app_color_pick :: proc(app: ^App) -> bool {
+	return app_capture_start(app, .Color, {}, record = false)
+}
+
+// A capture of `source` starts: for the workflow of `target`, or for a recording's region (`record`). The workflow's
+// Capture node gives its delay and whether the pointer is in the picture.
+app_capture_start :: proc(app: ^App, asked: Source, target: Capture_Target, record: bool) -> bool {
+	// (the last region asked before there is one: the region overlay)
+	source := source_resolve(asked, app.has_last_region)
 	if !app_step(app, Flow_Trigger{source}) { return false }
 	timing_start(SOURCE_NAMES[source])
-	app.capture_trigger, app.capture_record = t, record
+	app.capture_target, app.capture_record = target, record
 	// (the renderer's device made while the desktop is read: the overlay's first show does not wait for the driver)
-	if source == .Region && app.shared.main == nil && render.device_preload_state() == .Not_Started { render.preload_device() }
-	// (a region's picture is frozen while it is chosen: no delay; a screen or a window waits, for a menu to open)
-	delay := source == .Region ? 0 : app.settings.delay_s * 1000
-	worker_send(&app.worker, Job_Grab{source, delay})
+	if source in SOURCES_SELECTED && app.shared.main == nil && render.device_preload_state() == .Not_Started { render.preload_device() }
+	// (a recording's region and a colour: no workflow's options; a colour is read without the pointer over it)
+	o: Capture_Options
+	if !record && source != .Color { o = capture_options(workflows_target(&app.workflows, target)) }
+	worker_send(&app.worker, Job_Grab{source = source, delay_ms = o.delay_s * 1000, cursor = o.cursor, rect = app.last_region})
 	return true
+}
+
+// A countdown's second, from the worker: said while the capture waits; withdrawn at 0, before the picture.
+@(private = "file")
+app_countdown :: proc(app: ^App, r: Result_Countdown) {
+	if _, capturing := app.flow.(Flow_Capturing); !capturing { return }
+	if r.seconds > 0 {
+		app_announce(app, .Info, fmt.tprintf(i18n.tr("Capture in %d s"), r.seconds))
+		app.countdown_shown = true
+		return
+	}
+	// (the system's notification goes from the screen; a toast is in a window hidden during a capture)
+	if app.countdown_shown && app.announcer.last != 0 { platform.notify_close(app.anchor, app.announcer.last) }
+	app.countdown_shown = false
 }
 
 // The worker's results, in order.
@@ -450,6 +491,8 @@ app_results :: proc(app: ^App) {
 			delete(v.problem)
 		case Result_Setup_Facts:
 			updates_facts(app, v)
+		case Result_Countdown:
+			app_countdown(app, v)
 		case Result_Desktop:
 			app_desktop(app, v)
 		case Result_Shot:
@@ -480,7 +523,9 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 	}
 	app.desktop, app.has_desktop = d, true
 	app_step(app, Flow_Captured{})
-	if !overlay_show(app) {
+	picker := false
+	if s, selecting := app.flow.(Flow_Selecting); selecting { picker = s.source == .Color }
+	if !overlay_show(app, picker) {
 		app_desktop_drop(app)
 		app_step(app, Flow_Capture_Failed{.Failed})
 		if app.capture_record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
@@ -495,6 +540,8 @@ app_desktop_drop :: proc(app: ^App) {
 
 // What the overlay decided, after its frame.
 app_region_confirmed :: proc(app: ^App, r: Rect) {
+	// (what Source.Last_Region takes again, a recording's region too)
+	app.last_region, app.has_last_region = r, true
 	if app.capture_record {
 		overlay_hide(app)
 		app_record_chosen(app, r)
@@ -504,6 +551,19 @@ app_region_confirmed :: proc(app: ^App, r: Rect) {
 	overlay_hide(app)
 	// (the desktop stays until the cut comes back: the worker reads it)
 	worker_send(&app.worker, Job_Crop{app.desktop.frame, r})
+}
+
+// The colour picker's click: the colour's words on the clipboard ("#rrggbb", or "rgb(r, g, b)" with `rgb`), and said.
+app_color_picked :: proc(app: ^App, c: [4]u8, rgb: bool) {
+	if !app_step(app, Flow_Picked{}) { return }
+	overlay_hide(app)
+	app_desktop_drop(app)
+	text := color_pick_text(c, rgb)
+	if !platform.clipboard_set(app.anchor, {text = text}) {
+		app_announce(app, .Bad, i18n.tr("The colour cannot go to the clipboard"), text)
+		return
+	}
+	app_announce(app, .Good, fmt.tprintf(i18n.tr("Colour %s copied"), text))
 }
 
 app_region_cancelled :: proc(app: ^App) {
@@ -550,7 +610,7 @@ app_chain :: proc(app: ^App, shot: Shot) {
 		shot_free(&shot)
 		return
 	}
-	if workflow_capture(app, app.capture_trigger, shot) {
+	if workflow_capture(app, app.capture_target, shot) {
 		app_step(app, Flow_Handed{})
 		return
 	}
@@ -586,9 +646,11 @@ app_announce :: proc(app: ^App, kind: ui.Toast_Kind, title: string, body := "", 
 app_outcome :: proc(app: ^App) {
 	if s, failed := app.flow.(Flow_Failed); failed {
 		title := i18n.tr("No screenshot")
-		#partial switch app.capture_trigger {
-		case .Qr:  title = i18n.tr("No QR code")
-		case .Ocr: title = i18n.tr("No text")
+		switch {
+		case s.source == .Color: title = i18n.tr("No colour")
+		case app.capture_target.workflow != 0:
+		case app.capture_target.trigger == .Qr:  title = i18n.tr("No QR code")
+		case app.capture_target.trigger == .Ocr: title = i18n.tr("No text")
 		}
 		body := FLOW_ERROR_TEXT[s.error]
 		log.warn(body)
@@ -633,6 +695,7 @@ Tray_Menu :: enum u8 { Rest, Ready, Recording }
 TRAY_SHORTCUT_TEXT := [Shortcut_Action]string{
 	.Screen = i18n.later("Capture the screen"), .Region = i18n.later("Capture a region"), .Record = i18n.later("Record a video"), .Record_Gif = i18n.later("Record a GIF"),
 	.Window = i18n.later("Capture the window in front"), .Ocr = i18n.later("Read the text"), .Qr = i18n.later("Read a QR code"),
+	.All_Screens = i18n.later("Capture all the screens"), .Last_Region = i18n.later("Capture the last region again"), .Color = i18n.later("Pick a colour"),
 }
 
 // The tray's menu for the recording's state, each command with the keys that run it (tray_keys).
@@ -660,7 +723,7 @@ app_tray_menu :: proc(app: ^App) {
 			item := Tray_Item(int(Tray_Item.Screen) + int(a))
 			append(&items, platform.Tray_Menu_Item{id = int(item), text = i18n.tr(TRAY_SHORTCUT_TEXT[a]), default = item == default_item, shortcut = app.tray_keys[a]})
 		}
-		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Edit), text = i18n.tr("Capture a region and edit")})
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Edit), text = i18n.tr("Capture a region and edit"), shortcut = app.tray_edit_keys})
 	}
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.History), text = i18n.tr("History"), default = app.tray_menu == .Rest && app.settings.tray_click == .History})
@@ -701,6 +764,14 @@ app_tray_follow :: proc(app: ^App) {
 		app.tray_keys[a] = strings.clone(keys)
 		changed = true
 	}
+	// ("Capture a region and edit" has no fixed keys: its workflow's own, when that workflow has some)
+	edit_keys := ""
+	if wf := workflows_for(&app.workflows, .Edit); wf != nil { edit_keys = workflow_shortcut_keys(app, wf.id) }
+	if edit_keys != app.tray_edit_keys {
+		delete(app.tray_edit_keys)
+		app.tray_edit_keys = strings.clone(edit_keys)
+		changed = true
+	}
 	menu := Tray_Menu.Rest
 	if record_running(app.record) { menu = .Recording } else if record_ready(app.record) { menu = .Ready }
 	if changed || menu != app.tray_menu || app.tray_language != i18n.version() { app_tray_menu(app) }
@@ -727,7 +798,7 @@ app_tray :: proc(app: ^App) {
 			}
 		case .Menu_Item:
 			switch Tray_Item(e.item) {
-			case .Screen, .Region, .Record, .Record_Gif, .Window, .Ocr, .Qr:
+			case .Screen, .Region, .Record, .Record_Gif, .Window, .Ocr, .Qr, .All_Screens, .Last_Region, .Color:
 				app_shortcut_run(app, Shortcut_Action(e.item - int(Tray_Item.Screen)))
 			case .Edit:          app_trigger(app, .Edit)
 			case .Workflows:     workflows_show(app)

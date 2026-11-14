@@ -10,6 +10,7 @@ package cliche
 //   the mode       the interaction: one state machine, one transition procedure (edit_step), as flow.odin's
 //
 //   Idle --press--> Drawing | Moving | Resizing | Panning | Cropping | Typing
+//   Idle --right press on a shape--> Idle (the shape selected: the window opens its menu)
 //   Drawing, Moving, Resizing, Panning, Cropping --release--> Idle
 //   Typing --text end, press--> Idle
 //
@@ -18,6 +19,7 @@ package cliche
 
 import "core:math"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 import undo "gt:undo"
 
@@ -26,7 +28,7 @@ Edit_Vec :: [2]f32
 // A rectangle by its two corners (min <= max once normalized).
 Edit_Box :: struct { min, max: Edit_Vec }
 
-Edit_Tool :: enum u8 { Select, Rectangle, Ellipse, Arrow, Line, Pen, Text, Highlighter, Pixelate, Step, Crop }
+Edit_Tool :: enum u8 { Select, Rectangle, Ellipse, Arrow, Line, Pen, Text, Highlighter, Pixelate, Blur, Step, Crop }
 
 Edit_Kind :: enum u8 {
 	Rectangle,
@@ -36,13 +38,15 @@ Edit_Kind :: enum u8 {
 	Pen,           // freehand: its points
 	Text,
 	Highlighter,   // a translucent marker over a rectangle
-	Pixelate,      // hides what is under its rectangle
+	Pixelate,      // hides what is under its rectangle behind a mosaic
+	Blur,          // hides what is under its rectangle behind a blurred copy of the picture
 	Step,          // a filled circle with a number that counts up
+	Image,         // a picture pasted on the picture: the window holds its pixels (Edit_Shape.image names them)
 }
 
 // What the properties' bar offers for a kind.
-Edit_Prop :: enum u8 { Color, Width, Shadow, Fill, Text_Size }
-Edit_Props :: bit_set[Edit_Prop; u8]
+Edit_Prop :: enum u8 { Color, Width, Shadow, Fill, Text_Size, Text_Look, Bold, Step_Format, Step_Number, Blur_Radius, Pixel_Size }
+Edit_Props :: bit_set[Edit_Prop; u16]
 
 EDIT_PROPS := [Edit_Kind]Edit_Props{
 	.Rectangle   = {.Color, .Width, .Shadow, .Fill},
@@ -50,29 +54,50 @@ EDIT_PROPS := [Edit_Kind]Edit_Props{
 	.Arrow       = {.Color, .Width, .Shadow},
 	.Line        = {.Color, .Width, .Shadow},
 	.Pen         = {.Color, .Width, .Shadow},
-	.Text        = {.Color, .Shadow, .Text_Size},
+	.Text        = {.Color, .Shadow, .Text_Size, .Fill, .Text_Look, .Bold},
 	.Highlighter = {.Color},
-	.Pixelate    = {},
-	.Step        = {.Color, .Shadow, .Text_Size},
+	.Pixelate    = {.Pixel_Size},
+	.Blur        = {.Blur_Radius},
+	.Step        = {.Color, .Shadow, .Text_Size, .Fill, .Step_Format, .Step_Number},
+	.Image       = {.Shadow},
 }
+
+// How a text shows on the picture: its letters alone, the letters with an outline, or the letters on a box.
+Edit_Text_Look :: enum u8 { Plain, Outline, Background }
+
+// How a step writes its number: 1, 2, 3; a, b, c; A, B, C; i, ii, iii.
+Edit_Step_Format :: enum u8 { Number, Lower, Upper, Roman }
 
 // The look of a shape. Lengths are logical pixels: on a picture taken at 200 %, a 4 px stroke is 8 of its pixels.
 Edit_Style :: struct {
-	color:     u32,   // 0xRRGGBB, sRGB
-	width:     f32,
-	shadow:    f32,   // the shadow's softness, logical pixels (its blur; it falls a little less far): 0 none
-	fill:      bool,
-	text_size: f32,
+	color:       u32,   // 0xRRGGBB, sRGB
+	// 0xAARRGGBB, sRGB: a box's or an ellipse's inside, a step's disc, a text's outline or box. Alpha 0: none (a text's
+	// outline or box then takes black or white, whichever stands out from its letters)
+	fill_color:  u32,
+	width:       f32,
+	shadow:      f32,   // the shadow's softness, logical pixels (its blur; it falls a little less far): 0 none
+	text_size:   f32,
+	text_look:   Edit_Text_Look,
+	bold:        bool,
+	step_format: Edit_Step_Format,
+	blur_radius: f32,   // Blur: logical pixels
+	pixel_size:  f32,   // Pixelate: a cell's side, logical pixels
 }
 
 // The swatches: red first, the default (ShareX's look: red reads on any screenshot).
 EDIT_COLORS := [?]u32{0xE53935, 0xFB8C00, 0xFDD835, 0x43A047, 0x1E88E5, 0x8E24AA, 0x000000, 0xFFFFFF}
+EDIT_OPAQUE :: u32(0xFF000000)   // the alpha of a fill colour that is there
 EDIT_WIDTH_MIN :: 1    // a stroke's width, logical pixels: the slider's ends
 EDIT_WIDTH_MAX :: 40
 EDIT_TEXT_SIZES := [?]f32{16, 24, 32, 48}
+EDIT_TEXT_SIZE_MIN :: 6     // what the scale handle can make of a text or a step, logical pixels
+EDIT_TEXT_SIZE_MAX :: 400
 EDIT_SHADOW_MAX :: 20   // the shadow's slider's end, logical pixels
+// The choices of Blur's radius and Pixelate's cell: a few, each a blurred copy or a mosaic made once per picture
+EDIT_BLUR_RADII := [?]f32{4, 8, 16, 32}
+EDIT_PIXEL_SIZES := [?]f32{6, 12, 24, 48}
 
-EDIT_STYLE_DEFAULT :: Edit_Style{color = 0xE53935, width = 4, shadow = 3, fill = false, text_size = 24}
+EDIT_STYLE_DEFAULT :: Edit_Style{color = 0xE53935, width = 4, shadow = 3, text_size = 24, blur_radius = 8, pixel_size = 12}
 EDIT_HIGHLIGHT_COLOR :: 0xFDD835   // (the yellow swatch)
 EDIT_HIGHLIGHT_ALPHA :: 0.4
 
@@ -82,11 +107,16 @@ EDIT_SMALL_PX     :: 4      // a shape drawn smaller than this on the screen was
 EDIT_ZOOM_MIN     :: 0.05
 EDIT_ZOOM_MAX     :: 16
 EDIT_ZOOM_STEP    :: 1.25   // one notch of the wheel, one Ctrl+= or Ctrl+-
+EDIT_ZOOMS        := [?]f32{0.5, 1, 2, 4}   // the zoom menu's steps (with "fit")
 EDIT_WHEEL_PAN_PX :: 60     // window pixels a notch of the wheel pans
 EDIT_FIT_MARGIN   :: 0.96   // the share of the canvas a fitted picture takes: its edge stays visible
 EDIT_NUDGE_FAST   :: 10     // picture pixels a step with Shift
 EDIT_DUPLICATE_PX :: 16     // logical pixels a copy lands from its original
 EDIT_STEP_RADIUS  :: 0.8    // a step's radius, in its text size
+EDIT_TEXT_OUTLINE :: 0.16   // a text's outline, in its text size (half of it shows: the letters cover the rest)
+EDIT_TEXT_BOX_PAD :: 0.25   // the room around a text on a box, in its text size
+EDIT_PASTE_FIT    :: 0.9    // a pasted picture larger than this share of the picture is made smaller to fit it
+EDIT_SCALE_MIN    :: 0.02   // the least a pen's drawing is scaled to, of its size
 
 Edit_Shape :: struct {
 	kind:   Edit_Kind,
@@ -94,8 +124,9 @@ Edit_Shape :: struct {
 	// measured. Step: its centre, twice.
 	a, b:   Edit_Vec,
 	points: [dynamic]Edit_Vec,   // Pen (owned)
-	text:   string,              // Text (owned)
+	text:   string,              // Text (owned): its lines separated by "\n"
 	number: int,                 // Step
+	image:  u32,                 // Image: the window's picture of that id (never 0)
 	style:  Edit_Style,
 }
 
@@ -106,8 +137,8 @@ Edit_Snapshot :: struct {
 	has_crop: bool,
 }
 
-// The size of a text in the picture's pixels, at `size` picture pixels: the window's font measures it.
-Edit_Measure :: proc(user: rawptr, text: string, size: f32) -> Edit_Vec
+// The size of one line of text in the picture's pixels, at `size` picture pixels: the window's font measures it.
+Edit_Measure :: proc(user: rawptr, text: string, size: f32, bold: bool) -> Edit_Vec
 
 Edit_Doc :: struct {
 	size:         Edit_Vec,   // the picture, pixels
@@ -119,6 +150,10 @@ Edit_Doc :: struct {
 	history:      undo.Stack(Edit_Snapshot),
 	pending:      Edit_Snapshot,   // the document when the gesture began (has_pending)
 	has_pending:  bool,
+	step_start:   int,        // the least number the next step takes
+	// counts the changes of the shapes kept (a gesture ended, an undo, a style): the window reads the shapes again
+	// (which mosaics and blurred copies they need) only when it moved, not at each frame
+	revision:     u64,
 	measure:      Edit_Measure,
 	measure_user: rawptr,
 }
@@ -131,7 +166,8 @@ Edit_View :: struct {
 	fit:    bool,       // the picture is fitted to the canvas at each frame (until a zoom or a pan)
 }
 
-Edit_Handle :: enum u8 { None, Top_Left, Top, Top_Right, Right, Bottom_Right, Bottom, Bottom_Left, Left, Start, End }
+// Scale: one handle at the bottom right of a text, a step or a drawing, that makes all of it larger or smaller.
+Edit_Handle :: enum u8 { None, Top_Left, Top, Top_Right, Right, Bottom_Right, Bottom, Bottom_Left, Left, Start, End, Scale }
 Edit_Handles :: bit_set[Edit_Handle; u16]
 
 EDIT_BOX_HANDLES :: Edit_Handles{.Top_Left, .Top, .Top_Right, .Right, .Bottom_Right, .Bottom, .Bottom_Left, .Left}
@@ -141,7 +177,8 @@ EDIT_LINE_HANDLES :: Edit_Handles{.Start, .End}
 Edit_Idle     :: struct {}
 Edit_Drawing  :: struct { index: int, start: Edit_Vec }                         // a new shape follows the pointer
 Edit_Moving   :: struct { index: int, last: Edit_Vec }                          // picture pixels
-Edit_Resizing :: struct { index: int, handle: Edit_Handle, start, a, b: Edit_Vec }   // the press and the shape as it was
+// the press and the shape as it was (the whole shape as it was, for Scale: the document kept when the gesture began)
+Edit_Resizing :: struct { index: int, handle: Edit_Handle, start, a, b: Edit_Vec }
 Edit_Panning  :: struct { last: Edit_Vec }                                      // window pixels
 Edit_Cropping :: struct { start: Edit_Vec }
 Edit_Typing   :: struct { index: int, before: string, fresh: bool }   // before: the text as it was (owned); fresh: a new text
@@ -160,6 +197,9 @@ Edit_Type_End :: struct { keep: bool }     // Enter or a press elsewhere keep th
 
 Edit_Event :: union { Edit_Press, Edit_Move, Edit_Release, Edit_Wheel, Edit_Typed, Edit_Type_End }
 
+// A style's field that a slider or the colour picker runs through: the values of one run are one undo step.
+Edit_Run_Field :: enum u8 { None, Color, Fill_Color, Width, Shadow }
+
 Edit_Model :: struct {
 	doc:    Edit_Doc,
 	view:   Edit_View,
@@ -167,19 +207,22 @@ Edit_Model :: struct {
 	tool:   Edit_Tool,
 	styles: [Edit_Tool]Edit_Style,   // each tool's own, for its next shape
 	typing: u32,   // counts the starts of Typing: the window puts the shape's text in its field at a new one
-	// the last undo step was a width set on this shape (its index + 1; 0: none), and the stack was this long after it:
-	// the widths a slider runs through are one step, not one a frame
-	width_run, width_run_undo: int,
+	// the last undo step was a run of `run_field` on this shape (its index + 1; 0: none), and the stack was this long
+	// after it: the values a slider or the picker runs through are one step, not one a frame
+	run_field: Edit_Run_Field,
+	run_shape, run_undo: int,
 }
 
 edit_model_init :: proc(m: ^Edit_Model, size: [2]int, scale: f32, measure: Edit_Measure, measure_user: rawptr) {
-	m.doc = {size = {f32(size.x), f32(size.y)}, scale = scale > 0 ? scale : 1, selected = -1, measure = measure, measure_user = measure_user}
+	m.doc = {size = {f32(size.x), f32(size.y)}, scale = scale > 0 ? scale : 1, selected = -1, step_start = 1, measure = measure, measure_user = measure_user}
 	m.view = {zoom = 1, fit = true}
 	m.mode = Edit_Idle{}
 	m.tool = .Arrow
 	for t in Edit_Tool { m.styles[t] = EDIT_STYLE_DEFAULT }
-	m.styles[.Highlighter] = {color = EDIT_HIGHLIGHT_COLOR, width = EDIT_STYLE_DEFAULT.width, text_size = EDIT_STYLE_DEFAULT.text_size}
+	m.styles[.Highlighter].color = EDIT_HIGHLIGHT_COLOR
+	m.styles[.Highlighter].shadow = 0
 	m.styles[.Pixelate].shadow = 0
+	m.styles[.Blur].shadow = 0
 }
 
 edit_model_destroy :: proc(m: ^Edit_Model) {
@@ -274,6 +317,17 @@ edit_view_zoom_centre :: proc(m: ^Edit_Model, factor: f32) {
 	edit_view_zoom(m, factor, (m.view.canvas.min + m.view.canvas.max) * 0.5)
 }
 
+// The zoom set to `zoom` (1: a picture's pixel a pixel of the screen, Ctrl+1), around the canvas' centre.
+edit_view_zoom_to :: proc(m: ^Edit_Model, zoom: f32) {
+	if m.view.zoom <= 0 { return }
+	edit_view_zoom_centre(m, zoom / m.view.zoom)
+}
+
+// The picture's point at the canvas' centre, within the picture (where a paste lands without the pointer on the canvas).
+edit_view_centre :: proc(m: ^Edit_Model) -> Edit_Vec {
+	return picture_clamp(&m.doc, edit_to_picture(m.view, (m.view.canvas.min + m.view.canvas.max) * 0.5))
+}
+
 ////////////////////////////////
 // Shapes
 
@@ -304,13 +358,18 @@ shapes_equal :: proc(x, y: []Edit_Shape) -> bool {
 	if len(x) != len(y) { return false }
 	for i in 0 ..< len(x) {
 		p, q := x[i], y[i]
-		if p.kind != q.kind || p.a != q.a || p.b != q.b || p.number != q.number || p.style != q.style || p.text != q.text { return false }
+		if p.kind != q.kind || p.a != q.a || p.b != q.b || p.number != q.number || p.image != q.image || p.style != q.style || p.text != q.text { return false }
 		if !slice.equal(p.points[:], q.points[:]) { return false }
 	}
 	return true
 }
 
-// The box a shape covers, without its stroke's width.
+// The fill colour of a style, 0xRRGGBB; ok false: none.
+edit_fill :: proc(style: Edit_Style) -> (rgb: u32, ok: bool) {
+	return style.fill_color & 0xFFFFFF, style.fill_color >> 24 != 0
+}
+
+// The box a shape covers, without its stroke's width (a text's with its outline or its box).
 edit_shape_box :: proc(doc: ^Edit_Doc, s: ^Edit_Shape) -> Edit_Box {
 	#partial switch s.kind {
 	case .Pen:
@@ -321,6 +380,8 @@ edit_shape_box :: proc(doc: ^Edit_Doc, s: ^Edit_Shape) -> Edit_Box {
 	case .Step:
 		r := edit_step_radius(doc, s)
 		return {s.a - r, s.a + r}
+	case .Text:
+		return edit_box_pad(edit_box_of(s.a, s.b), edit_text_pad(doc, s))
 	}
 	return edit_box_of(s.a, s.b)
 }
@@ -332,28 +393,84 @@ edit_text_px :: proc(doc: ^Edit_Doc, s: ^Edit_Shape) -> f32 { return s.style.tex
 
 edit_step_radius :: proc(doc: ^Edit_Doc, s: ^Edit_Shape) -> f32 { return edit_text_px(doc, s) * EDIT_STEP_RADIUS }
 
-// The number the next step takes: one past the highest (a step deleted last is given again).
+// How far a text's outline or box reaches past its letters, picture pixels.
+edit_text_pad :: proc(doc: ^Edit_Doc, s: ^Edit_Shape) -> f32 {
+	switch s.style.text_look {
+	case .Plain:      return 0
+	case .Outline:    return edit_text_px(doc, s) * EDIT_TEXT_OUTLINE * 0.5
+	case .Background: return edit_text_px(doc, s) * EDIT_TEXT_BOX_PAD
+	}
+	return 0
+}
+
+// A Pixelate's cell, a Blur's radius: in whole picture pixels, as the window makes their mosaics and blurred copies.
+edit_pixel_cell :: proc(doc: ^Edit_Doc, style: Edit_Style) -> int { return max(int(math.round(style.pixel_size * doc.scale)), 1) }
+edit_blur_px :: proc(doc: ^Edit_Doc, style: Edit_Style) -> int { return max(int(math.round(style.blur_radius * doc.scale)), 1) }
+
+// The number the next step takes: one past the highest (a step deleted last is given again), and the start at least.
 edit_step_next :: proc(doc: ^Edit_Doc) -> int {
 	n := 0
 	for s in doc.shapes { if s.kind == .Step { n = max(n, s.number) } }
-	return n + 1
+	return max(n + 1, doc.step_start)
 }
 
-// A text's box from its measure: its top left stays.
+// How a step writes `n` in `format`, in `buf` (32 bytes are enough). A number letters or Roman numerals cannot write (0
+// or less; past 3999 in Roman) is written in digits.
+edit_step_label :: proc(buf: []u8, n: int, format: Edit_Step_Format) -> string {
+	if n <= 0 || format == .Number || (format == .Roman && n > 3999) { return strconv.write_int(buf, i64(n), 10) }
+	i := len(buf)
+	switch format {
+	case .Number:
+	case .Lower, .Upper:
+		// (as a spreadsheet's columns: z, then aa)
+		first := format == .Lower ? u8('a') : u8('A')
+		for v := n; v > 0 && i > 0; v = (v - 1) / 26 {
+			i -= 1
+			buf[i] = first + u8((v - 1) % 26)
+		}
+	case .Roman:
+		@(static, rodata) values := [13]int{1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1}
+		@(static, rodata) marks := [13]string{"m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i"}
+		j, v := 0, n
+		for k in 0 ..< len(values) {
+			for v >= values[k] && j + len(marks[k]) <= len(buf) {
+				copy(buf[j:], marks[k])
+				j += len(marks[k])
+				v -= values[k]
+			}
+		}
+		return string(buf[:j])
+	}
+	return string(buf[i:])
+}
+
+// A text's box from its measure, line by line: its top left stays.
 @(private = "file")
 text_measure :: proc(doc: ^Edit_Doc, s: ^Edit_Shape) {
-	size := Edit_Vec{1, edit_text_px(doc, s)}
-	if doc.measure != nil { size = doc.measure(doc.measure_user, s.text, edit_text_px(doc, s)) }
+	px := edit_text_px(doc, s)
+	size := Edit_Vec{1, 0}
+	// (each line, an empty last one too: a line just begun with Shift+Enter has its room)
+	rest := s.text
+	for {
+		nl := strings.index_byte(rest, '\n')
+		line := nl < 0 ? rest : rest[:nl]
+		v := Edit_Vec{1, px}
+		if doc.measure != nil { v = doc.measure(doc.measure_user, line, px, s.style.bold) }
+		size = {max(size.x, v.x), size.y + v.y}
+		if nl < 0 { break }
+		rest = rest[nl + 1:]
+	}
 	s.b = s.a + {max(size.x, 1), max(size.y, 1)}
 }
 
 // Whether `p` (picture pixels) touches the shape, `tolerance` picture pixels around its stroke.
 edit_shape_hit :: proc(doc: ^Edit_Doc, s: ^Edit_Shape, p: Edit_Vec, tolerance: f32) -> bool {
 	half := edit_stroke_px(doc, s) * 0.5 + tolerance
+	_, filled := edit_fill(s.style)
 	switch s.kind {
 	case .Rectangle:
 		r := edit_box_of(s.a, s.b)
-		if s.style.fill { return edit_box_contains(edit_box_pad(r, half), p) }
+		if filled { return edit_box_contains(edit_box_pad(r, half), p) }
 		return edit_box_contains(edit_box_pad(r, half), p) && !edit_box_contains(edit_box_pad(r, -half), p)
 	case .Ellipse:
 		r := edit_box_of(s.a, s.b)
@@ -361,7 +478,7 @@ edit_shape_hit :: proc(doc: ^Edit_Doc, s: ^Edit_Shape, p: Edit_Vec, tolerance: f
 		radii := edit_box_size(r) * 0.5
 		if radii.x < 1 || radii.y < 1 { return segment_distance(p, r.min, r.max) <= half }
 		d := length((p - c) / radii)
-		if s.style.fill { return d <= 1 + half / min(radii.x, radii.y) }
+		if filled { return d <= 1 + half / min(radii.x, radii.y) }
 		return abs(d - 1) * min(radii.x, radii.y) <= half
 	case .Arrow, .Line:
 		return segment_distance(p, s.a, s.b) <= half
@@ -369,8 +486,8 @@ edit_shape_hit :: proc(doc: ^Edit_Doc, s: ^Edit_Shape, p: Edit_Vec, tolerance: f
 		if len(s.points) == 1 { return length(p - s.points[0]) <= half }
 		for i in 1 ..< len(s.points) { if segment_distance(p, s.points[i - 1], s.points[i]) <= half { return true } }
 		return false
-	case .Text, .Highlighter, .Pixelate:
-		return edit_box_contains(edit_box_pad(edit_box_of(s.a, s.b), tolerance), p)
+	case .Text, .Highlighter, .Pixelate, .Blur, .Image:
+		return edit_box_contains(edit_box_pad(edit_shape_box(doc, s), tolerance), p)
 	case .Step:
 		return length(p - s.a) <= edit_step_radius(doc, s) + tolerance
 	}
@@ -385,8 +502,8 @@ edit_hit :: proc(doc: ^Edit_Doc, p: Edit_Vec, tolerance: f32) -> int {
 
 // The handles a shape has, and where each is (picture pixels).
 edit_handles :: proc(doc: ^Edit_Doc, s: ^Edit_Shape) -> (at: [Edit_Handle]Edit_Vec, has: Edit_Handles) {
-	#partial switch s.kind {
-	case .Rectangle, .Ellipse, .Highlighter, .Pixelate:
+	switch s.kind {
+	case .Rectangle, .Ellipse, .Highlighter, .Pixelate, .Blur, .Image:
 		r := edit_box_of(s.a, s.b)
 		c := (r.min + r.max) * 0.5
 		at[.Top_Left], at[.Top], at[.Top_Right] = r.min, {c.x, r.min.y}, {r.max.x, r.min.y}
@@ -396,6 +513,9 @@ edit_handles :: proc(doc: ^Edit_Doc, s: ^Edit_Shape) -> (at: [Edit_Handle]Edit_V
 	case .Arrow, .Line:
 		at[.Start], at[.End] = s.a, s.b
 		has = EDIT_LINE_HANDLES
+	case .Text, .Step, .Pen:
+		at[.Scale] = edit_shape_box(doc, s).max
+		has = {.Scale}
 	}
 	return
 }
@@ -440,6 +560,28 @@ shape_resize :: proc(s: ^Edit_Shape, handle: Edit_Handle, a, b, d: Edit_Vec, shi
 	s.a, s.b = r.min, r.max
 }
 
+// The scale handle moved by `d` from where it was: the shape as it was when the gesture began (`was`), scaled from its
+// anchor (a text's top left, a step's centre, a drawing's top left) by how far the handle went along its diagonal.
+@(private = "file")
+shape_scale :: proc(doc: ^Edit_Doc, s: ^Edit_Shape, was: ^Edit_Shape, d: Edit_Vec) {
+	box := edit_shape_box(doc, was)
+	anchor := was.kind == .Pen ? box.min : was.a
+	diag := box.max - anchor
+	l2 := diag.x * diag.x + diag.y * diag.y
+	if l2 <= 0 { return }
+	q := box.max + d - anchor
+	f := (q.x * diag.x + q.y * diag.y) / l2
+	#partial switch s.kind {
+	case .Text, .Step:
+		s.style.text_size = clamp(was.style.text_size * f, EDIT_TEXT_SIZE_MIN, EDIT_TEXT_SIZE_MAX)
+		if s.kind == .Text { text_measure(doc, s) }
+	case .Pen:
+		f = max(f, EDIT_SCALE_MIN)
+		for p, i in was.points { if i < len(s.points) { s.points[i] = anchor + (p - anchor) * f } }
+		s.a, s.b = anchor + (was.a - anchor) * f, anchor + (was.b - anchor) * f
+	}
+}
+
 ////////////////////////////////
 // Undo and redo
 
@@ -466,6 +608,7 @@ snapshot_restore :: proc(doc: ^Edit_Doc, s: Edit_Snapshot) {
 	delete(s.shapes)
 	doc.crop, doc.has_crop = s.crop, s.has_crop
 	doc.selected = -1
+	doc.revision += 1
 }
 
 // A change begins: the document as it is now is kept, for the undo stack.
@@ -487,6 +630,7 @@ change_end :: proc(doc: ^Edit_Doc) {
 		return
 	}
 	undo.push(&doc.history, p, 0, snapshot_free)
+	doc.revision += 1
 }
 
 // Whether anything was changed since the picture came (the window asks before it closes).
@@ -544,6 +688,52 @@ edit_delete :: proc(m: ^Edit_Model) -> bool {
 	return true
 }
 
+// Every shape taken away (the crop stays); one undo step.
+edit_delete_all :: proc(m: ^Edit_Model) -> bool {
+	if !edit_idle(m) || len(m.doc.shapes) == 0 { return false }
+	change_begin(&m.doc)
+	shapes_free(m.doc.shapes[:])
+	clear(&m.doc.shapes)
+	m.doc.selected = -1
+	change_end(&m.doc)
+	return true
+}
+
+// Where the selected shape goes among the others: on top of all, under all, one up, one down.
+Edit_Order :: enum u8 { Front, Back, Forward, Backward }
+
+// Where the selected shape would go; ok false: it is there already (or nothing is selected).
+@(private = "file")
+order_target :: proc(m: ^Edit_Model, o: Edit_Order) -> (to: int, ok: bool) {
+	if !edit_idle(m) || !edit_has_selection(m) { return }
+	i, last := m.doc.selected, len(m.doc.shapes) - 1
+	switch o {
+	case .Front:    to = last
+	case .Back:     to = 0
+	case .Forward:  to = min(i + 1, last)
+	case .Backward: to = max(i - 1, 0)
+	}
+	return to, to != i
+}
+
+edit_can_order :: proc(m: ^Edit_Model, o: Edit_Order) -> bool {
+	_, ok := order_target(m, o)
+	return ok
+}
+
+// The selected shape moved in the order (Home, End, Page Up, Page Down); one undo step. It stays selected.
+edit_order :: proc(m: ^Edit_Model, o: Edit_Order) -> bool {
+	to, ok := order_target(m, o)
+	if !ok { return false }
+	change_begin(&m.doc)
+	s := m.doc.shapes[m.doc.selected]
+	ordered_remove(&m.doc.shapes, m.doc.selected)
+	inject_at(&m.doc.shapes, to, s)
+	m.doc.selected = to
+	change_end(&m.doc)
+	return true
+}
+
 // A copy of the selected shape, a little below and right of it, on top and selected. A step's copy takes the next number.
 edit_duplicate :: proc(m: ^Edit_Model) -> bool {
 	if !edit_idle(m) || !edit_has_selection(m) { return false }
@@ -569,6 +759,30 @@ edit_deselect :: proc(m: ^Edit_Model) -> bool {
 	return true
 }
 
+// A text from the clipboard (not kept), as a text of the Text tool's style, its top left at `at` (picture pixels); one
+// undo step. Its line ends become "\n"; an empty text is no text.
+edit_paste_text :: proc(m: ^Edit_Model, text: string, at: Edit_Vec) -> bool {
+	if !edit_idle(m) { return false }
+	t, _ := strings.replace_all(text, "\r\n", "\n", context.temp_allocator)
+	t, _ = strings.replace_all(t, "\r", "\n", context.temp_allocator)
+	t = strings.trim_right(t, "\n")
+	if strings.trim_space(t) == "" { return false }
+	edit_add(m, {kind = .Text, a = picture_clamp(&m.doc, at), text = strings.clone(t), style = m.styles[.Text]})
+	return true
+}
+
+// A picture from the clipboard, of `size` pixels, held by the window as `image` (never 0): centred on `at` (picture
+// pixels), at its own pixels, or smaller to fit the picture; one undo step. Its style is the Select tool's (its shadow).
+edit_paste_image :: proc(m: ^Edit_Model, image: u32, size: [2]int, at: Edit_Vec) -> bool {
+	if !edit_idle(m) || image == 0 || size.x <= 0 || size.y <= 0 { return false }
+	s := Edit_Vec{f32(size.x), f32(size.y)}
+	k := min(1, m.doc.size.x * EDIT_PASTE_FIT / s.x, m.doc.size.y * EDIT_PASTE_FIT / s.y)
+	s *= k
+	a := picture_clamp(&m.doc, at) - s * 0.5
+	edit_add(m, {kind = .Image, a = a, b = a + s, image = image, style = m.styles[.Select]})
+	return true
+}
+
 // A tool chosen: a drawing tool lets go of the selection (its properties are the tool's then).
 edit_tool_set :: proc(m: ^Edit_Model, t: Edit_Tool) {
 	m.tool = t
@@ -587,11 +801,13 @@ edit_tool_kind :: proc(t: Edit_Tool) -> (k: Edit_Kind, ok: bool) {
 	case .Text:          return .Text, true
 	case .Highlighter:   return .Highlighter, true
 	case .Pixelate:      return .Pixelate, true
+	case .Blur:          return .Blur, true
 	case .Step:          return .Step, true
 	}
 	return
 }
 
+// The tool whose style a kind's shape takes and gives back (a pasted picture: Select's, no tool draws it).
 edit_kind_tool :: proc(k: Edit_Kind) -> Edit_Tool {
 	switch k {
 	case .Rectangle:   return .Rectangle
@@ -602,7 +818,9 @@ edit_kind_tool :: proc(k: Edit_Kind) -> Edit_Tool {
 	case .Text:        return .Text
 	case .Highlighter: return .Highlighter
 	case .Pixelate:    return .Pixelate
+	case .Blur:        return .Blur
 	case .Step:        return .Step
+	case .Image:       return .Select
 	}
 	return .Select
 }
@@ -614,18 +832,20 @@ edit_style_shown :: proc(m: ^Edit_Model) -> (style: Edit_Style, props: Edit_Prop
 	return EDIT_STYLE_DEFAULT, {}
 }
 
-// A property set: on the selection (one undo step) and on the tool that draws its kind, else on the current tool.
+// A property set: on the selection (one undo step) and on the tool that draws its kind, else on the current tool. The
+// values of one field that a slider or the colour picker runs through, one after the other on one shape, are one step.
 edit_style_set :: proc(m: ^Edit_Model, style: Edit_Style) -> bool {
 	if !edit_idle(m) { return false }
 	if s := edit_selected_shape(m); s != nil {
 		if s.style == style { return false }
-		width_only := style.width != s.style.width && edit_style_but_width(style, s.style)
-		run := width_only && m.width_run == m.doc.selected + 1 && m.width_run_undo == len(m.doc.history.undo) && !undo.can_redo(&m.doc.history)
+		field := run_field(s.style, style)
+		run := field != .None && m.run_field == field && m.run_shape == m.doc.selected + 1 && m.run_undo == len(m.doc.history.undo) && !undo.can_redo(&m.doc.history)
 		if !run { change_begin(&m.doc) }
 		s.style = style
 		if s.kind == .Text { text_measure(&m.doc, s) }
 		if !run { change_end(&m.doc) }
-		m.width_run, m.width_run_undo = width_only ? m.doc.selected + 1 : 0, len(m.doc.history.undo)
+		m.doc.revision += 1
+		m.run_field, m.run_shape, m.run_undo = field, field != .None ? m.doc.selected + 1 : 0, len(m.doc.history.undo)
 		m.styles[edit_kind_tool(s.kind)] = style
 		return true
 	}
@@ -634,12 +854,37 @@ edit_style_set :: proc(m: ^Edit_Model, style: Edit_Style) -> bool {
 	return true
 }
 
-// The two styles are the same but for their widths.
+// The one field that differs between two styles, when it is one a run goes through; None: another, or several.
 @(private = "file")
-edit_style_but_width :: proc(a, b: Edit_Style) -> bool {
-	a, b := a, b
-	a.width, b.width = 0, 0
-	return a == b
+run_field :: proc(a, b: Edit_Style) -> Edit_Run_Field {
+	x, y := a, b
+	field := Edit_Run_Field.None
+	if x.color != y.color { field = .Color; x.color = y.color }
+	if x.fill_color != y.fill_color { if field != .None { return .None }; field = .Fill_Color; x.fill_color = y.fill_color }
+	if x.width != y.width { if field != .None { return .None }; field = .Width; x.width = y.width }
+	if x.shadow != y.shadow { if field != .None { return .None }; field = .Shadow; x.shadow = y.shadow }
+	return x == y ? field : .None
+}
+
+// The number the Step's options show: the selected step's, else the one the next step takes.
+edit_step_number_shown :: proc(m: ^Edit_Model) -> int {
+	if s := edit_selected_shape(m); s != nil && s.kind == .Step { return s.number }
+	return edit_step_next(&m.doc)
+}
+
+// The Step's number set: the selected step's (one undo step), else the least number the next step takes.
+edit_step_number_set :: proc(m: ^Edit_Model, n: int) -> bool {
+	if !edit_idle(m) || n < 1 { return false }
+	if s := edit_selected_shape(m); s != nil && s.kind == .Step {
+		if s.number == n { return false }
+		change_begin(&m.doc)
+		s.number = n
+		change_end(&m.doc)
+		return true
+	}
+	if m.doc.step_start == n { return false }
+	m.doc.step_start = n
+	return true
 }
 
 // The part of the picture that is kept, in whole pixels: the crop, else all of it.
@@ -693,7 +938,7 @@ edit_step :: proc(m: ^Edit_Model, e: Edit_Event) -> bool {
 			r := edit_shape_box(doc, sh)
 			small := max(r.max.x - r.min.x, r.max.y - r.min.y) * m.view.zoom < EDIT_SMALL_PX
 			#partial switch sh.kind {
-			case .Rectangle, .Ellipse, .Arrow, .Line, .Highlighter, .Pixelate:
+			case .Rectangle, .Ellipse, .Arrow, .Line, .Highlighter, .Pixelate, .Blur:
 				if small {
 					shape_free(sh)
 					ordered_remove(&doc.shapes, s.index)
@@ -722,11 +967,11 @@ edit_step :: proc(m: ^Edit_Model, e: Edit_Event) -> bool {
 	case Edit_Resizing:
 		#partial switch v in e {
 		case Edit_Move:
-			shape_resize(&doc.shapes[s.index], s.handle, s.a, s.b, edit_to_picture(m.view, v.at) - s.start, v.shift)
+			resizing_follow(m, s, edit_to_picture(m.view, v.at), v.shift)
 			return true
 		case Edit_Release:
 			if v.button != .Left { return false }
-			shape_resize(&doc.shapes[s.index], s.handle, s.a, s.b, edit_to_picture(m.view, v.at) - s.start, v.shift)
+			resizing_follow(m, s, edit_to_picture(m.view, v.at), v.shift)
 			change_end(doc)
 			m.mode = Edit_Idle{}
 			return true
@@ -787,9 +1032,15 @@ idle_press :: proc(m: ^Edit_Model, v: Edit_Press) -> bool {
 		m.view.fit = false
 		return true
 	}
-	if v.button != .Left { return false }
 	p := edit_to_picture(m.view, v.at)
 	tolerance := EDIT_HIT_PX / m.view.zoom
+	if v.button == .Right {
+		// (a right press on a shape selects it, with any tool: the window opens its menu; elsewhere it means nothing)
+		hit := edit_hit(doc, p, tolerance)
+		if hit < 0 { return false }
+		doc.selected = hit
+		return true
+	}
 	if m.tool == .Crop {
 		change_begin(doc)
 		start := picture_clamp(doc, p)
@@ -843,7 +1094,7 @@ idle_press :: proc(m: ^Edit_Model, v: Edit_Press) -> bool {
 drawing_follow :: proc(m: ^Edit_Model, s: Edit_Drawing, p: Edit_Vec, shift: bool) {
 	sh := &m.doc.shapes[s.index]
 	#partial switch sh.kind {
-	case .Rectangle, .Ellipse, .Highlighter, .Pixelate:
+	case .Rectangle, .Ellipse, .Highlighter, .Pixelate, .Blur:
 		sh.b = shift ? edit_square(sh.a, p) : p
 	case .Arrow, .Line:
 		sh.b = shift ? edit_snap_45(sh.a, p) : p
@@ -855,6 +1106,20 @@ drawing_follow :: proc(m: ^Edit_Model, s: Edit_Drawing, p: Edit_Vec, shift: bool
 	case .Step:
 		sh.a, sh.b = p, p
 	}
+}
+
+// A handle follows the pointer: a box's side or corner, a line's end, or the scale of a text, a step or a drawing.
+@(private = "file")
+resizing_follow :: proc(m: ^Edit_Model, s: Edit_Resizing, p: Edit_Vec, shift: bool) {
+	doc := &m.doc
+	sh := &doc.shapes[s.index]
+	if s.handle == .Scale {
+		// (the shape as the gesture found it: change_begin kept the whole document)
+		if !doc.has_pending || s.index >= len(doc.pending.shapes) { return }
+		shape_scale(doc, sh, &doc.pending.shapes[s.index], p - s.start)
+		return
+	}
+	shape_resize(sh, s.handle, s.a, s.b, p - s.start, shift)
 }
 
 @(private = "file")
@@ -895,8 +1160,8 @@ typing_end :: proc(m: ^Edit_Model, s: Edit_Typing, keep: bool) {
 		sh.text = strings.clone(s.before)
 		text_measure(doc, sh)
 	}
-	// (a text left empty is no text)
-	if sh.text == "" {
+	// (a text left empty, or only blanks, is no text)
+	if strings.trim_space(sh.text) == "" {
 		shape_free(sh)
 		ordered_remove(&doc.shapes, s.index)
 		doc.selected = -1

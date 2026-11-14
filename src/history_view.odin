@@ -206,9 +206,9 @@ history_start :: proc(app: ^App) {
 // The kind of a screenshot of `source`.
 history_kind_of :: proc(source: Source) -> History_Kind {
 	switch source {
-	case .Region: return .Region
-	case .Screen: return .Screen
-	case .Window: return .Window
+	case .Region, .Last_Region, .Color: return .Region
+	case .Screen, .All_Screens:         return .Screen
+	case .Window:                       return .Window
 	}
 	return .Region
 }

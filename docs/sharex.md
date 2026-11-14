@@ -231,6 +231,10 @@ Files: `editor.odin`, `worker.odin`, `save.odin`, `uploader.odin`, a new `pin.od
 
 ### WP3: capture and hotkeys (P1, P2)
 
+Status: written (region grips, `--last-region`, `--all-screens`, `--color`, a workflow's own shortcut, a delay and the
+pointer on the Capture node). The colour picker is a command and a shortcut, not a workflow's source: a colour is no
+picture, and the Capture node gives a picture.
+
 Files: `overlay.odin`, `geometry.odin`, `workflow.odin`, `shortcuts.odin`, `settings.odin`, `app.odin`.
 
 1. Region handles: move and resize the chosen rectangle with the mouse; confirm with Enter or a double click.

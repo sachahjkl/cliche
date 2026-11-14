@@ -1,8 +1,20 @@
 # The texts in fr (docs/i18n.md). Written by the i18n command: a translation left empty is the English.
 language fr
 
+en Capture in %d s
+fr Capture dans %d s
+
+en The colour cannot go to the clipboard
+fr La couleur ne peut pas aller dans le presse-papiers
+
+en Colour %s copied
+fr Couleur %s copiée
+
 en No screenshot
 fr Aucune capture d'écran
+
+en No colour
+fr Aucune couleur
 
 en No QR code
 fr Aucun code QR
@@ -30,6 +42,15 @@ fr Lire le texte
 
 en Read a QR code
 fr Lire un code QR
+
+en Capture all the screens
+fr Capturer tous les écrans
+
+en Capture the last region again
+fr Capturer à nouveau la dernière zone
+
+en Pick a colour
+fr Prélever une couleur
 
 en Start recording
 fr Démarrer l'enregistrement
@@ -100,6 +121,9 @@ fr Surligneur
 en Pixelate
 fr Pixeliser
 
+en Blur
+fr Flou
+
 en Step number
 fr Numéro d'étape
 
@@ -115,11 +139,29 @@ fr Modifier
 en Redo
 fr Rétablir
 
+en Paste a picture or a text
+fr Coller une image ou un texte
+
 en Delete the selection
 fr Supprimer la sélection
 
+en Delete every annotation
+fr Supprimer toutes les annotations
+
 en Duplicate the selection
 fr Dupliquer la sélection
+
+en Bring to front
+fr Mettre au premier plan
+
+en Bring forward
+fr Avancer d'un plan
+
+en Send backward
+fr Reculer d'un plan
+
+en Send to back
+fr Mettre à l'arrière-plan
 
 en Remove the crop
 fr Retirer le rognage
@@ -135,6 +177,9 @@ fr Zoom arrière
 
 en Fit the picture to the window
 fr Ajuster l'image à la fenêtre
+
+en Actual size (100 %)
+fr Taille réelle (100 %)
 
 en Copy the picture
 fr Copier l'image
@@ -202,6 +247,15 @@ fr Non enregistrée
 en Saved
 fr Enregistrée
 
+en Nothing to paste
+fr Rien à coller
+
+en The clipboard holds no picture and no text.
+fr Le presse-papiers ne contient ni image ni texte.
+
+en The clipboard's picture cannot be read
+fr L'image du presse-papiers ne peut pas être lue
+
 en The picture could not be made
 fr L'image n'a pas pu être créée
 
@@ -213,6 +267,21 @@ fr Lecture de l'image…
 
 en Done
 fr Terminé
+
+en Zoom
+fr Zoom
+
+en Another colour…
+fr Autre couleur…
+
+en Fill colour
+fr Couleur de remplissage
+
+en Fill colour: none
+fr Couleur de remplissage : aucune
+
+en Fill
+fr Remplissage
 
 ctx text size, short
 en S
@@ -242,11 +311,62 @@ fr Grand texte
 en Very large text
 fr Très grand texte
 
+en Bold
+fr Gras
+
+ctx text look
+en Plain
+fr Simple
+
+ctx text look
+en Outline
+fr Contour
+
+ctx text look
+en Box
+fr Encadré
+
+en The letters alone
+fr Les lettres seules
+
+en The letters with an outline (the fill colour, else black or white)
+fr Les lettres avec un contour (la couleur de remplissage, sinon noir ou blanc)
+
+en The letters on a box (the fill colour, else black or white)
+fr Les lettres sur un cadre (la couleur de remplissage, sinon noir ou blanc)
+
+en Numbers: 1, 2, 3
+fr Chiffres : 1, 2, 3
+
+en Small letters: a, b, c
+fr Minuscules : a, b, c
+
+en Capital letters: A, B, C
+fr Majuscules : A, B, C
+
+en Roman numerals: i, ii, iii
+fr Chiffres romains : i, ii, iii
+
+en Number
+fr Numéro
+
+en Next
+fr Suivant
+
+en A blur of %d px
+fr Un flou de %d px
+
+en Pixels of %d px
+fr Des pixels de %d px
+
+en Pixel size
+fr Taille des pixels
+
 en Shadow
 fr Ombre
 
-en Fill
-fr Remplissage
+en No fill
+fr Aucun remplissage
 
 en The editor's keys
 fr Les touches de l'éditeur
@@ -634,12 +754,6 @@ fr Un clic sur l'icône
 en What a click on cliche's icon in the notification area does.
 fr Ce que fait un clic sur l'icône de cliche dans la zone de notification.
 
-en Delay before a screen or a window
-fr Délai avant un écran ou une fenêtre
-
-en Seconds to wait before a screen or a window is taken (a menu opened meanwhile is in the picture). A region's picture is taken at once, frozen while you choose.
-fr Les secondes d'attente avant de prendre un écran ou une fenêtre (un menu ouvert entre-temps est dans l'image). L'image d'une zone est prise tout de suite, figée pendant que vous choisissez.
-
 en Languages of the text read
 fr Langues du texte lu
 
@@ -706,8 +820,8 @@ fr La taille des miniatures dans la grille.
 en Take the rectangle on release
 fr Prendre le rectangle au relâchement
 
-en Take the rectangle as soon as the button is released. Off: adjust it with the arrow keys (Shift: resize), then press Enter or click inside it.
-fr Prendre le rectangle dès que le bouton est relâché. Désactivé : ajustez-le avec les flèches (Maj : redimensionner), puis appuyez sur Entrée ou cliquez dedans.
+en Take the rectangle as soon as the button is released. Off: drag its corners and edges to resize it and its inside to move it, or use the arrow keys (Shift: resize), then press Enter or double-click inside it.
+fr Prendre le rectangle dès que le bouton est relâché. Désactivé : faites glisser ses coins et ses bords pour le redimensionner et son intérieur pour le déplacer, ou utilisez les flèches (Maj : redimensionner), puis appuyez sur Entrée ou double-cliquez dedans.
 
 en Frame the window under the pointer
 fr Encadrer la fenêtre sous le pointeur
@@ -766,6 +880,15 @@ fr Lire le texte d'une zone : il va dans le presse-papiers.
 en Read a QR code in a region: its text goes to the clipboard.
 fr Lire un code QR dans une zone : son texte va dans le presse-papiers.
 
+en Capture every screen in one picture.
+fr Capturer tous les écrans dans une seule image.
+
+en Capture the rectangle chosen last again, with no overlay. With none chosen yet: choose one.
+fr Capturer à nouveau le dernier rectangle choisi, sans superposition. S'il n'y en a pas encore : en choisir un.
+
+en Pick a colour on the screen: a click copies it as #rrggbb, Shift and a click as rgb(r, g, b).
+fr Prélever une couleur à l'écran : un clic la copie sous la forme #rrggbb, Maj et un clic sous la forme rgb(r, g, b).
+
 en General
 fr Général
 
@@ -798,6 +921,9 @@ fr Rendu
 
 en Capture the screen under the pointer
 fr Capturer l'écran sous le pointeur
+
+en Pick a colour on the screen
+fr Prélever une couleur à l'écran
 
 en Record
 fr Enregistrer
@@ -865,6 +991,18 @@ fr Copiée
 en Copy
 fr Copier
 
+en WORKFLOWS
+fr WORKFLOWS
+
+en A workflow's own shortcut captures what its Capture step says, then runs that workflow. Set it on that step.
+fr Le propre raccourci d'un scénario capture ce qu'indique son étape Capture, puis exécute ce scénario. Réglez-le sur cette étape.
+
+en no shortcut
+fr aucun raccourci
+
+en Change…
+fr Modifier…
+
 en Add a host: put its ShareX uploader (.sxcu) in the uploaders' folder, or import it. The list above shows them.
 fr Ajouter un hébergeur : mettez son fichier ShareX (.sxcu) dans le dossier des hébergeurs, ou importez-le. La liste ci-dessus les montre.
 
@@ -882,6 +1020,9 @@ fr Lire le texte d'une zone
 
 en Read a QR code in a region
 fr Lire un code QR dans une zone
+
+en Run the workflow "%s"
+fr Exécuter le scénario « %s »
 
 en the file is not JSON
 fr le fichier n'est pas du JSON
@@ -997,6 +1138,30 @@ fr qr
 en ocr
 fr ocr
 
+en all screens
+fr tous les écrans
+
+en last region
+fr dernière zone
+
+en A region
+fr Une zone
+
+en The screen
+fr L'écran
+
+en The window in front
+fr La fenêtre au premier plan
+
+en All the screens
+fr Tous les écrans
+
+en The last region
+fr La dernière zone
+
+en A colour
+fr Une couleur
+
 en Screenshot
 fr Capture d'écran
 
@@ -1026,9 +1191,6 @@ fr annulé dans l'éditeur
 
 en Nothing ran
 fr Rien ne s'est exécuté
-
-en WORKFLOWS
-fr WORKFLOWS
 
 en New workflow
 fr Nouveau scénario
@@ -1060,8 +1222,8 @@ fr Par défaut : %s
 en Reset
 fr Réinitialiser
 
-en Where the workflow starts: the picture of the capture.
-fr Le début du scénario : l'image de la capture.
+en Where the workflow starts: the picture of the capture. Its own shortcut captures what it says, then runs this workflow; the delay (counted down in a notification) and the pointer apply to every capture that runs it.
+fr Le début du scénario : l'image de la capture. Son propre raccourci capture ce qu'il indique, puis exécute ce scénario ; le délai (décompté dans une notification) et le pointeur valent pour chaque capture qui l'exécute.
 
 en Opens the picture in the editor. Done sends its picture on and fires "done"; Cancel stops this branch and fires "cancelled".
 fr Ouvre l'image dans l'éditeur. Terminé transmet son image et déclenche « terminé » ; Annuler arrête cette branche et déclenche « annulé ».
@@ -1113,6 +1275,15 @@ fr tout
 
 en Source
 fr Source
+
+en Its own shortcut
+fr Son propre raccourci
+
+en What its shortcut captures
+fr Ce que son raccourci capture
+
+en Delay
+fr Délai
 
 en Resize
 fr Redimensionner
@@ -1218,9 +1389,6 @@ fr Rayon
 
 en Drop shadow
 fr Ombre portée
-
-en Blur
-fr Flou
 
 en Offset right
 fr Décalage à droite
@@ -1360,6 +1528,12 @@ fr Égal à
 en Value
 fr Valeur
 
+en All screens
+fr Tous les écrans
+
+en Last region
+fr Dernière zone
+
 en Copy image
 fr Copier l'image
 
@@ -1446,6 +1620,12 @@ fr Afficher dans le dossier
 
 en Add to history
 fr Ajouter à l'historique
+
+en after %d s
+fr après %d s
+
+en with the pointer
+fr avec le pointeur
 
 en at most %d × %d px
 fr au plus %d × %d px
@@ -1611,6 +1791,9 @@ fr Les scénarios par défaut
 
 en Right click the graph, or drag from the Capture's picture, to add a step.
 fr Faites un clic droit sur le graphe, ou glissez depuis l'image de la Capture, pour ajouter une étape.
+
+en its own shortcut
+fr son propre raccourci
 
 en no capture runs it
 fr aucune capture ne l'exécute

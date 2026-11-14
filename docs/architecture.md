@@ -18,7 +18,8 @@ renderer is made at the first window that needs one, and that window is hidden, 
 - **The worker** (`src/worker.odin`) owns the capture session (`gt:capture`) and does everything slow: it reads the
   desktop, cuts a region, swaps the channels, encodes PNG, writes files. Its results are posted back. It is a `gt:tasks`
   pool of one thread that never grows: the session belongs to the thread that opened it, and the jobs run in order.
-- **The chores** (`ui.chores()`, gt:tasks) run the rest: an editor's file read and decoded, its mosaic, the system's
+- **The chores** (`ui.chores()`, gt:tasks) run the rest: an editor's file read and decoded, its mosaics and blurred
+  copies (one per size its shapes use), a picture pasted into it decoded, the system's
   file dialogs (`ui.file_dialog`), a file shown in its folder (`ui.open`).
 - **The preferences' writer** (`config.User_Writer`) writes the preferences' file; the loop hands it the text once a
   turn, when they changed.
@@ -27,17 +28,25 @@ renderer is made at the first window that needs one, and that window is hidden, 
 
 ## The capture flow
 
-One state machine (`src/flow.odin`): `Idle -> Capturing -> Selecting (region only) -> Encoding -> Idle | Failed`. One
+One state machine (`src/flow.odin`): `Idle -> Capturing -> Selecting (region, colour) -> Encoding -> Idle | Failed`. One
 union, one transition procedure; a transition not in the table is refused, and the tests drive it without a window. The
 picture is handed to a run of the capture's workflow, and the flow is Idle again: the next capture may start while the
 run goes on.
+
+The sources: a region (chosen on the frozen desktop), the screen under the pointer, the window in front, all the screens
+(`capture.desktop`), the last region (the rectangle chosen last, cut from the desktop now: no overlay; with none yet, a
+region), and the colour picker (the overlay with no rectangle: a click copies a pixel's colour, `src/color_pick.odin`,
+and the flow ends with no picture). The workflow that will run gives its Capture node's delay and pointer: the worker
+counts the delay down (`countdown_plan`: a notice each second, withdrawn just before the picture) and asks gt:capture
+for the pointer (`capture.set_cursor`; Wayland and Windows draw it, the portal and X11 cannot).
 
 ## A region
 
 On the trigger the worker reads the desktop (`capture.desktop`, every output in one picture) and the windows with their
 rects. The interface then shows one fullscreen window (`src/overlay.odin`) that draws that frozen picture, dimmed outside
 the selection. This works the same on every compositor: no layer surface, no transparency. The geometry of the selection
-(drag, nudge, resize, the framed window) is pure (`src/geometry.odin`).
+(drag, nudge, resize, the grips that move and resize it with the mouse, a double click, the framed window) is pure
+(`src/geometry.odin`).
 
 ## Workflows: after a capture
 
@@ -87,6 +96,11 @@ runs exactly one workflow. Recording is not a workflow. The graph, its edits, it
 `src/shortcuts.odin` binds one global shortcut per kind of capture through `gt:shortcuts`: on Linux the desktop portal's
 GlobalShortcuts (the system may give other keys than the ones asked: the settings show which), on Windows
 RegisterHotKey. The commands (`cliche --region`) stay for a compositor's own bindings.
+
+A workflow may also have keys of its own: its Capture node's `shortcut` (a `flowgraph` Hotkey parameter, recorded in the
+inspector) and `source`. They are bound as `workflow-<id>`; a press captures that source and runs that workflow
+(`Capture_Target`). The set is bound again when the workflows' version changes and a workflow's keys, its name or the
+list of them did. The settings' Shortcuts page lists each workflow's keys under the fixed ones.
 
 ## Settings
 

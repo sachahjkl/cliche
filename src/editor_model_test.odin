@@ -1,11 +1,12 @@
 package cliche
 
+import "core:strings"
 import "core:testing"
 
-// A font of fixed width: half its size a character, its size and a fifth tall.
+// A font of fixed width: half its size a character (bold: three quarters), its size and a fifth tall.
 @(private = "file")
-measure_fixed :: proc(user: rawptr, text: string, size: f32) -> Edit_Vec {
-	return {f32(len(text)) * size * 0.5, size * 1.2}
+measure_fixed :: proc(user: rawptr, text: string, size: f32, bold: bool) -> Edit_Vec {
+	return {f32(len(text)) * size * (bold ? 0.75 : 0.5), size * 1.2}
 }
 
 // A model on a 1000 x 800 picture shown at 1:1 from the window's origin: window and picture pixels are the same.
@@ -76,7 +77,7 @@ editor_hit_tests_strokes_and_fills :: proc(t: ^testing.T) {
 	testing.expect_value(t, edit_hit(&m.doc, {100, 200}, tol), 0)   // (on its left side)
 	testing.expect_value(t, edit_hit(&m.doc, {105, 200}, tol), 0)   // (near it)
 	testing.expect_value(t, edit_hit(&m.doc, {200, 200}, tol), -1)  // (inside an outline: not it)
-	m.doc.shapes[0].style.fill = true
+	m.doc.shapes[0].style.fill_color = EDIT_OPAQUE | 0x1E88E5
 	testing.expect_value(t, edit_hit(&m.doc, {200, 200}, tol), 0)
 	// (the topmost first)
 	edit_tool_set(&m, .Line)
@@ -285,7 +286,11 @@ the_choices_come_back :: proc(t: ^testing.T) {
 	edit_model_init(&a, {100, 100}, 1, measure_fixed, nil)
 	defer edit_model_destroy(&a)
 	a.tool = .Rectangle
-	a.styles[.Rectangle] = {color = 0x1E88E5, width = 7.5, shadow = 6, fill = true, text_size = 24}
+	a.styles[.Rectangle] = {color = 0x1E88E5, fill_color = 0x80FDD835, width = 7.5, shadow = 6, text_size = 24, blur_radius = 8, pixel_size = 12}
+	a.styles[.Text].text_look, a.styles[.Text].bold, a.styles[.Text].text_size = .Outline, true, 37.5
+	a.styles[.Step].step_format = .Roman
+	a.styles[.Blur].blur_radius = 32
+	a.styles[.Pixelate].pixel_size = 6
 	tool, styles := edit_choices_text(&a)
 	b: Edit_Model
 	edit_model_init(&b, {100, 100}, 1, measure_fixed, nil)
@@ -296,8 +301,275 @@ the_choices_come_back :: proc(t: ^testing.T) {
 	c: Edit_Model
 	edit_model_init(&c, {100, 100}, 1, measure_fixed, nil)
 	defer edit_model_destroy(&c)
-	edit_choices_read(&c, "Nothing", "Arrow zz 4 1 0 18;Pen 00ff00 3")
+	// (a broken style, a short one, one of the former six fields, a text look out of its enum: none is read)
+	edit_choices_read(&c, "Nothing", "Arrow zz 4 1 0 18;Pen 00ff00 3;Line 1e88e5 4 3 0 24;Text e53935 4 3 00000000 24 7 0 0 8 12")
 	testing.expect_value(t, c.tool, Edit_Tool.Arrow)
 	testing.expect_value(t, c.styles[.Arrow], EDIT_STYLE_DEFAULT)
 	testing.expect_value(t, c.styles[.Pen], EDIT_STYLE_DEFAULT)
+	testing.expect_value(t, c.styles[.Line], EDIT_STYLE_DEFAULT)
+	testing.expect_value(t, c.styles[.Text], EDIT_STYLE_DEFAULT)
+}
+
+@(test)
+editor_zoom_to_a_step_keeps_the_centre :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	edit_view_fit(&m)
+	centre := edit_view_centre(&m)
+	edit_view_zoom_to(&m, 2)
+	testing.expect(t, abs(m.view.zoom - 2) < 0.0001 && !m.view.fit)
+	after := edit_view_centre(&m)
+	testing.expect(t, abs(after.x - centre.x) < 0.01 && abs(after.y - centre.y) < 0.01)
+	edit_view_zoom_to(&m, 1)   // (Ctrl+1)
+	testing.expect(t, abs(m.view.zoom - 1) < 0.0001)
+}
+
+// A fill colour of its own, with "none": a filled box is taken inside, an outline only on its edge.
+@(test)
+editor_fill_colour_is_its_own :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	edit_tool_set(&m, .Rectangle)
+	drag(&m, {100, 100}, {300, 300})
+	_, filled := edit_fill(m.doc.shapes[0].style)
+	testing.expect(t, !filled)
+	style, props := edit_style_shown(&m)
+	testing.expect(t, .Fill in props)
+	style.fill_color = EDIT_OPAQUE | 0xFDD835
+	testing.expect(t, edit_style_set(&m, style))
+	rgb, has := edit_fill(m.doc.shapes[0].style)
+	testing.expect(t, has && rgb == 0xFDD835)
+	testing.expect_value(t, m.doc.shapes[0].style.color, EDIT_STYLE_DEFAULT.color)   // (the stroke keeps its colour)
+	testing.expect_value(t, edit_hit(&m.doc, {200, 200}, EDIT_HIT_PX), 0)
+	// (the picker's drag through fill colours: one undo step; alpha 0 is no fill)
+	for c in ([]u32{0x80FDD835, 0x40FDD835, 0x00FDD835}) {
+		style.fill_color = c
+		testing.expect(t, edit_style_set(&m, style))
+	}
+	testing.expect_value(t, len(m.doc.history.undo), 2)   // the box drawn, then its fill
+	testing.expect_value(t, edit_hit(&m.doc, {200, 200}, EDIT_HIT_PX), -1)
+	testing.expect(t, edit_undo(&m))
+	_, filled = edit_fill(m.doc.shapes[0].style)
+	testing.expect(t, !filled)
+}
+
+// Shift+Enter's lines: as wide as the longest, as tall as all of them, an empty last one too; bold and a box measure again.
+@(test)
+editor_text_has_lines_and_looks :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	edit_tool_set(&m, .Text)
+	edit_step(&m, Edit_Press{at = {100, 100}, button = .Left})
+	edit_step(&m, Edit_Typed{text = "ab\nlonger\n"})
+	edit_step(&m, Edit_Type_End{keep = true})
+	s := &m.doc.shapes[0]
+	testing.expect_value(t, s.text, "ab\nlonger\n")
+	// (6 characters of 12 at 24 px; 3 lines of 28.8)
+	testing.expect(t, abs(s.b.x - 172) < 0.01 && abs(s.b.y - (100 + 3 * 28.8)) < 0.01)
+	style, props := edit_style_shown(&m)
+	testing.expect(t, .Bold in props && .Text_Look in props && .Fill in props)
+	style.bold = true
+	testing.expect(t, edit_style_set(&m, style))
+	testing.expect(t, abs(m.doc.shapes[0].b.x - 208) < 0.01)   // (bold: 18 a character)
+	style.text_look = .Background
+	testing.expect(t, edit_style_set(&m, style))
+	r := edit_shape_box(&m.doc, &m.doc.shapes[0])
+	testing.expect(t, abs(r.min.x - (100 - 24 * EDIT_TEXT_BOX_PAD)) < 0.01)   // (the box reaches past the letters)
+	testing.expect_value(t, len(m.doc.history.undo), 3)
+	// (a text of blanks only is no text)
+	edit_step(&m, Edit_Press{at = {600, 600}, button = .Left})
+	edit_step(&m, Edit_Typed{text = " \n "})
+	edit_step(&m, Edit_Type_End{keep = true})
+	testing.expect_value(t, len(m.doc.shapes), 1)
+}
+
+@(test)
+editor_step_labels :: proc(t: ^testing.T) {
+	buf: [32]u8
+	testing.expect_value(t, edit_step_label(buf[:], 12, .Number), "12")
+	testing.expect_value(t, edit_step_label(buf[:], 3, .Lower), "c")
+	testing.expect_value(t, edit_step_label(buf[:], 26, .Lower), "z")
+	testing.expect_value(t, edit_step_label(buf[:], 27, .Lower), "aa")
+	testing.expect_value(t, edit_step_label(buf[:], 28, .Upper), "AB")
+	testing.expect_value(t, edit_step_label(buf[:], 4, .Roman), "iv")
+	testing.expect_value(t, edit_step_label(buf[:], 1994, .Roman), "mcmxciv")
+	testing.expect_value(t, edit_step_label(buf[:], 4000, .Roman), "4000")   // (past what Roman numerals write: digits)
+	testing.expect_value(t, edit_step_label(buf[:], 0, .Upper), "0")
+}
+
+// The Step's number: with no step selected, where the next one starts; with one selected, its own (one undo step).
+@(test)
+editor_step_starts_where_asked :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	edit_tool_set(&m, .Step)
+	testing.expect_value(t, edit_step_number_shown(&m), 1)
+	testing.expect(t, edit_step_number_set(&m, 5))
+	testing.expect(t, !edit_changed(&m))   // (a start is no change of the picture)
+	drag(&m, {100, 100}, {100, 100})
+	testing.expect_value(t, m.doc.shapes[0].number, 5)
+	testing.expect_value(t, edit_step_number_shown(&m), 5)   // (the step just placed is selected)
+	edit_deselect(&m)
+	testing.expect_value(t, edit_step_number_shown(&m), 6)
+	m.doc.selected = 0
+	testing.expect(t, edit_step_number_set(&m, 9))
+	testing.expect_value(t, m.doc.shapes[0].number, 9)
+	testing.expect_value(t, len(m.doc.history.undo), 2)
+	testing.expect(t, edit_undo(&m))
+	testing.expect_value(t, m.doc.shapes[0].number, 5)
+	testing.expect(t, !edit_step_number_set(&m, 0))
+}
+
+// The scale handle: a text's size, a step's size, a drawing's points, by how far it goes along its diagonal.
+@(test)
+editor_scale_handle_scales :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	edit_tool_set(&m, .Select)
+	edit_add(&m, {kind = .Text, a = {100, 100}, text = strings.clone("abcd"), style = EDIT_STYLE_DEFAULT})
+	at, has := edit_handles(&m.doc, &m.doc.shapes[0])
+	testing.expect(t, has == {.Scale})
+	testing.expect(t, abs(at[.Scale].x - 148) < 0.01 && abs(at[.Scale].y - 128.8) < 0.01)
+	drag(&m, at[.Scale], at[.Scale] + {48, 28.8})   // (twice as far from its top left)
+	s := m.doc.shapes[0]
+	testing.expect(t, abs(s.style.text_size - 48) < 0.01)
+	testing.expect_value(t, s.a, Edit_Vec{100, 100})
+	testing.expect(t, abs(s.b.x - 196) < 0.01)   // (measured again)
+
+	edit_add(&m, {kind = .Step, a = {500, 500}, b = {500, 500}, number = 1, style = EDIT_STYLE_DEFAULT})
+	at, _ = edit_handles(&m.doc, &m.doc.shapes[1])
+	r := edit_step_radius(&m.doc, &m.doc.shapes[1])
+	drag(&m, at[.Scale], at[.Scale] - {r, r} * 0.5)   // (half way back to its centre)
+	testing.expect(t, abs(m.doc.shapes[1].style.text_size - 12) < 0.01)
+	testing.expect_value(t, m.doc.shapes[1].a, Edit_Vec{500, 500})
+
+	pen := Edit_Shape{kind = .Pen, a = {0, 0}, b = {100, 50}, style = EDIT_STYLE_DEFAULT}
+	append(&pen.points, Edit_Vec{0, 0}, Edit_Vec{50, 0}, Edit_Vec{100, 50})
+	edit_add(&m, pen)
+	at, _ = edit_handles(&m.doc, &m.doc.shapes[2])
+	testing.expect_value(t, at[.Scale], Edit_Vec{100, 50})
+	drag(&m, at[.Scale], {200, 100})
+	p := m.doc.shapes[2].points
+	testing.expect_value(t, p[1], Edit_Vec{100, 0})
+	testing.expect_value(t, p[2], Edit_Vec{200, 100})
+	testing.expect_value(t, len(m.doc.history.undo), 6)   // (three added, three scaled)
+	testing.expect(t, edit_undo(&m))
+	testing.expect_value(t, m.doc.shapes[2].points[2], Edit_Vec{100, 50})
+}
+
+// A right press on a shape selects it (the window opens its menu), with no undo step; elsewhere it means nothing.
+@(test)
+editor_right_press_selects :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	edit_tool_set(&m, .Rectangle)
+	drag(&m, {100, 100}, {300, 300})
+	edit_deselect(&m)
+	testing.expect(t, edit_step(&m, Edit_Press{at = {100, 200}, button = .Right}))
+	testing.expect_value(t, m.doc.selected, 0)
+	testing.expect(t, edit_idle(&m))
+	testing.expect_value(t, len(m.doc.history.undo), 1)
+	testing.expect(t, !edit_step(&m, Edit_Press{at = {700, 700}, button = .Right}))
+	testing.expect_value(t, m.doc.selected, 0)
+}
+
+@(test)
+editor_order_and_delete_all :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	drag(&m, {10, 10}, {100, 100})
+	drag(&m, {10, 200}, {100, 300})
+	drag(&m, {10, 400}, {100, 500})
+	m.doc.selected = 0
+	testing.expect(t, !edit_can_order(&m, .Back) && !edit_can_order(&m, .Backward))
+	testing.expect(t, edit_order(&m, .Front))
+	testing.expect_value(t, m.doc.selected, 2)
+	testing.expect_value(t, m.doc.shapes[2].a, Edit_Vec{10, 10})
+	testing.expect(t, !edit_order(&m, .Forward))
+	testing.expect(t, edit_order(&m, .Backward))
+	testing.expect_value(t, m.doc.selected, 1)
+	testing.expect_value(t, m.doc.shapes[1].a, Edit_Vec{10, 10})
+	testing.expect(t, edit_order(&m, .Back))
+	testing.expect_value(t, m.doc.shapes[0].a, Edit_Vec{10, 10})
+	testing.expect(t, edit_undo(&m))
+	testing.expect_value(t, m.doc.shapes[1].a, Edit_Vec{10, 10})
+	testing.expect(t, edit_delete_all(&m))
+	testing.expect_value(t, len(m.doc.shapes), 0)
+	testing.expect(t, !edit_delete_all(&m))
+	testing.expect(t, edit_undo(&m))   // (one step brings them all back)
+	testing.expect_value(t, len(m.doc.shapes), 3)
+}
+
+// A text pasted: its line ends made "\n", the Text tool's style. A picture pasted: centred, made smaller to fit.
+@(test)
+editor_pastes_text_and_pictures :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	m.styles[.Text].color = 0x1E88E5
+	testing.expect(t, edit_paste_text(&m, "one\r\ntwo\r\n", {50, 60}))
+	s := m.doc.shapes[0]
+	testing.expect_value(t, s.kind, Edit_Kind.Text)
+	testing.expect_value(t, s.text, "one\ntwo")
+	testing.expect_value(t, s.a, Edit_Vec{50, 60})
+	testing.expect_value(t, s.style.color, u32(0x1E88E5))
+	testing.expect(t, !edit_paste_text(&m, " \r\n", {0, 0}))
+	testing.expect(t, edit_paste_image(&m, 7, {4000, 100}, {500, 400}))
+	img := m.doc.shapes[1]
+	testing.expect_value(t, img.kind, Edit_Kind.Image)
+	testing.expect_value(t, img.image, u32(7))
+	size := img.b - img.a
+	testing.expect(t, abs(size.x - 900) < 0.01 && abs(size.y - 22.5) < 0.01)   // (900 of the picture's 1000)
+	testing.expect(t, abs((img.a.x + img.b.x) * 0.5 - 500) < 0.01)
+	testing.expect_value(t, m.doc.selected, 1)
+	testing.expect_value(t, edit_hit(&m.doc, {500, 400}, 0), 1)
+	testing.expect(t, !edit_paste_image(&m, 0, {10, 10}, {0, 0}))
+	testing.expect_value(t, len(m.doc.history.undo), 2)
+}
+
+@(test)
+editor_blur_draws_a_box :: proc(t: ^testing.T) {
+	m: Edit_Model
+	model_make(&m)
+	defer edit_model_destroy(&m)
+	edit_tool_set(&m, .Blur)
+	drag(&m, {100, 100}, {101, 101})   // (a click: nothing)
+	testing.expect_value(t, len(m.doc.shapes), 0)
+	drag(&m, {100, 100}, {300, 200})
+	s := m.doc.shapes[0]
+	testing.expect_value(t, s.kind, Edit_Kind.Blur)
+	testing.expect_value(t, edit_blur_px(&m.doc, s.style), 8)
+	_, props := edit_style_shown(&m)
+	testing.expect(t, props == {.Blur_Radius})
+	edit_tool_set(&m, .Pixelate)
+	_, props = edit_style_shown(&m)
+	testing.expect(t, props == {.Pixel_Size})
+	testing.expect_value(t, edit_pixel_cell(&m.doc, m.styles[.Pixelate]), 12)
+}
+
+// The blurred copy: a quarter of its radius a pixel, and soft (black meets white in greys).
+@(test)
+editor_blur_copy_is_small_and_soft :: proc(t: ^testing.T) {
+	rgba := make([]u8, 32 * 2 * 4)
+	defer delete(rgba)
+	for y in 0 ..< 2 {
+		for x in 0 ..< 32 {
+			v := u8(x < 16 ? 0 : 255)
+			copy(rgba[(y * 32 + x) * 4:], []u8{v, v, v, 255})
+		}
+	}
+	pixels, size, cell := edit_blur_make(rgba, {32, 2}, 8)
+	defer delete(pixels)
+	testing.expect_value(t, cell, 2)
+	testing.expect_value(t, size, [2]int{16, 1})
+	testing.expect(t, pixels[0] < pixels[15 * 4])
+	middle := pixels[8 * 4]
+	testing.expect(t, middle > 20 && middle < 235)
 }

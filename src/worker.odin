@@ -18,7 +18,9 @@ import setup "gt:setup"
 import tasks "gt:tasks"
 
 Job_Open      :: struct {}                                    // the capture session, at start: ready before it is needed
-Job_Grab      :: struct { source: Source, delay_ms: int }     // the desktop (Region), or a shot (Screen, Window) after delay_ms
+// The desktop (Region, Color), or a shot (the other sources), after delay_ms counted down; `cursor`: the pointer in the
+// picture; `rect`: a Last_Region's rectangle (logical).
+Job_Grab      :: struct { source: Source, delay_ms: int, cursor: bool, rect: Rect }
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
 Job_Save      :: struct { editor: u64, shot: Shot, folder, pattern: string }   // an editor's Ctrl+S (Editor.id); owned by the job
 Job_Copy_Encode :: struct { editor: u64, shot: Shot }         // an editor's Ctrl+C (Editor.id): its PNG for the clipboard, made here (owned)
@@ -74,7 +76,10 @@ Result_Integrated :: struct { problem: string }
 // This cliche is the installed copy (setup.facts): it updates itself (update.auto).
 Result_Setup_Facts :: struct { installed: bool }
 
-Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders, Result_Setup_Facts }
+// A capture's delay counted down: `seconds` left before the picture (0: it is taken now, the countdown's notice goes).
+Result_Countdown :: struct { seconds: int }
+
+Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders, Result_Setup_Facts, Result_Countdown }
 
 Worker :: struct {
 	pool:      tasks.Pool,
@@ -175,17 +180,21 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		worker_session(w)
 		worker_post(w, Result_Opened{w.session_error, w.session != nil ? w.session.backend : .None, save_folder_default()})
 	case Job_Grab:
-		// (a screen or a window waits: a menu opened meanwhile is in the picture; the worker has nothing else to do then)
-		if v.delay_ms > 0 { time.sleep(time.Duration(v.delay_ms) * time.Millisecond) }
+		// (the workflow's delay: a menu opened meanwhile is in the picture; the worker has nothing else to do then)
+		worker_countdown(w, v.delay_ms)
 		if !worker_session(w) {
-			if v.source == .Region { worker_post(w, Result_Desktop{error = w.session_error}) } else { worker_post(w, Result_Shot{error = flow_error_of(w.session_error)}) }
+			if v.source in SOURCES_SELECTED { worker_post(w, Result_Desktop{error = w.session_error}) } else { worker_post(w, Result_Shot{error = flow_error_of(w.session_error)}) }
 			return
 		}
+		capture.set_cursor(w.session, v.cursor)
 		switch v.source {
-		case .Region: worker_post(w, grab_desktop(w.session))
-		case .Screen: worker_post(w, grab_screen(w.session, w.pointer))
-		case .Window: worker_post(w, grab_window(w.session))
+		case .Region, .Color: worker_post(w, grab_desktop(w.session))
+		case .Screen:         worker_post(w, grab_screen(w.session, w.pointer))
+		case .Window:         worker_post(w, grab_window(w.session))
+		case .All_Screens:    worker_post(w, grab_all(w.session))
+		case .Last_Region:    worker_post(w, grab_rect(w.session, v.rect))
 		}
+		capture.set_cursor(w.session, false)
 	case Job_Crop:
 		out, ok := capture.crop(v.frame, v.rect)
 		if !ok { worker_post(w, Result_Shot{error = .Empty}); return }
@@ -234,6 +243,41 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		delete(v.version)
 		worker_post(w, Result_Integrated{ok ? "" : strings.concatenate({"the update is in place, but ", why})})
 	}
+}
+
+// Waits `delay_ms` as countdown_plan says, each second left said to the interface (Result_Countdown).
+@(private = "file")
+worker_countdown :: proc(w: ^Worker, delay_ms: int) {
+	for step in countdown_plan(delay_ms) {
+		worker_post(w, Result_Countdown{step.say})
+		if step.wait_ms > 0 { time.sleep(time.Duration(step.wait_ms) * time.Millisecond) }
+	}
+}
+
+// The last notice of a countdown goes this long before the picture: the system takes it off the screen first.
+COUNTDOWN_CLEAR_MS :: 300
+
+// A step of a countdown: the seconds left to say, then how long to wait.
+Countdown_Step :: struct { say, wait_ms: int }
+
+// A delay as the steps of its countdown: each whole second left said (the first step is the part before the first whole
+// second), then 0 said COUNTDOWN_CLEAR_MS before the end, for the notice to go before the picture. The waits add up
+// to `delay_ms`. Empty with no delay. Temp allocator.
+countdown_plan :: proc(delay_ms: int) -> []Countdown_Step {
+	if delay_ms <= 0 { return nil }
+	seconds := (delay_ms + 999) / 1000
+	out := make([dynamic]Countdown_Step, 0, seconds + 1, context.temp_allocator)
+	first := delay_ms - (seconds - 1) * 1000
+	for s := seconds; s >= 1; s -= 1 {
+		wait := s == seconds ? first : 1000
+		if s > 1 {
+			append(&out, Countdown_Step{s, wait})
+			continue
+		}
+		clear_ms := min(COUNTDOWN_CLEAR_MS, wait)
+		append(&out, Countdown_Step{s, wait - clear_ms}, Countdown_Step{0, clear_ms})
+	}
+	return out[:]
 }
 
 // The session, opened at the first need. False: none can open here (session_error says why).

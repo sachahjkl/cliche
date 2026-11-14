@@ -20,6 +20,7 @@ import "gt:draw"
 import flowgraph "gt:flowgraph"
 import lucide "gt:lucide"
 import "gt:render"
+import shortcuts "gt:shortcuts"
 import "gt:ui"
 import undo "gt:undo"
 import i18n "gt:i18n"
@@ -139,6 +140,8 @@ workflow_mode_leave :: proc(app: ^App) {
 	m := &app.history_window.workflow_mode
 	if !m.open { return }
 	m.open = false
+	// (a Capture step's keys left while being recorded: the global shortcuts take theirs again)
+	shortcuts.hold(app.shortcuts, false)
 	workflows_save(app)
 }
 
@@ -426,6 +429,8 @@ workflow_node_look :: proc(user: rawptr, n: ^flowgraph.Node, def: ^flowgraph.Nod
 	subtitle: string
 	if Node_Kind(n.kind) == .Capture {
 		if wf := workflows_find(&app.workflows, m.shown); wf != nil { subtitle = workflow_triggers_text(wf) }
+		// (then its own keys, its delay and the pointer: "region, screen; Ctrl+Alt+E: a region")
+		if own := node_summary(n); own != "" { subtitle = fmt.tprintf("%s; %s", subtitle, own) }
 	} else {
 		subtitle = node_summary(n)
 	}
@@ -443,10 +448,13 @@ group_color :: proc(group: string) -> [3]f32 {
 	return {0.60, 0.62, 0.66}
 }
 
-// What a Capture node says under its title: the captures that run its workflow.
+// What a Capture node says under its title: the captures that run its workflow (its own shortcut counts).
 workflow_triggers_text :: proc(wf: ^flowgraph.Graph_Entry) -> string {
 	triggers := workflow_triggers(wf)
-	if triggers == {} { return i18n.tr("no capture runs it") }
+	if triggers == {} {
+		if capture_options(wf).shortcut != "" { return i18n.tr("its own shortcut") }
+		return i18n.tr("no capture runs it")
+	}
 	b := strings.builder_make(context.temp_allocator)
 	for t in triggers {
 		if strings.builder_len(b) > 0 { strings.write_string(&b, ", ") }

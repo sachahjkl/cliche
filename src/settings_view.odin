@@ -52,13 +52,17 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 
 // The actions of the palette and of the sheet of keys that the history's (History_Action) do not hold already.
 Settings_Action :: enum u8 {
-	Capture_Screen, Capture_Window, Read_Qr, Read_Text, Record, Record_Gif,
+	Capture_Screen, Capture_Window, Capture_All_Screens, Capture_Last_Region, Capture_Edit, Pick_Color, Read_Qr, Read_Text, Record, Record_Gif,
 	Choose_Folder, Open_Uploaders, Import_Uploader, Shortcuts_Page, System_Shortcuts, Check_Updates,
 }
 
 SETTINGS_ACTIONS := [Settings_Action]ui.Command{
 	.Capture_Screen   = {label = i18n.later("Capture the screen under the pointer"), group = i18n.later("Capture"), icon = lucide.MONITOR, tags = {"screenshot", "monitor", "full"}},
 	.Capture_Window   = {label = i18n.later("Capture the window in front"), group = i18n.later("Capture"), icon = lucide.IMAGE, tags = {"screenshot", "active"}},
+	.Capture_All_Screens = {label = i18n.later("Capture all the screens"), group = i18n.later("Capture"), icon = lucide.MONITOR, tags = {"screenshot", "monitors", "desktop", "full"}},
+	.Capture_Last_Region = {label = i18n.later("Capture the last region again"), group = i18n.later("Capture"), icon = lucide.IMAGE, tags = {"screenshot", "repeat", "same", "again"}},
+	.Capture_Edit     = {label = i18n.later("Capture a region and edit"), group = i18n.later("Capture"), icon = lucide.PENCIL, tags = {"screenshot", "annotate", "editor", "draw"}},
+	.Pick_Color       = {label = i18n.later("Pick a colour on the screen"), group = i18n.later("Capture"), icon = lucide.PALETTE, tags = {"colour", "color", "eyedropper", "picker", "hex", "rgb"}},
 	.Read_Qr          = {label = i18n.later("Read a QR code"), group = i18n.later("Capture"), icon = lucide.QR_CODE, tags = {"scan", "barcode"}},
 	.Read_Text        = {label = i18n.later("Read the text"), group = i18n.later("Capture"), icon = lucide.CLIPBOARD, tags = {"ocr", "recognition", "copy"}},
 	.Record           = {label = i18n.later("Record a video"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"mp4", "screencast", "video"}},
@@ -147,6 +151,10 @@ settings_action :: proc(app: ^App, a: Settings_Action) {
 	switch a {
 	case .Capture_Screen:   hw.hide_due = true; app_trigger(app, .Screen)
 	case .Capture_Window:   hw.hide_due = true; app_trigger(app, .Window)
+	case .Capture_All_Screens: hw.hide_due = true; app_trigger(app, .All_Screens)
+	case .Capture_Last_Region: hw.hide_due = true; app_trigger(app, .Last_Region)
+	case .Capture_Edit:     hw.hide_due = true; app_trigger(app, .Edit)
+	case .Pick_Color:       hw.hide_due = true; app_color_pick(app)
 	case .Read_Qr:          hw.hide_due = true; app_trigger(app, .Qr)
 	case .Read_Text:        hw.hide_due = true; app_trigger(app, .Ocr)
 	case .Record:           hw.hide_due = true; app_record_trigger(app, .Mp4)
@@ -267,6 +275,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 	case .None:
 		foot_text(i18n.tr("This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = CTRL, Print, exec, cliche --region; sway: bindsym Ctrl+Print exec cliche --region):"), em)
 	}
+	shortcuts_workflows(app, em)
 	ui.spacer(ui.px(em * 0.6))
 	if ui.tags("weak") {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.5), font_size = math.round(em * 0.78), text_pad = 0})
@@ -287,6 +296,38 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 				platform.clipboard_set(app.history_window.host.win, {text = SHORTCUT_COMMANDS[a]})
 				m.copied = SHORTCUT_COMMANDS[a]
 			}
+		}
+	}
+}
+
+// Each workflow's own keys (its Capture step's), what they capture and what the system made of them; its button opens
+// that step in the Workflows, where the keys are recorded.
+@(private = "file")
+shortcuts_workflows :: proc(app: ^App, em: f32) {
+	ui.spacer(ui.px(em * 0.8))
+	if ui.tags("weak") {
+		ui.next({width = ui.fill(), height = ui.px(em * 1.5), font_size = math.round(em * 0.78), text_pad = 0})
+		ui.label(fmt.tprintf("%s###wf_keys_head", i18n.tr("WORKFLOWS")))
+	}
+	foot_text(i18n.tr("A workflow's own shortcut captures what its Capture step says, then runs that workflow. Set it on that step."), em)
+	for &wf in app.workflows.set.list {
+		o := capture_options(&wf)
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.1)), axis = .X, cross = .Center})
+		if ui.row(id = fmt.tprintf("###wf_keys_%d", wf.id)) {
+			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
+			ui.label(fmt.tprintf("%s###name", wf.name))
+			said := i18n.tr("no shortcut")
+			if o.shortcut != "" {
+				keys := workflow_shortcut_keys(app, wf.id)
+				st := shortcuts.status(app.shortcuts, workflow_shortcut_id(wf.id))
+				said = fmt.tprintf("%s: %s", keys, strings.to_lower(i18n.tr(CAPTURE_SOURCE_TEXT[o.source]), context.temp_allocator))
+				if problem := shortcuts.problem_text(o.shortcut, st); problem != "" { said = fmt.tprintf("%s (%s)", said, problem) }
+			}
+			ui.next({width = ui.text_size(em * 0.8), height = ui.pct(1), text_pad = 0})
+			if ui.tags("weak") { ui.label(fmt.tprintf("%s###keys", said)) }
+			ui.spacer(ui.px(em * 0.6))
+			ui.next({font_size = math.round(em * 0.86)})
+			if ui.button("change", i18n.tr("Change…"), lucide.PENCIL, {width = ui.px(em * 6.5)}).clicked { workflow_capture_show(app, wf.id) }
 		}
 	}
 }

@@ -33,6 +33,8 @@ ENTRY_ACTIONS := [?]desktop.Desktop_Action{
 	{id = "region", name = "Capture a region", arguments = "--region"},
 	{id = "screen", name = "Capture the screen", arguments = "--screen"},
 	{id = "window", name = "Capture the window in front", arguments = "--window"},
+	{id = "edit", name = "Capture a region and edit", arguments = "--edit"},
+	{id = "color", name = "Pick a colour", arguments = "--color"},
 	{id = "qr", name = "Read a QR code", arguments = "--qr"},
 	{id = "ocr", name = "Read the text", arguments = "--ocr"},
 	{id = "record", name = "Record a video", arguments = "--record"},

@@ -10,6 +10,7 @@ import "core:strings"
 import flowgraph "gt:flowgraph"
 import i18n "gt:i18n"
 import lucide "gt:lucide"
+import "gt:platform"
 
 // The node kinds, in the order of CATALOG.nodes: flowgraph.Node.kind is `int(Node_Kind)`.
 Node_Kind :: enum u8 {
@@ -71,7 +72,14 @@ CATALOG := flowgraph.Catalog{
 		{name = i18n.later("anything"), any = true},
 	},
 	nodes = {
-		{name = "capture", title = i18n.later("Capture"), group = i18n.later("Source"), icon = lucide.MONITOR, tags = {"start", "trigger", "screenshot"}, outputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, place = PLACE_RUN, max_count = 1, min_count = 1},
+		// (its parameters: the workflow's own shortcut and what it captures, in Source's order; then the delay and the
+		// pointer of every capture that runs the workflow: capture_options)
+		{name = "capture", title = i18n.later("Capture"), group = i18n.later("Source"), icon = lucide.MONITOR, tags = {"start", "trigger", "screenshot", "shortcut", "hotkey", "delay", "timer", "cursor", "pointer"}, outputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, place = PLACE_RUN, max_count = 1, min_count = 1, params = {
+			{name = "shortcut", title = i18n.later("Its own shortcut"), type = .Hotkey},
+			{name = "source", title = i18n.later("What its shortcut captures"), type = .Choice, choices = {i18n.later("A region"), i18n.later("The screen"), i18n.later("The window in front"), i18n.later("All the screens"), i18n.later("The last region")}},
+			{name = "delay", title = i18n.later("Delay"), type = .Int, lo = 0, hi = 30, step = 1, unit = "s"},
+			{name = "cursor", title = i18n.later("Show the pointer"), type = .Bool},
+		}},
 
 		{name = "resize", title = i18n.later("Resize"), group = i18n.later("Geometry"), icon = lucide.ZOOM_OUT, tags = {"scale", "smaller", "size", "shrink"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, outputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, place = PLACE_WORKER, params = {
 			{name = "mode", title = i18n.later("By"), type = .Choice, choices = {i18n.later("Percent"), i18n.later("Largest size")}},
@@ -165,7 +173,8 @@ CATALOG := flowgraph.Catalog{
 			{name = "test", title = i18n.later("When"), type = .Choice, choices = {i18n.later("Width"), i18n.later("Height"), i18n.later("Width / height"), i18n.later("Source")}},
 			{name = "compare", title = i18n.later("Is"), type = .Choice, choices = {i18n.later("More than"), i18n.later("Less than"), i18n.later("Equal to")}},
 			{name = "value", title = i18n.later("Value"), type = .Float, lo = 0, hi = 16384, step = 1, default_number = 1920},
-			{name = "source", title = i18n.later("Source"), type = .Choice, choices = {i18n.later("Region"), i18n.later("Screen"), i18n.later("Window")}},
+			// (in Source's order: condition_holds compares the index)
+			{name = "source", title = i18n.later("Source"), type = .Choice, choices = {i18n.later("Region"), i18n.later("Screen"), i18n.later("Window"), i18n.later("All screens"), i18n.later("Last region")}},
 		}},
 
 		{name = "copy_image", title = i18n.later("Copy image"), group = i18n.later("Outputs"), icon = lucide.COPY, tags = {"clipboard", "paste"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, place = PLACE_WORKER, effect = true},   // (the worker encodes its PNG; the interface sets the clipboard: workflow_node_result)
@@ -196,8 +205,24 @@ CATALOG := flowgraph.Catalog{
 // allocator; "" when there is nothing to say.
 node_summary :: proc(n: ^flowgraph.Node) -> string {
 	switch Node_Kind(n.kind) {
-	case .Capture, .Grayscale, .Invert, .Sepia, .Annotate, .Copy_Image, .Copy_Text, .Read_Qr, .Show_In_Folder, .Add_To_History:
+	case .Grayscale, .Invert, .Sepia, .Annotate, .Copy_Image, .Copy_Text, .Read_Qr, .Show_In_Folder, .Add_To_History:
 		return ""
+	case .Capture:
+		// ("Ctrl+Alt+E: a region, after 3 s, with the pointer"; nothing when it has neither keys, nor delay, nor pointer)
+		b := strings.builder_make(context.temp_allocator)
+		if keys := flowgraph.param_text(&CATALOG, n, "shortcut"); keys != "" {
+			hk, _ := platform.hotkey_parse(keys)
+			fmt.sbprintf(&b, "%s: %s", platform.key_text(hk), strings.to_lower(i18n.tr(flowgraph.param_choice_text(&CATALOG, n, "source")), context.temp_allocator))
+		}
+		if d := flowgraph.param_int(&CATALOG, n, "delay"); d > 0 {
+			if strings.builder_len(b) > 0 { strings.write_string(&b, ", ") }
+			fmt.sbprintf(&b, i18n.tr("after %d s"), d)
+		}
+		if flowgraph.param_bool(&CATALOG, n, "cursor") {
+			if strings.builder_len(b) > 0 { strings.write_string(&b, ", ") }
+			strings.write_string(&b, i18n.tr("with the pointer"))
+		}
+		return strings.to_string(b)
 	case .Resize:
 		if Resize_Mode(flowgraph.param_int(&CATALOG, n, "mode")) == .Percent { return percent_text(flowgraph.param_float(&CATALOG, n, "percent")) }
 		w, h := flowgraph.param_int(&CATALOG, n, "width"), flowgraph.param_int(&CATALOG, n, "height")

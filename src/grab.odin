@@ -55,6 +55,24 @@ grab_window :: proc(s: ^capture.Session) -> Result_Shot {
 	return {shot = shot_of_frame(&cut, .Window)}
 }
 
+// Every output in one picture (what is between outputs of different sizes, transparent).
+grab_all :: proc(s: ^capture.Session) -> Result_Shot {
+	f, err := capture.desktop(s)
+	if err != .None { return {error = flow_error_of(err)} }
+	return {shot = shot_of_frame(&f, .All_Screens)}
+}
+
+// `r` (logical, on the desktop) cut from the desktop now: the last region again, with no overlay.
+grab_rect :: proc(s: ^capture.Session, r: Rect) -> Result_Shot {
+	if rect_empty(r) { return {error = .Empty} }
+	d, err := capture.desktop(s)
+	if err != .None { return {error = flow_error_of(err)} }
+	defer capture.frame_destroy(&d)
+	cut, ok := capture.crop(d, r)
+	if !ok { return {error = .Empty} }   // (the outputs changed: nothing is there now)
+	return {shot = shot_of_frame(&cut, .Last_Region)}
+}
+
 // A frame as a shot, its pixels taken over: a frame of gt:capture is packed RGBA (the session's order) in the context's
 // allocator, the shot's own. A frame of another kind is copied.
 shot_of_frame :: proc(f: ^capture.Frame, source: Source) -> Shot {

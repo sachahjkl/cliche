@@ -10,13 +10,19 @@ package cliche
 // shows that output's part of the picture; a selection stays on it.
 //
 // What the user does:
-//   drag                 a rectangle; it stays, the keys adjust it (region.confirm_on_release: taken at the release)
+//   drag                 a rectangle; it stays, the mouse and the keys adjust it (region.confirm_on_release: taken at
+//                        the release)
+//   drag a grip          a corner or an edge of the rectangle chosen resizes it, its inside moves it (the pointer's
+//                        shape says which); a press elsewhere draws a new one
 //   click                the window framed under the pointer (region.frame_windows, when the system says where windows
-//                        are); inside a rectangle
-//                        already chosen: that rectangle
+//                        are)
+//   double click inside  the rectangle chosen
 //   Enter, Space         the rectangle chosen, else the whole output
 //   arrows / Shift       move the rectangle a pixel (ten with Ctrl) / grow or shrink it from its bottom-right corner
 //   Escape, right click  the rectangle dropped, or, with none, the region given up
+// The colour picker (`picker`) is the same window, undimmed, with no rectangle: a click takes the colour under the
+// pointer (Shift: as rgb()), Enter the one under the pointer, the arrows move that point a pixel (ten with Ctrl),
+// Escape gives it up.
 // The decision is acted on after the frame (overlay_after_frame): the window is not hidden from inside its own frame.
 
 import "core:fmt"
@@ -34,8 +40,9 @@ MAGNIFIER_ZOOM    :: 8     // how much it enlarges them
 MAGNIFIER_GAP_PX  :: 24    // between the pointer and the magnifier
 NUDGE_FAST        :: 10    // pixels a step with Ctrl
 OUTLINE_PX        :: 1     // the outline of what is chosen, in the window's pixels (scaled)
+HANDLE_PX         :: 7     // the side of a grip's square on the rectangle chosen, in the window's pixels (scaled)
 
-Overlay_Decision :: enum u8 { None, Confirm, Cancel }
+Overlay_Decision :: enum u8 { None, Confirm, Cancel, Pick }
 
 Overlay :: struct {
 	host:     host.Host,
@@ -51,13 +58,19 @@ Overlay :: struct {
 	has_hover: bool,
 	decision: Overlay_Decision,
 	chosen:   Rect,             // what Confirm takes
+	picker:   bool,             // the colour picker: a click takes a pixel's colour, no rectangle
+	picked:   [4]u8,            // what Pick takes
+	pick_rgb: bool,             // its words as rgb() (Shift)
+	hover_grip: Grip,           // the grip of the rectangle under the pointer (its shape)
+	clicks:   Click_Track,      // the presses, for a double click
 	// a layer surface over one output (platform.open_overlay: no window animation, the keyboard at once), on `out`;
 	// false: a fullscreen window the compositor places (a desktop with no layer shell), whose output is guessed
 	layer:    bool,
 }
 
-// Opens (the first time) and shows the overlay over the desktop the worker read. False: no window could open.
-overlay_show :: proc(app: ^App) -> bool {
+// Opens (the first time) and shows the overlay over the desktop the worker read: a region's, or the colour picker
+// (`picker`). False: no window could open.
+overlay_show :: proc(app: ^App, picker := false) -> bool {
 	o := &app.overlay
 	if !app.has_desktop { return false }
 	out := overlay_pointer_output(app)
@@ -99,6 +112,9 @@ overlay_show :: proc(app: ^App) -> bool {
 	o.decision = .None
 	o.has_hover = false
 	o.has_pointer = false
+	o.picker = picker
+	o.hover_grip = .None
+	o.clicks = {}
 	if !o.layer { o.out = overlay_output(app) }
 	selection_reset(&o.sel, o.out)
 	token := app_take_token(app)
@@ -150,6 +166,9 @@ overlay_after_frame :: proc(app: ^App) {
 	case .Cancel:
 		o.decision = .None
 		app_region_cancelled(app)
+	case .Pick:
+		o.decision = .None
+		app_color_picked(app, o.picked, o.pick_rgb)
 	}
 }
 
@@ -209,30 +228,41 @@ overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Eve
 			o.pointer, o.has_pointer = p, true
 			if e.button == .Right { overlay_escape(o); continue }
 			if e.button != .Left { continue }
-			if o.sel.has_rect && rect_contains(o.sel.rect, p) {   // (inside what is chosen: that is taken)
+			if o.picker {
+				overlay_pick(app, p, .Shift in e.mods)
+				continue
+			}
+			// (a double click inside what is chosen takes it; its first click took the inside, and moved nothing)
+			if click_double(&o.clicks, p, ui.now_ms()) && o.sel.has_rect && rect_contains(o.sel.rect, p) {
+				selection_release(&o.sel, p)
 				overlay_confirm(o, o.sel.rect)
 				continue
 			}
-			o.sel.has_rect = false
+			if selection_take(&o.sel, p) != .None { continue }   // (a grip of what is chosen: moved or resized)
 			selection_press(&o.sel, p)
 		case .Mouse_Release:
-			if e.button != .Left { continue }
+			if e.button != .Left || o.picker { continue }
 			p := overlay_point(o, e.pos)
 			switch selection_release(&o.sel, p) {
 			case .Click:
 				if r, ok := frame_pick(app.desktop.windows, p, o.out, app.desktop.have_rects && app.settings.frame_windows); ok { overlay_confirm(o, r) }
 			case .Rect:
 				if app.settings.confirm_on_release { overlay_confirm(o, o.sel.rect) }
-			case .None:
+			case .Adjusted, .Held, .None:   // (adjusted: it stays chosen, Enter or a double click takes it)
 			}
 		case .Key_Press:
-			overlay_key(o, e)
+			if o.picker { overlay_picker_key(app, e) } else { overlay_key(o, e) }
 		}
 	}
-	// (the window framed under the pointer, while no rectangle is chosen or dragged)
+	// (the window framed under the pointer, while no rectangle is chosen or dragged; else the grip under it)
 	o.has_hover = false
-	if o.has_pointer && !o.sel.dragging && !o.sel.has_rect {
-		o.hover, o.has_hover = frame_pick(app.desktop.windows, o.pointer, o.out, app.desktop.have_rects && app.settings.frame_windows)
+	o.hover_grip = .None
+	if o.has_pointer && !o.picker && !o.sel.dragging {
+		if o.sel.has_rect {
+			o.hover_grip = selection_grip_at(&o.sel, o.pointer)
+		} else {
+			o.hover, o.has_hover = frame_pick(app.desktop.windows, o.pointer, o.out, app.desktop.have_rects && app.settings.frame_windows)
+		}
 	}
 	return nil   // (the overlay's interface is its picture: nothing goes to widgets)
 }
@@ -253,6 +283,55 @@ overlay_key :: proc(o: ^Overlay, e: platform.Event) {
 	case: return
 	}
 	if .Shift in e.mods { selection_resize(&o.sel, d) } else { selection_nudge(&o.sel, d) }
+}
+
+// The colour picker's keys: Enter takes the colour under the point (Shift: as rgb()), the arrows move the point (the
+// system's pointer stays: only the pixel read moves), Escape gives it up.
+@(private = "file")
+overlay_picker_key :: proc(app: ^App, e: platform.Event) {
+	o := &app.overlay
+	step: i32 = .Ctrl in e.mods ? NUDGE_FAST : 1
+	d: Point
+	#partial switch e.key {
+	case .Escape: o.decision = .Cancel; return
+	case .Return, .Space:
+		if o.has_pointer { overlay_pick(app, o.pointer, .Shift in e.mods) }
+		return
+	case .Left:  d = {-step, 0}
+	case .Right: d = {step, 0}
+	case .Up:    d = {0, -step}
+	case .Down:  d = {0, step}
+	case: return
+	}
+	if !o.has_pointer { return }
+	o.pointer = point_clamp(o.pointer + d, {o.out.x, o.out.y, o.out.w - 1, o.out.h - 1})
+}
+
+// The colour of the pixel at `p` taken (Pick), from the frozen picture: no capture, one pixel read.
+@(private = "file")
+overlay_pick :: proc(app: ^App, p: Point, rgb: bool) {
+	o := &app.overlay
+	c, ok := frame_pixel(app.desktop.frame, p)
+	if !ok { return }
+	o.picked, o.pick_rgb = c, rgb
+	o.decision = .Pick
+}
+
+// The pointer's shape over the overlay: the grip it is on or holds, else a cross.
+@(private = "file")
+overlay_cursor :: proc(o: ^Overlay) -> platform.Cursor {
+	if o.picker { return .Crosshair }
+	g := o.hover_grip
+	if o.sel.dragging { g = o.sel.grip }   // (a new rectangle being drawn: None, a cross)
+	switch g {
+	case .None:     return .Crosshair
+	case .Move:     return .Move
+	case .N, .S:    return .Resize_V
+	case .E, .W:    return .Resize_H
+	case .NW, .SE:  return .Resize_NWSE
+	case .NE, .SW:  return .Resize_NESW
+	}
+	return .Crosshair
 }
 
 @(private = "file")
@@ -286,6 +365,9 @@ Overlay_Draw :: struct {
 	label:      string,
 	font:       font.Font_Id,
 	font_size:  f32,
+	handles:    bool,      // the grips' squares on what is chosen
+	swatch:     [4]u8,     // the colour under the pointer (the picker), beside the label
+	has_swatch: bool,
 }
 
 // Where the frozen picture is on the desktop.
@@ -299,11 +381,26 @@ overlay_build :: proc(h: ^host.Host, size: ui.Vec2) {
 	d := ui.frame_new(Overlay_Draw)
 	d^ = {tex = o.tex, frame = {app.desktop.frame.origin, app.desktop.frame.scale}, out = o.out, win_scale = overlay_scale(o), dim = app.settings.dim,
 		pointer = o.pointer, magnifier = app.settings.magnifier && o.has_pointer, font = app.shared.font, font_size = ui.font_size()}
-	switch {
-	case o.sel.has_rect:  d.lit, d.has_lit = o.sel.rect, true
-	case o.has_hover:     d.lit, d.has_lit = o.hover, true
+	// (no widget takes the pointer here: the shape is asked of the state, which the host gives the window after the build)
+	h.state.cursor_request = overlay_cursor(o)
+	if o.picker {
+		// (the colours as they are: no shade; the magnifier always, it is the picker's tool)
+		d.dim, d.magnifier = 0, o.has_pointer
+		if o.has_pointer {
+			if c, ok := frame_pixel(app.desktop.frame, o.pointer); ok {
+				d.swatch, d.has_swatch = c, true
+				d.label = fmt.tprintf("%s   %d, %d", color_pick_text(c, false), o.pointer.x, o.pointer.y)
+			}
+		}
+	} else {
+		switch {
+		case o.sel.has_rect:  d.lit, d.has_lit = o.sel.rect, true
+		case o.has_hover:     d.lit, d.has_lit = o.hover, true
+		}
+		// (no squares while a new rectangle is drawn: its corner follows the pointer)
+		d.handles = o.sel.has_rect && !(o.sel.dragging && o.sel.grip == .None)
+		if d.has_lit { d.label = fmt.tprintf("%d x %d", d.lit.w, d.lit.h) } else if o.has_pointer { d.label = fmt.tprintf("%d, %d", o.pointer.x, o.pointer.y) }
 	}
-	if d.has_lit { d.label = fmt.tprintf("%d x %d", d.lit.w, d.lit.h) } else if o.has_pointer { d.label = fmt.tprintf("%d, %d", o.pointer.x, o.pointer.y) }
 	ui.next({fixed_x = 0, fixed_y = 0, width = ui.px(size.x), height = ui.px(size.y)})
 	b := ui.build_box({}, "###overlay")
 	b.custom, b.custom_user = overlay_draw, d
@@ -345,8 +442,28 @@ overlay_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		draw.rect(dc, {{l.max.x, l.min.y}, {win.max.x, l.max.y}}, dim)
 		px := max(math.round(OUTLINE_PX * d.win_scale), 1)
 		draw.rect(dc, l, {1, 1, 1, 0.9}, 0, px)
+		if d.handles { overlay_handles(d, dc, l) }
 	}
 	if d.magnifier { overlay_magnifier(d, dc, win) }
+}
+
+// The grips of what is chosen: a square at each corner and at the middle of each edge.
+@(private = "file")
+overlay_handles :: proc(d: ^Overlay_Draw, dc: ^draw.Context, l: draw.Rect) {
+	side := math.round(HANDLE_PX * d.win_scale)
+	half := side / 2
+	line := max(math.round(d.win_scale), 1)
+	mid := (l.min + l.max) / 2
+	at := [8][2]f32{
+		l.min, {mid.x, l.min.y}, {l.max.x, l.min.y},
+		{l.min.x, mid.y}, {l.max.x, mid.y},
+		{l.min.x, l.max.y}, {mid.x, l.max.y}, l.max,
+	}
+	for c in at {
+		r := draw.Rect{c - {half, half}, c - {half, half} + {side, side}}
+		draw.rect(dc, r, {1, 1, 1, 1})
+		draw.rect(dc, r, {0, 0, 0, 0.7}, 0, line)
+	}
 }
 
 // Near the pointer: the pixels around it enlarged, a cross on the one under it, and the position or the size.
@@ -370,7 +487,17 @@ overlay_magnifier :: proc(d: ^Overlay_Draw, dc: ^draw.Context, win: draw.Rect) {
 	draw.rect(dc, dst, {1, 1, 1, 0.6}, 0, max(math.round(s), 1))
 	if d.label != "" {
 		fs := d.font_size
-		draw.rect(dc, {{dst.min.x, dst.max.y}, {dst.max.x, dst.max.y + fs * 1.6}}, {0, 0, 0, 0.8})
-		draw.text(dc, d.font, fs, {dst.min.x + fs * 0.5, dst.max.y + fs * 1.15}, {1, 1, 1, 1}, d.label)
+		strip := draw.Rect{{dst.min.x, dst.max.y}, {dst.max.x, dst.max.y + fs * 1.6}}
+		draw.rect(dc, strip, {0, 0, 0, 0.8})
+		x := dst.min.x + fs * 0.5
+		if d.has_swatch {
+			// (the colour taken, as a square before its words)
+			sw := draw.Rect{{x, strip.min.y + fs * 0.3}, {x + fs, strip.min.y + fs * 1.3}}
+			c := d.swatch
+			draw.rect(dc, sw, draw.srgb(f32(c.r) / 255, f32(c.g) / 255, f32(c.b) / 255))   // (a pixel's values are sRGB)
+			draw.rect(dc, sw, {1, 1, 1, 0.8}, 0, max(math.round(s), 1))
+			x += fs * 1.5
+		}
+		draw.text(dc, d.font, fs, {x, dst.max.y + fs * 1.15}, {1, 1, 1, 1}, d.label)
 	}
 }

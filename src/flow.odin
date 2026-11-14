@@ -6,22 +6,37 @@ package cliche
 //
 //   Idle -> Capturing -> Selecting -> Encoding -> (Handed) Idle | Failed -> Idle
 //                     \______________/
-//                      (screen, window: no selection)
+//                      (screen, window, all screens, last region: no selection)
+//   Idle -> Capturing -> Selecting (colour) -> (Picked) Idle
 //
 // The picture is handed to a run of the capture's workflow (workflow_app.odin), which goes on outside this flow: the next
-// capture may start at once. A trigger while a capture goes on is refused: one capture at a time.
+// capture may start at once. A trigger while a capture goes on is refused: one capture at a time. A colour picked is no
+// picture: the app copies its words, and the flow is Idle again.
 
 import capture "gt:capture"
 import i18n "gt:i18n"
 
-// Where the picture comes from.
+// Where the picture comes from. The first five are the Capture node's choices of a workflow's own shortcut, in this
+// order (workflow_nodes.odin), and the Condition node's sources.
 Source :: enum u8 {
-	Region,   // a rectangle (or a window, or an output) chosen on the frozen desktop
-	Screen,   // the output under the pointer, no interface
-	Window,   // the window in front, no interface
+	Region,        // a rectangle (or a window, or an output) chosen on the frozen desktop
+	Screen,        // the output under the pointer, no interface
+	Window,        // the window in front, no interface
+	All_Screens,   // every output in one picture, no interface
+	Last_Region,   // the rectangle chosen last, cut from the desktop now, no interface
+	Color,         // a pixel's colour, chosen on the frozen desktop: no picture
 }
 
-SOURCE_NAMES := [Source]string{.Region = "region", .Screen = "screen", .Window = "window"}
+SOURCE_NAMES := [Source]string{.Region = "region", .Screen = "screen", .Window = "window", .All_Screens = "all-screens", .Last_Region = "last-region", .Color = "color"}
+
+// The sources whose picture is chosen on the frozen desktop (the overlay).
+SOURCES_SELECTED :: bit_set[Source]{.Region, .Color}
+
+// The source a capture of `s` takes: a last region with none chosen yet is a region chosen now.
+source_resolve :: proc(s: Source, has_last_region: bool) -> Source {
+	if s == .Last_Region && !has_last_region { return .Region }
+	return s
+}
 
 // Why a capture failed.
 Flow_Error :: enum u8 {
@@ -55,8 +70,8 @@ FLOW_ERROR_TEXT := [Flow_Error]string{
 }
 
 Flow_Idle      :: struct {}
-Flow_Capturing :: struct { source: Source }   // the worker reads the screen
-Flow_Selecting :: struct {}                   // the overlay shows the frozen desktop (Region only)
+Flow_Capturing :: struct { source: Source }   // the worker reads the screen (after the workflow's delay)
+Flow_Selecting :: struct { source: Source }   // the overlay shows the frozen desktop (Region, Color)
 Flow_Encoding  :: struct { source: Source }   // the picture is cut (a region) and handed to its workflow
 Flow_Done      :: struct { source: Source }
 Flow_Failed    :: struct { source: Source, error: Flow_Error }
@@ -67,6 +82,7 @@ Flow_Trigger        :: struct { source: Source }   // a command, a hotkey, the t
 Flow_Captured       :: struct {}                   // the worker has the picture
 Flow_Capture_Failed :: struct { error: Flow_Error }
 Flow_Confirmed      :: struct {}                   // the user took a rectangle
+Flow_Picked         :: struct {}                   // the user took a pixel's colour (copied by the app)
 Flow_Cancelled      :: struct {}                   // Escape, a close
 Flow_Handed         :: struct {}                   // the picture went to a run of its workflow: the capture is over
 Flow_Saved          :: struct {}                   // the picture's work is done (a test's flow: the app hands it on)
@@ -74,8 +90,8 @@ Flow_Save_Failed    :: struct { error: Flow_Error }
 Flow_Reset          :: struct {}                   // the outcome was told: ready for the next
 
 Flow_Event :: union {
-	Flow_Trigger, Flow_Captured, Flow_Capture_Failed, Flow_Confirmed, Flow_Cancelled, Flow_Handed, Flow_Saved, Flow_Save_Failed,
-	Flow_Reset,
+	Flow_Trigger, Flow_Captured, Flow_Capture_Failed, Flow_Confirmed, Flow_Picked, Flow_Cancelled, Flow_Handed, Flow_Saved,
+	Flow_Save_Failed, Flow_Reset,
 }
 
 // The state after `e` in `f`. ok false: `e` means nothing in `f` (a trigger while busy, a late result), and `f` stays.
@@ -91,16 +107,21 @@ flow_step :: proc(f: Flow, e: Flow_Event) -> (next: Flow, ok: bool) {
 	case Flow_Capturing:
 		#partial switch v in e {
 		case Flow_Captured:
-			if s.source == .Region { return Flow_Selecting{}, true }
+			if s.source in SOURCES_SELECTED { return Flow_Selecting{s.source}, true }
 			return Flow_Encoding{s.source}, true
 		case Flow_Capture_Failed: return Flow_Failed{s.source, v.error}, true
 		case Flow_Cancelled:      return Flow_Idle{}, true
 		}
 	case Flow_Selecting:
 		#partial switch v in e {
-		case Flow_Confirmed: return Flow_Encoding{.Region}, true
+		case Flow_Confirmed:
+			if s.source != .Region { break }   // (a colour is picked, not confirmed)
+			return Flow_Encoding{.Region}, true
+		case Flow_Picked:
+			if s.source != .Color { break }
+			return Flow_Idle{}, true
 		case Flow_Cancelled: return Flow_Idle{}, true
-		case Flow_Capture_Failed: return Flow_Failed{.Region, v.error}, true
+		case Flow_Capture_Failed: return Flow_Failed{s.source, v.error}, true
 		}
 	case Flow_Encoding:
 		#partial switch v in e {

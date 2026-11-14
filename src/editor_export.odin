@@ -8,19 +8,27 @@ package cliche
 // (render.readback_poll) a frame or two later. The renderer converts what it reads to straight RGBA; a picture of
 // several tiles is put together here, once.
 //
-// Pixelate draws a mosaic: the picture's mean colour by cells of EDIT_PIXELATE_CELL logical pixels, on one grid for the
-// whole picture. A thread of the editor's makes it once per picture (edit_mosaic_make goes through every pixel).
+// Pixelate draws a mosaic: the picture's mean colour by cells of its pixel size, on one grid for the whole picture. Blur
+// draws a blurred copy of the picture: a mosaic of cells a quarter of its radius, blurred, which the GPU stretches back
+// (a blur hides the detail a smaller copy loses anyway; the copy is small and quick to make). A task of the chores
+// makes each mosaic and each blurred copy once per picture and size (they go through every pixel; editor.odin).
 
 import "core:math"
+import "core:slice"
+import "core:strings"
 import "core:sync"
 import "gt:draw"
 import "gt:font"
+import pic "gt:image"
 import "gt:render"
 
 EDIT_TILE          :: 4096   // the side of an offscreen target of the export, at most
-EDIT_PIXELATE_CELL :: 12     // logical pixels
+EDIT_BLUR_DOWN     :: 4      // a blurred copy's cell, in parts of its radius
 EDIT_SHADOW_FALL   :: 0.8    // how far the shadow falls down and right, per pixel of its softness (Edit_Style.shadow)
 EDIT_SHADOW_COLOR  :: draw.Color{0, 0, 0, 0.6}
+EDIT_STEP_RING     :: 0.12   // a step's ring around a disc of its fill colour, in its radius
+EDIT_STEP_LABEL    :: 1.6    // the widest a step's label is, in its radius (a longer one is written smaller)
+EDIT_TEXT_BOX_ROUND :: 0.2   // a text's box's corners, in its text size
 
 // The mean colour of each cell of the picture (sRGB, row by row; owned).
 Edit_Mosaic :: struct {
@@ -29,16 +37,33 @@ Edit_Mosaic :: struct {
 	colors:     [][4]u8,
 }
 
+// A blurred copy of the picture, as a texture whose texel is `cell` picture pixels.
+Edit_Blur :: struct {
+	radius: int,   // picture pixels (edit_blur_px)
+	cell:   int,
+	tex:    render.Texture,
+}
+
+// A pasted picture's texture (Edit_Shape.image).
+Edit_Image :: struct {
+	id:   u32,
+	tex:  render.Texture,
+	size: [2]int,
+}
+
 // Where and how the document is painted.
 Edit_Paint :: struct {
-	doc:     ^Edit_Doc,
-	picture: render.Texture,
-	mosaic:  ^Edit_Mosaic,   // nil: not made yet (a pixelated box is a flat grey meanwhile)
-	font_id: font.Font_Id,
-	fonts:   ^font.State,
-	zoom:    f32,            // target pixels per picture pixel
-	origin:  Edit_Vec,       // where the picture's top left is, target pixels
-	skip:    int,            // the index of a shape not painted (the text being typed: its field shows it); -1 none
+	doc:       ^Edit_Doc,
+	picture:   render.Texture,
+	mosaics:   []Edit_Mosaic,   // made so far: a pixelated box whose cell has none yet is a flat grey
+	blurs:     []Edit_Blur,     // made so far: a blurred box whose radius has none yet is a flat grey
+	images:    []Edit_Image,
+	font_id:   font.Font_Id,
+	font_bold: font.Font_Id,    // 0: font_id's
+	fonts:     ^font.State,
+	zoom:      f32,             // target pixels per picture pixel
+	origin:    Edit_Vec,        // where the picture's top left is, target pixels
+	skip:      int,             // the index of a shape not painted (the text being typed: its field shows it); -1 none
 }
 
 // `cancel` (atomic, may be nil): set from another thread, the work stops at the next row of cells (the result is partial).
@@ -74,6 +99,18 @@ edit_mosaic_make :: proc(rgba: []u8, size: [2]int, cell: int, cancel: ^bool = ni
 edit_mosaic_free :: proc(m: ^Edit_Mosaic) {
 	delete(m.colors)
 	m^ = {}
+}
+
+// A blurred copy of the picture for a blur of `radius` picture pixels: RGBA of `out_size`, each pixel `cell` picture
+// pixels (owned; nil when the picture is empty). `cancel` as edit_mosaic_make's (the copy is then partial).
+edit_blur_make :: proc(rgba: []u8, size: [2]int, radius: int, cancel: ^bool = nil, allocator := context.allocator) -> (pixels: []u8, out_size: [2]int, cell: int) {
+	cell = max(radius / EDIT_BLUR_DOWN, 1)
+	mos := edit_mosaic_make(rgba, size, cell, cancel)
+	defer edit_mosaic_free(&mos)
+	if len(mos.colors) == 0 { return nil, {}, cell }
+	small := pic.Image{pixels = slice.reinterpret([]u8, mos.colors), width = mos.cols, height = mos.rows}
+	out := pic.blur(small, f32(radius) / f32(cell), allocator)
+	return out.pixels, {out.width, out.height}, cell
 }
 
 // A colour of the model (0xRRGGBB, sRGB) for gt:draw.
@@ -125,26 +162,22 @@ paint_body :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
 	doc := p.doc
 	color := edit_color(s.style.color)
 	w := max(edit_stroke_px(doc, s) * p.zoom, 1)
+	fill, filled := fill_color(s.style)
 	switch s.kind {
 	case .Rectangle:
 		r := target_box(p, edit_box_of(s.a, s.b))
-		// (the stroke is centred on the box's edge, as a line's is on its path)
-		outer := draw.rect_pad(r, w * 0.5)
-		if s.style.fill { draw.rect(dc, outer, color) } else { draw.rect(dc, outer, color, 0, w) }
+		// (the stroke is centred on the box's edge, as a line's is on its path; the fill goes under it)
+		if filled { draw.rect(dc, r, fill) }
+		draw.rect(dc, draw.rect_pad(r, w * 0.5), color, 0, w)
 	case .Ellipse:
 		r := target_box(p, edit_box_of(s.a, s.b))
 		centre := draw.rect_center(r)
 		radii := draw.rect_size(r) * 0.5
 		path := draw.path_make(allocator = context.temp_allocator)
-		if s.style.fill {
-			draw.path_arc(&path, centre, radii + w * 0.5, 0, 2 * math.PI)
-			draw.path_close(&path)
-			draw.path_fill(dc, &path, color)
-		} else {
-			draw.path_arc(&path, centre, radii, 0, 2 * math.PI)
-			draw.path_close(&path)
-			draw.path_stroke(dc, &path, w, color)
-		}
+		draw.path_arc(&path, centre, radii, 0, 2 * math.PI)
+		draw.path_close(&path)
+		if filled { draw.path_fill(dc, &path, fill) }
+		draw.path_stroke(dc, &path, w, color)
 	case .Line:
 		draw.line(dc, target(p, s.a), target(p, s.b), w, color)
 	case .Arrow:
@@ -161,16 +194,64 @@ paint_body :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
 		for q in s.points[1:] { draw.path_line_to(&path, target(p, q)) }
 		draw.path_stroke(dc, &path, w, color)
 	case .Text:
-		size := edit_text_px(doc, s) * p.zoom
-		m := font.metrics(p.fonts, p.font_id, size)
-		at := target(p, s.a)
-		draw.text(dc, p.font_id, size, {at.x, at.y + m.ascent}, color, s.text)
+		paint_text(dc, p, s)
 	case .Highlighter:
 		draw.rect(dc, target_box(p, edit_box_of(s.a, s.b)), edit_color(s.style.color, EDIT_HIGHLIGHT_ALPHA))
 	case .Pixelate:
-		paint_mosaic(dc, p, edit_box_of(s.a, s.b))
+		paint_mosaic(dc, p, edit_box_of(s.a, s.b), edit_pixel_cell(doc, s.style))
+	case .Blur:
+		paint_blur(dc, p, edit_box_of(s.a, s.b), edit_blur_px(doc, s.style))
 	case .Step:
 		paint_step(dc, p, s)
+	case .Image:
+		for img in p.images {
+			if img.id == s.image { draw.image(dc, img.tex, target_box(p, edit_box_of(s.a, s.b))); break }
+		}
+	}
+}
+
+// Black or white, whichever stands out from `rgb`: a text's outline or box when it has no fill colour.
+@(private = "file")
+color_against :: proc(rgb: u32) -> draw.Color {
+	return color_light(rgb) ? draw.Color{0, 0, 0, 1} : draw.Color{1, 1, 1, 1}
+}
+
+// A style's fill colour with its opacity; ok false: none.
+@(private = "file")
+fill_color :: proc(style: Edit_Style) -> (c: draw.Color, ok: bool) {
+	rgb := edit_fill(style) or_return
+	return edit_color(rgb, f32(style.fill_color >> 24) / 255), true
+}
+
+// A text, line by line: its letters alone, with an outline (under them: the letters keep their shape), or on a box.
+@(private = "file")
+paint_text :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
+	doc := p.doc
+	size := edit_text_px(doc, s) * p.zoom
+	face := s.style.bold && p.font_bold != 0 ? p.font_bold : p.font_id
+	color := edit_color(s.style.color)
+	fill, filled := fill_color(s.style)
+	other := filled ? fill : color_against(s.style.color)
+	if s.style.text_look == .Background {
+		draw.rect(dc, target_box(p, edit_shape_box(doc, s)), other, size * EDIT_TEXT_BOX_ROUND)
+	}
+	m := font.metrics(p.fonts, face, size)
+	at := target(p, s.a)
+	y := at.y + m.ascent
+	rest := s.text
+	for {
+		nl := strings.index_byte(rest, '\n')
+		line := nl < 0 ? rest : rest[:nl]
+		if s.style.text_look == .Outline {
+			sh := font.shape(p.fonts, face, size, line, {}, context.temp_allocator)
+			draw.glyph_run_stroke(dc, size, {at.x, y}, other, sh.glyphs, size * EDIT_TEXT_OUTLINE)
+			draw.glyph_run(dc, size, {at.x, y}, color, sh.glyphs)
+		} else {
+			draw.text(dc, face, size, {at.x, y}, color, line)
+		}
+		if nl < 0 { break }
+		rest = rest[nl + 1:]
+		y += m.line_height
 	}
 }
 
@@ -198,27 +279,57 @@ paint_arrow :: proc(dc: ^draw.Context, a, b: Edit_Vec, w, k: f32, color: draw.Co
 	draw.path_fill(dc, &path, color)
 }
 
+// A disc of the step's colour (of its fill colour, in a ring of its colour, when it has one) and its label.
 @(private = "file")
 paint_step :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
 	r := edit_step_radius(p.doc, s) * p.zoom
 	c := target(p, s.a)
-	draw.rect(dc, {c - r, c + r}, edit_color(s.style.color), r)
+	fill, filled := fill_color(s.style)
+	rgb, _ := edit_fill(s.style)
+	disc := filled ? rgb : s.style.color   // (the label's ink stands out from it)
+	draw.rect(dc, {c - r, c + r}, filled ? fill : edit_color(s.style.color), r)
+	if filled { draw.rect(dc, {c - r, c + r}, edit_color(s.style.color), r, max(r * EDIT_STEP_RING, 1)) }
 	size := edit_text_px(p.doc, s) * p.zoom * 0.8
-	buf: [24]u8
-	text := int_text(buf[:], s.number)
-	m := font.metrics(p.fonts, p.font_id, size)
+	buf: [32]u8
+	text := edit_step_label(buf[:], s.number, s.style.step_format)
 	tw := font.text_width(p.fonts, p.font_id, size, text)
-	ink := color_light(s.style.color) ? draw.Color{0, 0, 0, 1} : draw.Color{1, 1, 1, 1}
-	draw.text(dc, p.font_id, size, {c.x - tw * 0.5, c.y + m.cap_height * 0.5}, ink, text)
+	if tw > r * EDIT_STEP_LABEL {
+		size *= r * EDIT_STEP_LABEL / tw
+		tw = r * EDIT_STEP_LABEL
+	}
+	m := font.metrics(p.fonts, p.font_id, size)
+	draw.text(dc, p.font_id, size, {c.x - tw * 0.5, c.y + m.cap_height * 0.5}, color_against(disc), text)
 }
 
-// The cells of the mosaic that the box covers, each cut by the box.
+// The box within the picture (a part outside it has nothing to hide); ok false: nothing of it is inside.
 @(private = "file")
-paint_mosaic :: proc(dc: ^draw.Context, p: ^Edit_Paint, box: Edit_Box) {
-	r := Edit_Box{{max(box.min.x, 0), max(box.min.y, 0)}, {min(box.max.x, p.doc.size.x), min(box.max.y, p.doc.size.y)}}
-	if r.max.x <= r.min.x || r.max.y <= r.min.y { return }
-	m := p.mosaic
-	if m == nil || len(m.colors) == 0 {
+picture_cut :: proc(p: ^Edit_Paint, box: Edit_Box) -> (r: Edit_Box, ok: bool) {
+	r = Edit_Box{{max(box.min.x, 0), max(box.min.y, 0)}, {min(box.max.x, p.doc.size.x), min(box.max.y, p.doc.size.y)}}
+	return r, r.max.x > r.min.x && r.max.y > r.min.y
+}
+
+// The blurred copy of `radius` under the box, stretched back to the picture's pixels.
+@(private = "file")
+paint_blur :: proc(dc: ^draw.Context, p: ^Edit_Paint, box: Edit_Box, radius: int) {
+	r, inside := picture_cut(p, box)
+	if !inside { return }
+	for b in p.blurs {
+		if b.radius != radius || b.tex == 0 { continue }
+		c := f32(b.cell)
+		draw.image(dc, b.tex, target_box(p, r), {r.min / c, r.max / c})
+		return
+	}
+	draw.rect(dc, target_box(p, r), {0.5, 0.5, 0.5, 1})
+}
+
+// The cells of the mosaic of `cell` that the box covers, each cut by the box.
+@(private = "file")
+paint_mosaic :: proc(dc: ^draw.Context, p: ^Edit_Paint, box: Edit_Box, cell_px: int) {
+	r, inside := picture_cut(p, box)
+	if !inside { return }
+	m: ^Edit_Mosaic
+	for &x in p.mosaics { if x.cell == cell_px && len(x.colors) > 0 { m = &x; break } }
+	if m == nil {
 		draw.rect(dc, target_box(p, r), {0.5, 0.5, 0.5, 1})
 		return
 	}
@@ -236,21 +347,6 @@ paint_mosaic :: proc(dc: ^draw.Context, p: ^Edit_Paint, box: Edit_Box) {
 			draw.rect(dc, target_box(p, cut), draw.srgb(f32(v[0]) / 255, f32(v[1]) / 255, f32(v[2]) / 255))
 		}
 	}
-}
-
-// The decimal text of `n` in `buf`.
-@(private = "file")
-int_text :: proc(buf: []u8, n: int) -> string {
-	i := len(buf)
-	v := abs(n)
-	for {
-		i -= 1
-		buf[i] = u8('0' + v % 10)
-		v /= 10
-		if v == 0 || i == 1 { break }
-	}
-	if n < 0 { i -= 1; buf[i] = '-' }
-	return string(buf[i:])
 }
 
 ////////////////////////////////

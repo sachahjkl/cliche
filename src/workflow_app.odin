@@ -70,15 +70,17 @@ workflows_want_editor :: proc(app: ^App) -> bool {
 	for t in ([]Trigger{.Region, .Screen, .Window}) {
 		if wf := workflows_for(&app.workflows, t); wf != nil && workflow_has(wf, .Annotate) { return true }
 	}
+	// (not for a workflow's own keys: "Edit then share" has some by default, and an editor at rest for everyone is a
+	// renderer and a window held from the start; its editor opens at its first use, as `cliche --edit`'s does)
 	return false
 }
 
 ////////////////////////////////
 // Runs
 
-// A capture's picture (taken) runs the workflow of `t`. False: no workflow runs for it (the shot is freed).
-workflow_capture :: proc(app: ^App, t: Trigger, shot: Shot) -> bool {
-	wf := workflows_for(&app.workflows, t)
+// A capture's picture (taken) runs the workflow of `target`. False: no workflow runs for it (the shot is freed).
+workflow_capture :: proc(app: ^App, target: Capture_Target, shot: Shot) -> bool {
+	wf := workflows_target(&app.workflows, target)
 	if wf == nil {
 		shot := shot
 		shot_free(&shot)
