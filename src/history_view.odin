@@ -24,7 +24,7 @@ import "core:time"
 import config "gt:config"
 import "gt:draw"
 import "gt:font"
-import "gt:host"
+import host "gt:host"
 import lucide "gt:lucide"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
@@ -517,7 +517,6 @@ history_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app := (^App)(h.user)
 	hw := &app.history_window
-	views_owner_build(app, h)
 	hw.frame += 1
 	now_ms := f64(time.to_unix_nanoseconds(time.now())) / 1e6
 	hw.today = timefmt.local_day(now_ms, hw.offset_minutes)
@@ -1184,7 +1183,7 @@ history_menu :: proc(app: ^App, em: f32) {
 @(private = "file")
 history_palette_keep :: proc(app: ^App) -> bool {
 	hw := &app.history_window
-	_ = ui.views_commands_update(&hw.view_cmds, &app.views)
+	_ = ui.views_commands_update(&hw.view_cmds, &app.views, owner = &hw.host.state)
 	key := Palette_Key{prefs = app.prefs.version + 1, workflows = hw.workflow_mode.open, language = i18n.version(), views = hw.view_cmds.serial}
 	if hw.palette_made == key { return false }
 	hw.palette_made = key
@@ -1192,19 +1191,12 @@ history_palette_keep :: proc(app: ^App) -> bool {
 	a := palette_table_remake(t)
 	theirs, names := settings_palette(app, a)
 	flows := key.workflows ? slice.enumerated_array(&WORKFLOW_ACTIONS) : nil
-	moves, acts := views_moves(&hw.view_cmds, history_view_mine, nil, a)
+	moves, acts := views_moves(&hw.view_cmds, a)
 	t.commands = slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), theirs, flows, moves}, a)
 	t.disabled = make([]bool, len(t.commands), a)
 	t.names = names
 	t.acts = acts
 	return true
-}
-
-// The views whose moves the window's palette lists: not a palette's own (it is open while they are listed), not an
-// editor's (each editor's palette lists them), not a sheet's (its owner is not known here: its header moves it).
-@(private = "file")
-history_view_mine :: proc(c: ui.View_Command, _: rawptr) -> bool {
-	return c.id != ui.PALETTE_VIEW && c.id != ui.SHORTCUTS_VIEW && !strings.has_prefix(c.instance, EDITOR_INSTANCE)
 }
 
 // What the palette lists, given to it when its table was made again, when what can act changed, or with `force`. Only

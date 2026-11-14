@@ -22,11 +22,11 @@ docked. cliche keeps that choice per view, and which views were open, in `<state
 - **One `ui.Views` for the program.** Every window's State gets it (`views_window`), the overlays and the pins too,
   although they open no view: `ui.views()` outside a build is then always the program's, whichever window was built
   last.
-- **The backend of the views' windows follows the build.** A `Views` has one backend, and `host.view_windows(h)` steps
-  and frames the windows of the views that `h` owns, after `h`'s frame. Each window that owns views sets it to its own
-  host at the top of its build (`views_owner_build`). The step after that frame uses it. Refused: one backend on the
-  history window: an editor's view in a window of its own would be stepped after the editor's frame but framed only in
-  the history's, which is often hidden.
+- **One backend of the views' windows for every owner window**, set once at the start
+  (`host.view_windows(&app.shared)`): a view's window is framed after the window that owns the view. Refused: one
+  backend on the history window (an editor's view in a window of its own would be framed only with the history, often
+  hidden), and a backend set again at each owner's build (cliche's first form, before the toolkit served several
+  owners).
 - **An editor's views are instances named by the editor** (`Editor.name`, `editor-<id>`). Two editors open the size
   dialog side by side, each with its own answer. Their memory is shared: the place that the person chose for one
   editor's size dialog is the place of the next one's.
@@ -40,9 +40,9 @@ docked. cliche keeps that choice per view, and which views were open, in `<state
 - **The window's keys wait while one of its views that takes keys is open**, in any presentation: its palettes, its
   sheet, a question, the size dialog, the setup. This is the rule of the dialogs that these views were. The preview is
   not one: it leaves the keys to the page.
-- **Each palette lists the moves of its own window's views.** An editor's palette keeps the moves of its instance. The
-  history's leaves out the editors' views, the palettes (open while they list) and the sheets (the toolkit does not
-  name a sheet's window: its header moves it).
+- **Each palette lists the moves of its own window's views**: one `ui.View_Commands` per window, made with that
+  window's State (`views_commands_update(..., owner)`), its sheet's included. The palettes' own moves are left out: a
+  palette is open while it lists them.
 - **A view that asks about a window's content closes with it.** The editor's views close when the editor is kept for
   another picture. The history's palettes and questions close when the window hides; the preview stays. The workflows'
   add palette and question close when the mode is left.
@@ -52,6 +52,7 @@ docked. cliche keeps that choice per view, and which views were open, in `<state
 - An answer is read one build after the view ends. A question may float beside its content while that content
   changes: the delete checks that each file is still there, the size dialog applies to the picture as it is then.
 - The size dialog gives the keyboard to its first field in its first build, unseen as it is: what the person types
-  before it shows goes in. The key of the field is computed as `ui.number` makes it (its row's key, then `###value`).
+  before it shows goes in (`ui.focus_next_field` before that field). The margins' variant has its own title and icon
+  (`ui.view_title`, `ui.view_icon`): one id, an icon per opening.
 - The editor builds no `views_frame`: it has no pane. Its views float, open in a window, or show as dialogs; the dock
   acts are absent there.

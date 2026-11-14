@@ -115,8 +115,10 @@ The dialogs and the history's preview are gui_toolkit's views (`src/views.odin`;
 `src/md/features/views.md`): one `ui.Views` for the program, given to every window's State, its memory in
 `<state dir>/cliche/views.txt`. A view opens in the window whose build opens it. The history window builds
 `ui.views_frame` around its modes and a dock space, `history`, around its grid or list: the preview's home. Each editor's
-views are instances named by the editor. Each window that owns views makes its host the backend of the views' windows
-at the top of its build (`views_owner_build`).
+views are instances named by the editor. One backend opens the views' windows for every window
+(`host.view_windows(&app.shared)`), and each window's palette lists the moves of its own views.
+
+The editor's two bars are the toolkit's tool bar in its Wrap mode (`ui.toolbar`; `src/md/features/editor-bars.md`).
 
 ## Shortcuts
 

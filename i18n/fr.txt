@@ -364,6 +364,9 @@ fr Mise en ligne…
 en Reading the picture…
 fr Lecture de l'image…
 
+en Zoom
+fr Zoom
+
 en Done
 fr Terminé
 
@@ -430,11 +433,17 @@ fr Tourner, inverser, redimensionner ou rogner l'image
 en Emoji
 fr Émoji
 
-en Zoom
-fr Zoom
+en Colour
+fr Couleur
+
+en Colours
+fr Couleurs
 
 en Another colour…
 fr Autre couleur…
+
+en Fill
+fr Remplissage
 
 en Fill colour
 fr Couleur de remplissage
@@ -442,8 +451,14 @@ fr Couleur de remplissage
 en Fill colour: none
 fr Couleur de remplissage : aucune
 
-en Fill
-fr Remplissage
+en Style
+fr Style
+
+en Width
+fr Largeur
+
+en Arrow heads
+fr Pointes de flèche
 
 en No head
 fr Sans pointe
@@ -457,6 +472,9 @@ fr Une pointe au début
 en A head at both ends
 fr Une pointe à chaque bout
 
+en Line style
+fr Style du trait
+
 en A solid line
 fr Un trait plein
 
@@ -468,6 +486,9 @@ fr Un trait en pointillés
 
 en Corners
 fr Coins
+
+en Text size
+fr Taille du texte
 
 ctx text size, short
 en S
@@ -500,6 +521,9 @@ fr Très grand texte
 en Bold
 fr Gras
 
+en Text look
+fr Aspect du texte
+
 ctx text look
 en Plain
 fr Simple
@@ -520,6 +544,9 @@ fr Les lettres avec un contour (la couleur de remplissage, sinon noir ou blanc)
 
 en The letters on a box (the fill colour, else black or white)
 fr Les lettres sur un cadre (la couleur de remplissage, sinon noir ou blanc)
+
+en Number style
+fr Style des numéros
 
 en Numbers: 1, 2, 3
 fr Chiffres : 1, 2, 3
@@ -542,6 +569,9 @@ fr Suivant
 en %g times larger
 fr %g fois plus grand
 
+en Lens shape
+fr Forme de la loupe
+
 ctx lens shape
 en Circle
 fr Cercle
@@ -559,11 +589,11 @@ fr Une loupe rectangulaire
 en A blur of %d px
 fr Un flou de %d px
 
-en Pixels of %d px
-fr Des pixels de %d px
-
 en Pixel size
 fr Taille des pixels
+
+en Pixels of %d px
+fr Des pixels de %d px
 
 en Shadow
 fr Ombre
@@ -600,9 +630,6 @@ fr Bas
 
 en Transparent
 fr Transparent
-
-en Width
-fr Largeur
 
 en Height
 fr Hauteur
@@ -1736,9 +1763,6 @@ fr Marges
 
 en Margin
 fr Marge
-
-en Colour
-fr Couleur
 
 en Border
 fr Bordure
