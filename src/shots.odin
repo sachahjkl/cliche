@@ -14,6 +14,7 @@ import config "gt:config"
 import prefs_page "gt:prefs_page"
 import "gt:host"
 import pic "gt:image"
+import "gt:platform"
 import png "gt:png"
 import "gt:render"
 import "gt:ui"
@@ -138,8 +139,10 @@ shots_editor :: proc(app: ^App, folder: string) -> int {
 		editor_after_frame(ed)   // (what the program's loop does after a frame: it takes the task's mosaic)
 		time.sleep(10 * time.Millisecond)
 	}
-	written := shots_write(app, &ed.host, folder, "editor")
-	return written ? 0 : 1
+	if !shots_write(app, &ed.host, folder, "editor") { return 1 }
+	// (a narrow window: the bars wrap onto more lines, nothing is hidden: src/md/features/editor-bars.md)
+	platform.set_size(ed.host.win, {560, 640})
+	return shots_write(app, &ed.host, folder, "editor-narrow") ? 0 : 1
 }
 
 @(private = "file")

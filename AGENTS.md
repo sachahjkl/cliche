@@ -36,3 +36,21 @@ Every step is a command of `tools/clichetool` (`help` lists them):
 - Automation is a command of `tools/clichetool`, never a shell, batch, PowerShell, Python or Node script.
 - Comments and commit messages are in English. Comments say why.
 - Commits: author and committer `sachahjkl <sacha@sacha.house>`, no attribution trailer, no session link.
+
+## Roadmap
+
+- `ROADMAP.md`, beside `CHANGELOG.md`, holds cliche's planned work: `# Roadmap`, then `## Now`, `## Next` and `## Later`,
+  each a list. Each entry starts with a bold summary, then one or two sentences on what it gives the user. No dates, no
+  front matter.
+- When a work is done, remove its entry in the same commit as its changelog fragment.
+- Work that touches several programs goes in the roadmap of gui_toolkit.
+- `clichetool check` checks its format with the changelog's.
+
+## Intent
+
+This project follows <https://srcmd.org>, with the Markdown in `src/md`. Read `src/md/README.md` first.
+
+- Change the intent first, then derive the code and the tests. A change of design changes its intent file in the same
+  commit.
+- Keep there what the code does not show: the purpose, the decisions, the refused alternatives, the subtle points.
+- `src/md/README.md` lists every other file of the folder in its `## File Index`.

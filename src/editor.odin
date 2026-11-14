@@ -13,9 +13,10 @@ package cliche
 // The window follows the settings' model (settings_view.odin): a host of its own; the theme of appearance.theme; the
 // command palette (Ctrl+K) and the sheet of its keys (F1).
 //
-//   the bar      the tools (each an icon, a tooltip and a key), the properties of the tool or of the selection, then
-//                undo, redo, copy, save, Cancel and Done
+//   tools bar    the tools (each an icon, a tooltip and a key), the Insert and Picture menus, the properties of the
+//                tool or of the selection; it wraps onto more lines, nothing hidden (src/md/features/editor-bars.md)
 //   the canvas   the picture and its shapes (editor_export.odin paints them), the selection's handles, the crop
+//   actions bar  the zoom, undo, redo, copy, save, upload, pin, then Cancel and Done
 //
 // The canvas takes the pointer itself (editor_input: its presses, releases and wheel never reach the widgets) and turns
 // it into the model's events; the keys go through the commands' table, as the settings' do. A text being typed is a
@@ -1472,7 +1473,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	// (while a text is typed, its field has the keys: no command takes a letter from it; nor while the colour popover
 	// is open: its field takes a colour's letters)
 	_, typing := m.mode.(Edit_Typing)
-	dialog := ed.palette.open || ed.sheet.open || ed.asking || ed.size_dialog.open || ui.toolbar_menu_open(EDITOR_BAR) || ed.color_target != .None
+	dialog := ed.palette.open || ed.sheet.open || ed.asking || ed.size_dialog.open || ed.color_target != .None
 	if !dialog && !typing && !ed.exporting && !ed.export_wait {
 		if ui.key_press(.Escape) {
 			if !edit_deselect(m) { editor_close_asked(ed) }
@@ -1487,14 +1488,15 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	canvas: ui.Rect
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###editor") {   // (the theme's surface: the host only clears to black)
-		editor_bar(ed, em)
+		editor_tools_bar(ed, em)
 		ui.next({width = ui.fill(), height = ui.fill(), cursor = ed.hover, bg = ui.color("well")})
 		b := ui.build_box({.Clickable, .Clip, .Draw_Background}, "###canvas")
 		b.custom, b.custom_user = editor_canvas_draw, ed
 		_ = ui.signal(b)
 		canvas = b.rect   // (last frame's layout: where the canvas is)
+		editor_actions_bar(ed, em)
 	}
-	// (the button the popover opened from is gone: a property the selection no longer has, a folded bar)
+	// (the button the popover opened from is gone: a property the selection no longer has)
 	if ed.color_target != .None && ed.color_target not_in ed.color_built { ed.color_target = .None }
 	// (after the canvas: drawn over it, and first for the pointer)
 	editor_text_field(ed, em)
@@ -1589,44 +1591,57 @@ editor_text_field :: proc(ed: ^Editor, em: f32) {
 	}
 }
 
-// The bar: the tools, the Insert and Picture menus, the properties, then what is done with the picture. A window too
-// narrow for all of it folds into the bar's "…" panel, item by item (EDITOR_FOLD_*): the rare tools and the menus, then
-// pin, upload and redo, then the zoom, then the properties (the last of them first), then undo, copy and save, then the
-// everyday tools; Cancel and Done stay. Save as and Print are in the palette and on their keys.
+// The bar above the picture: what draws (src/md/features/editor-bars.md). The tools, the Insert and Picture menus, then
+// the properties of the tool or of the selection. Nothing folds away: a narrow window wraps it onto more lines.
 @(private = "file")
-editor_bar :: proc(ed: ^Editor, em: f32) {
+editor_tools_bar :: proc(ed: ^Editor, em: f32) {
 	m := &ed.model
 	side := math.round(em * 2.2)
-	ui.next({width = ui.fill(), height = ui.px(side + math.round(em * 0.8))})
-	if ui.toolbar(EDITOR_BAR) {
-		ui.spacer(ui.px(em * 0.5))
-		// (what folds first: the rare tools and the two menus, then pin, upload and redo, then the zoom, then the
-		// properties (the colours last of them), then undo, copy and save, then the everyday tools)
-		if ui.toolbar_group("tools", {priority = EDITOR_FOLD_TOOLS}) {
-			for t in Edit_Tool {
-				a := Editor_Action(int(Editor_Action.Tool_Select) + int(t))
-				priority: Maybe(int)
-				if t in EDITOR_RARE_TOOLS { priority = EDITOR_FOLD_RARE }
-				if ui.toolbar_item(fmt.tprintf("tool%d", int(t)), priority) {
+	pad := math.round(em * 0.4)
+	// (as tall as its lines: the canvas takes what is left)
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	if ui.column(id = "###tools_bar") {
+		ui.spacer(ui.px(pad))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+		if ui.row(id = "###tools_row") {
+			ui.spacer(ui.px(em * 0.5))
+			ui.next({width = ui.fill()})
+			if ui.flow({math.round(em * 0.2), pad}, "###tools_flow") {
+				for t in Edit_Tool {
+					a := Editor_Action(int(Editor_Action.Tool_Select) + int(t))
 					if bar_icon(fmt.tprintf("tool%d", int(t)), EDITOR_ACTIONS[a], side, active = m.tool == t, enabled = true) { editor_action(ed, a) }
 				}
+				editor_menu_buttons(ed, side)
+				bar_separator(em, side)
+				editor_properties(ed, em, side)
 			}
+			ui.spacer(ui.px(em * 0.5))
 		}
-		if ui.toolbar_group("insert", {priority = EDITOR_FOLD_RARE}) { editor_menu_buttons(ed, side) }
-		if ui.toolbar_group("properties", {separator = true, priority = EDITOR_FOLD_PROPERTIES}) { editor_properties(ed, em, side) }
-		ui.spacer(ui.fill())
-		if ui.toolbar_group("zoom", {priority = EDITOR_FOLD_ZOOM}) { editor_zoom(ed, em, side) }
-		if ui.toolbar_group("acts", {priority = EDITOR_FOLD_ACTS}) {
-			for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save, .Upload, .Pin}) {
-				// (copy and save at each capture; pin, upload and redo also have their keys)
-				priority: Maybe(int)
-				if a == .Redo || a == .Upload || a == .Pin { priority = EDITOR_FOLD_SELDOM }
-				if ui.toolbar_item(fmt.tprintf("act%d", int(a)), priority) {
+		ui.spacer(ui.px(pad))
+	}
+}
+
+// The bar under the picture: what is done with it (src/md/features/editor-bars.md). The zoom, undo and redo, copy,
+// save, upload and pin; then Cancel and Done, one piece at the right end: the actions wrap before them. Save as and
+// Print are in the palette and on their keys.
+@(private = "file")
+editor_actions_bar :: proc(ed: ^Editor, em: f32) {
+	side := math.round(em * 2.2)
+	pad := math.round(em * 0.4)
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	if ui.column(id = "###actions_bar") {
+		ui.spacer(ui.px(pad))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+		if ui.row(id = "###actions_row") {
+			ui.spacer(ui.px(em * 0.5))
+			ui.next({width = ui.fill()})
+			if ui.flow({math.round(em * 0.2), pad}, "###actions_flow") {
+				editor_zoom(ed, em, side)
+				bar_separator(em, side)
+				for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save, .Upload, .Pin}) {
 					if bar_icon(fmt.tprintf("act%d", int(a)), EDITOR_ACTIONS[a], side, active = false, enabled = editor_action_enabled(ed, a)) { editor_action(ed, a) }
 				}
 			}
-		}
-		if ui.toolbar_group("end", {pinned = true}) {
 			ui.spacer(ui.px(em * 0.5))
 			// (Cancel ends the workflow's step as given up: what hangs on its "cancelled" runs, what needs its picture does not)
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(side), radius = em * 0.4})
@@ -1636,24 +1651,22 @@ editor_bar :: proc(ed: ^Editor, em: f32) {
 			if ui.button("done", i18n.tr("Done"), o = {intent = .Primary, tip = ui.command_tip(EDITOR_ACTIONS[.Done])}).clicked && editor_action_enabled(ed, .Done) { editor_action(ed, .Done) }
 			ui.spacer(ui.px(em * 0.5))
 		}
+		ui.spacer(ui.px(pad))
 	}
 }
 
-// The id of the editor's tool bar (ui.toolbar_menu_open: its "…" panel has Escape).
-@(private = "file") EDITOR_BAR :: "editor_bar"
+// One property of the tools bar, or one menu button: a box of the flow, so that it goes to the next line whole (the
+// colours with their "another colour" disc, a label with its slider).
+@(private = "file", require_results, deferred_none = ui.pop_parent)
+bar_part :: proc(side: f32, id: string) -> bool {
+	ui.next({width = ui.children_sum(), height = ui.px(side), axis = .X, cross = .Center})
+	ui.push_parent(ui.build_box({}, fmt.tprintf("###part_%s", id)))
+	return true
+}
+
 @(private = "file") EDITOR_ZOOM_MENU :: "editor_zoom_menu"
 @(private = "file") EDITOR_INSERT_MENU :: "editor_insert_menu"
 @(private = "file") EDITOR_PICTURE_MENU :: "editor_picture_menu"
-
-// The bar's fold priorities, the lowest folds first: what is used at each capture (the colours, the everyday tools,
-// copy and save) stays longest in a narrow window.
-@(private = "file") EDITOR_FOLD_RARE       :: -3   // the rare tools, the Insert and Picture menus
-@(private = "file") EDITOR_FOLD_SELDOM     :: -2   // pin, upload, redo (each has its key)
-@(private = "file") EDITOR_FOLD_ZOOM       :: -1
-@(private = "file") EDITOR_FOLD_PROPERTIES :: 0    // the last of them first: the colours fold last
-@(private = "file") EDITOR_FOLD_ACTS       :: 1
-@(private = "file") EDITOR_FOLD_TOOLS      :: 2
-@(private = "file") EDITOR_RARE_TOOLS :: bit_set[Edit_Tool]{.Balloon, .Eraser, .Magnify, .Cut_Out}
 
 // The stickers' names, in EDIT_STICKERS' order (the menu's search finds them by name).
 EDITOR_STICKER_NAMES := [len(EDIT_STICKERS)]string{
@@ -1663,13 +1676,13 @@ EDITOR_STICKER_NAMES := [len(EDIT_STICKERS)]string{
 	i18n.later("Eyes"), i18n.later("Pointing right"), i18n.later("Bug"),
 }
 
-// Two buttons, each an item of the bar that folds on its own: their menus offer what can be put on the picture (a
+// Two buttons, each a part of the tools bar: their menus offer what can be put on the picture (a
 // picture from a file, the last screenshot, a pointer, an emoji), and what can be done to the picture itself (turn,
 // mirror, resize, margins, trim).
 @(private = "file")
 editor_menu_buttons :: proc(ed: ^Editor, side: f32) {
 	menu_button :: proc(id, menu, icon, tip: string, side: f32) {
-		if ui.toolbar_item(id) {
+		if bar_part(side, id) {
 			ui.next({width = ui.px(side), height = ui.px(side), radius = math.round(side * 0.22), font_size = math.round(side * 0.5)})
 			sig := ui.button(id, icon = icon, o = {tip = tip, face = .Ghost, lit = ui.menu_is_open(menu)})
 			if sig.clicked {
@@ -1681,8 +1694,7 @@ editor_menu_buttons :: proc(ed: ^Editor, side: f32) {
 	menu_button("picture", EDITOR_PICTURE_MENU, lucide.IMAGE, i18n.tr("Turn, mirror, resize or trim the picture"), side)
 }
 
-// The Insert and Picture menus, built outside the bar: a button folded into its "…" panel opens one, and the panel
-// closes at the press in the menu.
+// The Insert and Picture menus, built outside the bar: a menu stays open while the bar wraps under it.
 @(private = "file")
 editor_menus :: proc(ed: ^Editor) {
 	item :: proc(ed: ^Editor, a: Editor_Action) {
@@ -1729,7 +1741,7 @@ editor_zoom :: proc(ed: ^Editor, em, side: f32) {
 	}
 }
 
-// The zoom's menu, built outside the bar as the Insert and Picture menus are (the zoom folds early in a narrow window).
+// The zoom's menu, built outside the bar as the Insert and Picture menus are.
 @(private = "file")
 editor_zoom_menu :: proc(ed: ^Editor) {
 	m := &ed.model
@@ -1767,9 +1779,8 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 	style, props := edit_style_shown(m)
 	if props == {} { return }
 	before := style
-	// (each property an item of the bar's group, the most needed first: a narrow window folds the last ones into "…",
-	// not all of them)
-	if .Color in props { if ui.toolbar_item("colours") {
+	// (each property one part of the tools bar, the most needed first: a narrow window wraps it to the next line whole)
+	if .Color in props { if bar_part(side, "colours") {
 		for c, i in EDIT_COLORS {
 			if swatch(fmt.tprintf("swatch%d", i), c, i18n.tr(EDITOR_COLOR_NAMES[i]), style.color == c, math.round(side * 0.62)) { style.color = c }
 			ui.spacer(ui.px(math.round(em * 0.25)))
@@ -1781,7 +1792,7 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 		}
 		bar_separator(em, side)
 	} }
-	if .Fill in props { if ui.toolbar_item("fill") {
+	if .Fill in props { if bar_part(side, "fill") {
 		rgb, filled := edit_fill(style)
 		tip := filled ? i18n.tr("Fill colour") : i18n.tr("Fill colour: none")
 		bar_label("fill_label", i18n.tr("Fill"), side)
@@ -1790,68 +1801,68 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 		}
 		bar_separator(em, side)
 	} }
-	if .Width in props { if ui.toolbar_item("width") {
+	if .Width in props { if bar_part(side, "width") {
 		// (a slider for the feel, its field for the exact width)
 		// (narrower than the shadow's: at 1180 px the colours, the fill and the width share the bar with the tools)
 		ui.next({width = ui.px(math.round(em * 10)), height = ui.px(math.round(side * 0.85))})
 		ui.number("###width", &style.width, lo = f32(EDIT_WIDTH_MIN), hi = f32(EDIT_WIDTH_MAX), step = 1, unit = "px", slider = true)
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Heads in props { if ui.toolbar_item("heads") {
+	if .Heads in props { if bar_part(side, "heads") {
 		// (in Edit_Heads' order)
 		labels := [len(Edit_Heads)]string{"—", "→", "←", "↔"}
 		tips := [len(Edit_Heads)]string{i18n.tr("No head"), i18n.tr("A head at the end"), i18n.tr("A head at the start"), i18n.tr("A head at both ends")}
 		at := int(style.heads)
-		ui.next({width = ui.px(em * 8), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###heads", labels[:], &at, tips[:]) { style.heads = Edit_Heads(at) }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Dash in props { if ui.toolbar_item("dash") {
+	if .Dash in props { if bar_part(side, "dash") {
 		// (in Edit_Dash's order)
 		labels := [len(Edit_Dash)]string{"──", "╌╌", "┈┈"}
 		tips := [len(Edit_Dash)]string{i18n.tr("A solid line"), i18n.tr("A dashed line"), i18n.tr("A dotted line")}
 		at := int(style.dash)
-		ui.next({width = ui.px(em * 7), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###dash", labels[:], &at, tips[:]) { style.dash = Edit_Dash(at) }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Radius in props { if ui.toolbar_item("radius") {
+	if .Radius in props { if bar_part(side, "radius") {
 		bar_label("radius_label", i18n.tr("Corners"), side)
 		ui.next({width = ui.px(math.round(em * 11)), height = ui.px(math.round(side * 0.85))})
 		ui.number("###radius", &style.radius, lo = f32(0), hi = f32(EDIT_RADIUS_MAX), step = 1, unit = "px", slider = true)
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Text_Size in props { if ui.toolbar_item("text_size") {
+	if .Text_Size in props { if bar_part(side, "text_size") {
 		labels := [len(EDIT_TEXT_SIZES)]string{i18n.tr("text size, short", "S"), i18n.tr("text size, short", "M"), i18n.tr("text size, short", "L"), i18n.tr("text size, short", "XL")}
 		tips := [len(EDIT_TEXT_SIZES)]string{i18n.tr("Small text"), i18n.tr("Medium text"), i18n.tr("Large text"), i18n.tr("Very large text")}
 		at := nearest(EDIT_TEXT_SIZES[:], style.text_size)
-		ui.next({width = ui.px(em * 10), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###text_size", labels[:], &at, tips[:]) { style.text_size = EDIT_TEXT_SIZES[at] }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Bold in props { if ui.toolbar_item("bold") {
+	if .Bold in props { if bar_part(side, "bold") {
 		if bar_toggle("bold", lucide.BOLD, i18n.tr("Bold"), style.bold, side) { style.bold = !style.bold }
 		ui.spacer(ui.px(em * 0.4))
 	} }
-	if .Text_Look in props { if ui.toolbar_item("text_look") {
+	if .Text_Look in props { if bar_part(side, "text_look") {
 		// (in Edit_Text_Look's order)
 		labels := [len(Edit_Text_Look)]string{i18n.tr("text look", "Plain"), i18n.tr("text look", "Outline"), i18n.tr("text look", "Box")}
 		tips := [len(Edit_Text_Look)]string{i18n.tr("The letters alone"), i18n.tr("The letters with an outline (the fill colour, else black or white)"), i18n.tr("The letters on a box (the fill colour, else black or white)")}
 		at := int(style.text_look)
-		ui.next({width = ui.px(em * 13), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###text_look", labels[:], &at, tips[:]) { style.text_look = Edit_Text_Look(at) }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Step_Format in props { if ui.toolbar_item("step_format") {
+	if .Step_Format in props { if bar_part(side, "step_format") {
 		// (in Edit_Step_Format's order)
 		labels := [len(Edit_Step_Format)]string{"1", "a", "A", "i"}
 		tips := [len(Edit_Step_Format)]string{i18n.tr("Numbers: 1, 2, 3"), i18n.tr("Small letters: a, b, c"), i18n.tr("Capital letters: A, B, C"), i18n.tr("Roman numerals: i, ii, iii")}
 		at := int(style.step_format)
-		ui.next({width = ui.px(em * 9), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###step_format", labels[:], &at, tips[:]) { style.step_format = Edit_Step_Format(at) }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Step_Number in props { if ui.toolbar_item("step_number") {
+	if .Step_Number in props { if bar_part(side, "step_number") {
 		// (the selected step's number; with none selected, the number the next step starts at)
 		n := edit_step_number_shown(m)
 		bar_label("step_number_label", edit_has_selection(m) ? i18n.tr("Number") : i18n.tr("Next"), side)
@@ -1859,7 +1870,7 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 		if ui.number("###step_number", &n, lo = 1, hi = 9999, step = 1) { edit_step_number_set(m, n) }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Zoom in props { if ui.toolbar_item("zoom") {
+	if .Zoom in props { if bar_part(side, "zoom") {
 		labels: [len(EDIT_MAGNIFY_ZOOMS)]string
 		tips: [len(EDIT_MAGNIFY_ZOOMS)]string
 		for v, i in EDIT_MAGNIFY_ZOOMS {
@@ -1867,40 +1878,40 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 			tips[i] = fmt.tprintf(i18n.tr("%g times larger"), v)
 		}
 		at := nearest(EDIT_MAGNIFY_ZOOMS[:], style.zoom)
-		ui.next({width = ui.px(em * 10), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###magnify_zoom", labels[:], &at, tips[:]) { style.zoom = EDIT_MAGNIFY_ZOOMS[at] }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Lens in props { if ui.toolbar_item("lens") {
+	if .Lens in props { if bar_part(side, "lens") {
 		// (in Edit_Lens' order)
 		labels := [len(Edit_Lens)]string{i18n.tr("lens shape", "Circle"), i18n.tr("lens shape", "Box")}
 		tips := [len(Edit_Lens)]string{i18n.tr("A round magnifier"), i18n.tr("A rectangular magnifier")}
 		at := int(style.lens)
-		ui.next({width = ui.px(em * 9), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###lens", labels[:], &at, tips[:]) { style.lens = Edit_Lens(at) }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Blur_Radius in props { if ui.toolbar_item("blur_radius") {
+	if .Blur_Radius in props { if bar_part(side, "blur_radius") {
 		labels := [len(EDIT_BLUR_RADII)]string{i18n.tr("text size, short", "S"), i18n.tr("text size, short", "M"), i18n.tr("text size, short", "L"), i18n.tr("text size, short", "XL")}
 		tips: [len(EDIT_BLUR_RADII)]string
 		for v, i in EDIT_BLUR_RADII { tips[i] = fmt.tprintf(i18n.tr("A blur of %d px"), int(v)) }
 		at := nearest(EDIT_BLUR_RADII[:], style.blur_radius)
 		bar_label("blur_label", i18n.tr("Blur"), side)
-		ui.next({width = ui.px(em * 10), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###blur_radius", labels[:], &at, tips[:]) { style.blur_radius = EDIT_BLUR_RADII[at] }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Pixel_Size in props { if ui.toolbar_item("pixel_size") {
+	if .Pixel_Size in props { if bar_part(side, "pixel_size") {
 		labels := [len(EDIT_PIXEL_SIZES)]string{i18n.tr("text size, short", "S"), i18n.tr("text size, short", "M"), i18n.tr("text size, short", "L"), i18n.tr("text size, short", "XL")}
 		tips: [len(EDIT_PIXEL_SIZES)]string
 		for v, i in EDIT_PIXEL_SIZES { tips[i] = fmt.tprintf(i18n.tr("Pixels of %d px"), int(v)) }
 		at := nearest(EDIT_PIXEL_SIZES[:], style.pixel_size)
 		bar_label("pixel_label", i18n.tr("Pixel size"), side)
-		ui.next({width = ui.px(em * 10), height = ui.px(math.round(side * 0.85))})
+		ui.next({height = ui.px(math.round(side * 0.85))})   // (as wide as its labels: none is cut, in any language)
 		if ui.segmented("###pixel_size", labels[:], &at, tips[:]) { style.pixel_size = EDIT_PIXEL_SIZES[at] }
 		ui.spacer(ui.px(em * 0.5))
 	} }
-	if .Shadow in props { if ui.toolbar_item("shadow") {
+	if .Shadow in props { if bar_part(side, "shadow") {
 		// (its softness: 0, none)
 		ui.next({height = ui.px(side), text_pad = 0})
 		ui.label(fmt.tprintf("%s###shadow_label", i18n.tr("Shadow")))
