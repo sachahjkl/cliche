@@ -3,6 +3,26 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-14
+
+### Added
+- **Several captures selected, as in a file manager, in the grid and in the list**: Ctrl+click adds or takes one, Shift+click selects a range (a second one nearer the first makes it smaller), Ctrl+Shift+click adds a range; the arrows with Shift, Ctrl+Shift or Ctrl do the same from the keyboard, by lines in the grid; Ctrl+Space toggles the capture under the cursor and Ctrl+A selects all. The selection stays when you switch between the grid and the list. Open, copy the paths, upload, combine, delete and remove act on every capture selected; the preview, edit, pin and copy the picture on the one under the cursor. Escape with several selected keeps the cursor's alone.
+
+### Changed
+- **The editor's bars are centred.** The tools above the picture and the actions under it sit in the middle of the editor, as the picture does; a bar that wraps centres each of its lines.
+- **cliche draws its own title bar by default, like the other programs**: the main window and each editor have cliche's title bar, with its minimise, maximise and close buttons; drag it to move the window, double-click it to maximise. The system's title bar is a setting again (Settings > Window), applied at once; on GNOME, which draws none, cliche keeps its own and says so.
+- **The editor's bars are the toolkit's tool bar**: the tools, the properties and the actions look and behave as in the other programs of the toolkit. Nothing is hidden: a narrow window still wraps each bar onto more lines, a property never splits from its label, and Cancel and Done stay together at the end. The colours, the fill and the other properties each move to the next line as one group, a line before each; Bold is a button held down while the text is bold. The size dialog shows the margins' icon again when it adds margins, and each window's palette now also lists the moves of its sheet of keys.
+- **Dialogs and the preview go where you put them**: the command palette, the sheet of keys, the questions before a delete or a close, the setup and the editor's size and margins dialog can float inside their window or open in a window of their own, and in the main window dock at a side (their header's icons, a right click on the header, a drag of it, or the palette's "Float…", "Dock…" and "Open … in a window"). The history's preview is a pane you can float, dock elsewhere or put in a window of its own; its width is kept when you drag its edge. cliche remembers where each one was, and whether the preview was open, and shows it there at the next start; the preview is open at the very first start. In the size and margins dialog, what you type at once goes into its first field.
+- **The update in the history's footer**: a button in the history's footer says that a new version is on offer, downloading or ready to restart, and acts on it; no message says it again. A failed update is still said.
+- **The editor has two bars, and nothing hides in a menu**: the tools, the Insert and Picture menus and the properties of the tool are above the picture; the zoom, undo, redo, copy, save, upload, pin, Cancel and Done are under it. In a narrow window each bar goes onto more lines instead of moving buttons into a "…" menu. The arrow heads, dashes, text sizes and other choices are as wide as their labels, never cut.
+
+### Fixed
+- **The text of the history can be selected and copied.** A drag selects the words of a text or QR capture in its cell, in the preview and in the details under it (name, kind, size, path, link); a click on a cell still picks it and a double click opens it. Ctrl+C copies the text selected instead of the picture, until a press elsewhere. The history's and the workflows' status lines, a workflow's triggers, a step's last run and the commands of the desktop's shortcuts select the same way.
+- **The window's keys work over its dialogs and in the editor while a text is typed.** In the main window, Ctrl+K, F1, Ctrl+,, Ctrl+W and Ctrl+Q did nothing while the sheet of the keys, a question or the setup was open. In the editor, Ctrl+K, F1 and Ctrl+W did nothing while a shape's text was typed or a picture was saved. They now work there too.
+- **The command palette opens in the settings and the workflows too**: Ctrl+K, Ctrl+Shift+P and F1 work in every mode of the main window, even while a setting's field or a workflow's name has the keyboard, and the settings' and the workflows' bars have the palette's button. In the settings, the palette lists every setting: choose one to go to it.
+- **On Windows, the path of a capture has backslashes only**: "Copy the path" in the history, the notification and the saved files gave `C:\Users\you\Pictures/cliche/cliche-….mp4`; they now give `C:\Users\you\Pictures\cliche\cliche-….mp4`. The captures already in the history copy right too.
+- **The font settings apply.** The interface, monospace and reading fonts chosen in the settings changed nothing; they now show at once, in every window, and Default brings cliche's own back.
+
 ## [0.5.0] - 2026-11-14
 
 ### Added
@@ -181,6 +201,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.6.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.6.0
 [0.5.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.5.0
 [0.4.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.4.0
 [0.3.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.3.2
