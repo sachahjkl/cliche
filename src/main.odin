@@ -12,7 +12,7 @@ import "gt:platform"
 import process "gt:process"
 import setup "gt:setup"
 
-APP_VERSION :: "0.4.0"
+APP_VERSION :: "0.5.0"
 
 USAGE :: `cliche: screenshots
 

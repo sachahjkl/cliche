@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.5.0] - 2026-11-14
+
+### Added
+- **Every step that acts says when it is done**: the steps that copy, save, upload, shorten, notify, open, pin, show in folder, delete or add to the history have a "done" output, and Upload a "failed" one. Link it to another step's "when": that step waits for it, for example Ask once the file is saved, or Save file when the upload failed.
+
 ## [0.4.0] - 2026-11-14
 
 ### Added
@@ -176,6 +181,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.5.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.5.0
 [0.4.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.4.0
 [0.3.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.3.2
 [0.3.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.3.1
