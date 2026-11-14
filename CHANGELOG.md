@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.7.0] - 2026-11-14
+
+### Changed
+- **One command palette, as in the other programs**: the palette of the main window and of the editor has the toolkit's look, keys and prefixes. Type `>` for the commands, `:` for the settings (a switch flips at once and the palette stays open), `@` to go to a capture by its name, and `#` to choose a workflow (the one shown is marked); without a prefix, the palette searches them all. What you chose most and lately comes first, under Recent. The hint row at the foot lists the prefixes. The palette that adds a step to a workflow lists the kinds of step alone.
+
 ## [0.6.0] - 2026-11-14
 
 ### Added
@@ -201,6 +206,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.7.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.7.0
 [0.6.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.6.0
 [0.5.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.5.0
 [0.4.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.4.0
