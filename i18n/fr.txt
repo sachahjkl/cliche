@@ -1617,8 +1617,8 @@ fr Une notification à la fin de l'exécution : son titre, et ce qui arrive ou u
 en Keeps the file, the address or the text that comes in, in the history.
 fr Garde dans l'historique le fichier, l'adresse ou le texte qui arrive.
 
-en %s. Off in a preview. Linked to "when", it waits for that action (an editor's Done or Cancel).
-fr %s. Désactivée dans un aperçu. Reliée à « quand », elle attend cette action (Terminé ou Annuler d'un éditeur).
+en %s. Off in a preview. Linked to "when", it waits for that action: an editor's Done or Cancel, an answer, another step's end. Its "done" fires once it has acted.
+fr %s. Désactivée dans un aperçu. Reliée à « quand », elle attend cette action : Terminé ou Annuler d'un éditeur, une réponse, la fin d'une autre étape. Son « terminé » se déclenche une fois qu'elle a agi.
 
 en %s: makes a new picture; the others that read this one keep it as it is.
 fr %s : crée une nouvelle image ; les autres étapes qui lisent celle-ci la gardent telle quelle.
@@ -1634,6 +1634,12 @@ fr PNG (rapide)
 
 en WebP (lossless)
 fr WebP (sans perte)
+
+en done
+fr terminé
+
+en failed
+fr échoué
 
 en action
 fr action
@@ -1847,9 +1853,6 @@ fr Annoter
 
 en Interactive
 fr Interactif
-
-en done
-fr terminé
 
 en cancelled
 fr annulé

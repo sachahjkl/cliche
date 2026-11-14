@@ -24,7 +24,9 @@ Cancel, which deletes the recording. The same command again starts, then stops i
 
 `cliche --edit` opens a region in the editor (the Annotate step of its workflow): arrows, boxes, text, step numbers, a
 pixelated part, red with a shadow by default; each one stays movable until Done, and the workflow goes on. Cancel stops
-that branch of the workflow; a step linked to the editor's "cancelled" runs then instead.
+that branch of the workflow; a step linked to the editor's "cancelled" runs then instead. Every step that copies, saves,
+uploads or notifies has a "done" too, and Upload a "failed": a step linked to it waits for that end (ask once the file is
+saved, save a copy when the upload failed).
 `cliche --history` shows the captures kept, as a grid or a list.
 
 ## Use

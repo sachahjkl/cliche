@@ -67,8 +67,10 @@ does each node's work.
 - **The catalog** (`src/workflow_nodes.odin`): `CATALOG`, a `flowgraph.Catalog` in `Node_Kind`'s order: each kind's
   title, icon, group, ports and parameters (Int, Float with its range and unit, Bool, Color, Choice, Text, Folder, List:
   the uploaders), where its work runs, whether it acts outside the picture (off in a preview), and `node_summary`, a
-  summary of its parameters for the node's subtitle. Annotate has two action outputs, "done" and "cancelled"; each
-  effect has an action input, "when": linked, the effect waits for the editor's Done (or its Cancel).
+  summary of its parameters for the node's subtitle. Annotate has two action outputs, "done" and "cancelled", and Ask
+  "yes" and "no"; each effect has an action input, "when", and an action output, "done", and Upload a "failed" too. A
+  node whose "when" is linked waits for that action: the editor's Done or Cancel, an answer, another effect's end. An
+  action output is the last of its node's outputs, so the links of a saved workflow keep their port numbers.
 - **The engine** (`src/workflow_run.odin`): a `flowgraph.Run` and what cliche adds, pure, tested without a window. Each
   node is flowgraph's small state machine (`Waiting -> Running -> Done | Failed | Cancelled`, `Waiting -> Skipped`); a
   node runs when every node before it is decided and its linked actions fired; a failed, cancelled or skipped node skips

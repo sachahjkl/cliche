@@ -266,7 +266,7 @@ node_what :: proc(n: ^flowgraph.Node) -> string {
 	case .Notify:         return i18n.tr("One notification at the end of the run: its title, and what comes in or a summary. Linked to \"when\", it waits for that action.")
 	case .Add_To_History: return i18n.tr("Keeps the file, the address or the text that comes in, in the history.")
 	}
-	if def.effect { return fmt.tprintf(i18n.tr("%s. Off in a preview. Linked to \"when\", it waits for that action (an editor's Done or Cancel)."), i18n.tr(def.group)) }
+	if def.effect { return fmt.tprintf(i18n.tr("%s. Off in a preview. Linked to \"when\", it waits for that action: an editor's Done or Cancel, an answer, another step's end. Its \"done\" fires once it has acted."), i18n.tr(def.group)) }
 	return fmt.tprintf(i18n.tr("%s: makes a new picture; the others that read this one keep it as it is."), i18n.tr(def.group))
 }
 

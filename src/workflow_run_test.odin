@@ -322,6 +322,38 @@ the_editor_s_actions_decide_what_runs :: proc(t: ^testing.T) {
 	}
 }
 
+// An effect's end as a condition: Notify waits for Save's "done"; Copy runs only on Upload's "failed", and is skipped
+// when the upload works.
+@(test)
+an_effect_s_end_decides_what_runs :: proc(t: ^testing.T) {
+	// 0 Capture, 1 Save, 2 Notify (what Save wrote), 3 Upload, 4 Copy
+	g := graph({.Capture, .Save_File, .Notify, .Upload, .Copy_Image}, {{0, 1}, {1, 2}, {0, 3}, {0, 4}})
+	defer flowgraph.graph_destroy(&g)
+	when_port := u32(1)
+	SAVE_DONE :: u32(1)                              // (after its file)
+	UPLOAD_FAILED :: u32(2)                          // (after its address and its "done")
+	_, linked := flowgraph.link(&g, &CATALOG, {2, SAVE_DONE, 3, when_port})
+	testing.expect(t, linked)
+	_, linked = flowgraph.link(&g, &CATALOG, {4, UPLOAD_FAILED, 5, when_port})
+	testing.expect(t, linked)
+	for upload_fails in ([]bool{true, false}) {
+		run: Run
+		run_start(&run, g, picture(4, 4), {id = 1})
+		defer run_free(&run)
+		testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{2, 4}))   // (Notify and Copy wait for their condition)
+		testing.expect(t, done_with_text(&run, 1, PORT_FILE, "/tmp/a.png", .Save_File))
+		testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{3}))   // (Save is done: Notify runs)
+		if upload_fails {
+			testing.expect(t, flowgraph.run_finish(&run.flow, 3, {outcome = .Failed, message = "offline"}))
+			testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{5}))
+		} else {
+			testing.expect(t, done_with_text(&run, 3, PORT_URL, "https://example.org/a.png", .Upload))
+			testing.expect_value(t, len(run_tasks(&run)), 0)
+			testing.expect_value(t, state(&run, 4), flowgraph.Node_State.Skipped)
+		}
+	}
+}
+
 @(test)
 two_runs_go_on_side_by_side :: proc(t: ^testing.T) {
 	g := graph({.Capture, .Annotate, .Copy_Image}, {{0, 1}, {1, 2}})

@@ -44,6 +44,8 @@ shots_run :: proc(folder: string, which: string) -> int {
 	// (no file of the user's: the pictures show cliche's themes, and a licence kept in memory only)
 	prefs_page.themes_file_init(&app.themes_file, "", themes())
 	licence_init(app, memory = true)
+	// (the main window's build asks the install each frame, as in app_run: never offered here, history_window_open is headless)
+	prefs_page.install_init(&app.install, &app.prefs, setup_options())
 	defer {
 		settings_free(&app.settings)
 		config.prefs_destroy(&app.prefs)

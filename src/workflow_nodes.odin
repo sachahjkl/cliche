@@ -69,7 +69,12 @@ SAVE_FORMAT_EXTENSION := [Save_Format]string{.Png_Small = ".png", .Png_Fast = ".
 
 // The effects (the clipboard, a file, the network, a notification, the history) have an action input, "when": linked to
 // an Annotate's "done", the effect waits for the person's Done; linked to its "cancelled", it runs only when they gave
-// up. Left unlinked, it asks for nothing.
+// up. Left unlinked, it asks for nothing. Each effect also has a "done" output, which fires once its work is done, and
+// Upload a "failed": what hangs on them waits for that end (an Ask once the file is saved, a save if the upload failed).
+// (an action output is the last of its node's outputs: a link to an older port keeps its index in a saved workflow)
+DONE_OUTPUT := flowgraph.Port_Def{name = i18n.later("done"), kind = flowgraph.ACTION, on = .Done}
+FAILED_OUTPUT := flowgraph.Port_Def{name = i18n.later("failed"), kind = flowgraph.ACTION, on = .Failed}
+
 CATALOG := flowgraph.Catalog{
 	kinds = {
 		{name = i18n.later("action")},
@@ -197,8 +202,8 @@ CATALOG := flowgraph.Catalog{
 			{name = "source", title = i18n.later("Source"), type = .Choice, choices = {i18n.later("Region"), i18n.later("Screen"), i18n.later("Window"), i18n.later("All screens"), i18n.later("Last region")}},
 		}},
 
-		{name = "copy_image", title = i18n.later("Copy image"), group = i18n.later("Outputs"), icon = lucide.COPY, tags = {"clipboard", "paste"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, place = PLACE_WORKER, effect = true},   // (the worker encodes its PNG; the interface sets the clipboard: workflow_node_result)
-		{name = "save_file", title = i18n.later("Save file"), group = i18n.later("Outputs"), icon = lucide.SAVE, tags = {"disk", "png", "write", "folder"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("file"), kind = PORT_FILE}}, place = PLACE_WORKER, effect = true, params = {
+		{name = "copy_image", title = i18n.later("Copy image"), group = i18n.later("Outputs"), icon = lucide.COPY, tags = {"clipboard", "paste"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, DONE_OUTPUT}, place = PLACE_WORKER, effect = true},   // (the worker encodes its PNG; the interface sets the clipboard: workflow_node_result)
+		{name = "save_file", title = i18n.later("Save file"), group = i18n.later("Outputs"), icon = lucide.SAVE, tags = {"disk", "png", "write", "folder"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("file"), kind = PORT_FILE}, DONE_OUTPUT}, place = PLACE_WORKER, effect = true, params = {
 			{name = "folder", title = i18n.later("Folder"), type = .Folder, placeholder = i18n.later("The default folder (Settings, Save)")},
 			{name = "name", title = i18n.later("File name"), type = .Text, placeholder = i18n.later("The default name (Settings, Save)")},
 			{name = "format", title = i18n.later("Format"), type = .Choice, choices = {i18n.later("PNG, small"), i18n.later("PNG, fast"), i18n.later("JPEG"), i18n.later("WebP"), i18n.later("WebP, lossless")}},
@@ -209,14 +214,15 @@ CATALOG := flowgraph.Catalog{
 		// (its "what" takes several links: the Capture node's picture, file and text all linked, the one a run gives goes)
 		{name = "upload", title = i18n.later("Upload"), group = i18n.later("Outputs"), icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link", "sxcu", "imgur", "file", "text"}, inputs = {{name = i18n.later("what"), kind = PORT_ANY, multiple = true}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {
 			{name = i18n.later("address"), kind = PORT_URL},
-			{name = i18n.later("done"), kind = flowgraph.ACTION, on = .Done},
+			DONE_OUTPUT,
+			FAILED_OUTPUT,
 		}, place = PLACE_WORKER, effect = true, params = {
 			{name = "uploader", title = i18n.later("Host"), type = .List},
 		}},
-		{name = "shorten_url", title = i18n.later("Shorten URL"), group = i18n.later("Outputs"), icon = lucide.LINK_2, tags = {"short", "link", "address", "is.gd", "v.gd", "shortener"}, inputs = {{name = i18n.later("address"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("address"), kind = PORT_URL}}, place = PLACE_WORKER, effect = true, params = {
+		{name = "shorten_url", title = i18n.later("Shorten URL"), group = i18n.later("Outputs"), icon = lucide.LINK_2, tags = {"short", "link", "address", "is.gd", "v.gd", "shortener"}, inputs = {{name = i18n.later("address"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("address"), kind = PORT_URL}, DONE_OUTPUT}, place = PLACE_WORKER, effect = true, params = {
 			{name = "shortener", title = i18n.later("Shortener"), type = .List, placeholder = BUILTIN_SHORTENER_NAME},
 		}},
-		{name = "copy_text", title = i18n.later("Copy text"), group = i18n.later("Outputs"), icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "url", "address", "link"}, inputs = {{name = i18n.later("text"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, place = PLACE_INTERFACE, effect = true},
+		{name = "copy_text", title = i18n.later("Copy text"), group = i18n.later("Outputs"), icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "url", "address", "link"}, inputs = {{name = i18n.later("text"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}, DONE_OUTPUT}, place = PLACE_INTERFACE, effect = true},
 		{name = "read_qr", title = i18n.later("Read QR code"), group = i18n.later("Outputs"), icon = lucide.QR_CODE, tags = {"scan", "barcode", "decode"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, place = PLACE_WORKER},
 		{name = "read_text", title = i18n.later("Read text"), group = i18n.later("Outputs"), icon = lucide.TEXT_CURSOR_INPUT, tags = {"ocr", "recognition", "tesseract"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, place = PLACE_WORKER, params = {
 			{name = "languages", title = i18n.later("Languages"), type = .Text, placeholder = i18n.later("The default languages (Settings, Capture)")},
@@ -227,16 +233,16 @@ CATALOG := flowgraph.Catalog{
 			{name = "dark", title = i18n.later("Dark colour"), type = .Color, default_color = BLACK},
 			{name = "light", title = i18n.later("Light colour"), type = .Color, default_color = WHITE},
 		}},
-		{name = "notify", title = i18n.later("Notify"), group = i18n.later("Outputs"), icon = lucide.BELL, tags = {"notification", "toast", "message", "tell"}, inputs = {{name = i18n.later("what"), kind = PORT_ANY, multiple = true}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_INTERFACE, effect = true, params = {
+		{name = "notify", title = i18n.later("Notify"), group = i18n.later("Outputs"), icon = lucide.BELL, tags = {"notification", "toast", "message", "tell"}, inputs = {{name = i18n.later("what"), kind = PORT_ANY, multiple = true}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {DONE_OUTPUT}, place = PLACE_INTERFACE, effect = true, params = {
 			{name = "title", title = i18n.later("Title"), type = .Text, placeholder = i18n.later("Said for you: \"Screenshot saved\"")},
 			{name = "show", title = i18n.later("Show"), type = .Choice, choices = {i18n.later("What comes in"), i18n.later("A summary of the run")}},
 		}},
-		{name = "show_in_folder", title = i18n.later("Show in folder"), group = i18n.later("Outputs"), icon = lucide.FOLDER_OPEN, tags = {"reveal", "explorer", "file manager"}, inputs = {{name = i18n.later("file"), kind = PORT_FILE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_WORKER, effect = true},
+		{name = "show_in_folder", title = i18n.later("Show in folder"), group = i18n.later("Outputs"), icon = lucide.FOLDER_OPEN, tags = {"reveal", "explorer", "file manager"}, inputs = {{name = i18n.later("file"), kind = PORT_FILE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {DONE_OUTPUT}, place = PLACE_WORKER, effect = true},
 		// (an address in the browser, a file with its program: the system's choice)
-		{name = "open", title = i18n.later("Open"), group = i18n.later("Outputs"), icon = lucide.EXTERNAL_LINK, tags = {"browser", "launch", "view", "url", "address"}, inputs = {{name = i18n.later("what"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_WORKER, effect = true},
-		{name = "pin", title = i18n.later("Pin to the screen"), group = i18n.later("Outputs"), icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_INTERFACE, effect = true},
-		{name = "delete_file", title = i18n.later("Delete file"), group = i18n.later("Outputs"), icon = lucide.TRASH_2, tags = {"remove", "erase", "after upload", "clean"}, inputs = {{name = i18n.later("file"), kind = PORT_FILE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_WORKER, effect = true},
-		{name = "add_to_history", title = i18n.later("Add to history"), group = i18n.later("Outputs"), icon = lucide.HISTORY, tags = {"remember", "keep", "list"}, inputs = {{name = i18n.later("what"), kind = PORT_ANY, multiple = true}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, place = PLACE_INTERFACE, effect = true},
+		{name = "open", title = i18n.later("Open"), group = i18n.later("Outputs"), icon = lucide.EXTERNAL_LINK, tags = {"browser", "launch", "view", "url", "address"}, inputs = {{name = i18n.later("what"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {DONE_OUTPUT}, place = PLACE_WORKER, effect = true},
+		{name = "pin", title = i18n.later("Pin to the screen"), group = i18n.later("Outputs"), icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {DONE_OUTPUT}, place = PLACE_INTERFACE, effect = true},
+		{name = "delete_file", title = i18n.later("Delete file"), group = i18n.later("Outputs"), icon = lucide.TRASH_2, tags = {"remove", "erase", "after upload", "clean"}, inputs = {{name = i18n.later("file"), kind = PORT_FILE}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {DONE_OUTPUT}, place = PLACE_WORKER, effect = true},
+		{name = "add_to_history", title = i18n.later("Add to history"), group = i18n.later("Outputs"), icon = lucide.HISTORY, tags = {"remember", "keep", "list"}, inputs = {{name = i18n.later("what"), kind = PORT_ANY, multiple = true}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {DONE_OUTPUT}, place = PLACE_INTERFACE, effect = true},
 	},
 }
 
