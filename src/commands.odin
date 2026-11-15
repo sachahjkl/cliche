@@ -38,18 +38,28 @@ verb_of_flag :: proc(arg: string) -> (v: Verb, ok: bool) {
 	return
 }
 
+// A verb's word on the instance socket. Ping and Quit are the messages every program understands (gt:instance): an
+// installer's `cliche --status` and `cliche --quit` send those, and so does cliche itself.
+verb_message :: proc(v: Verb) -> string {
+	#partial switch v {
+	case .Ping: return instance.MESSAGE_PING
+	case .Quit: return instance.MESSAGE_QUIT
+	}
+	return VERB_NAMES[v]
+}
+
 command_format :: proc(c: Command, allocator := context.temp_allocator) -> string {
 	if c.verb in VERBS_WITH_TOKEN && c.token != "" && !strings.contains_any(c.token, " \n") {
-		return strings.concatenate({VERB_NAMES[c.verb], " ", c.token}, allocator)
+		return strings.concatenate({verb_message(c.verb), " ", c.token}, allocator)
 	}
-	return strings.clone(VERB_NAMES[c.verb], allocator)
+	return strings.clone(verb_message(c.verb), allocator)
 }
 
 command_parse :: proc(text: string) -> (c: Command, ok: bool) {
 	f := strings.fields(text, context.temp_allocator)
 	if len(f) == 0 || len(f) > 2 { return }
-	for name, v in VERB_NAMES {
-		if name != f[0] { continue }
+	for v in Verb {
+		if verb_message(v) != f[0] { continue }
 		if len(f) == 2 {
 			if v not_in VERBS_WITH_TOKEN { return }
 			c.token = f[1]
@@ -62,6 +72,11 @@ command_parse :: proc(text: string) -> (c: Command, ok: bool) {
 
 // Whether a cliche runs and answers (--status: setup.Setup_Options.running): a ping does nothing there.
 cliche_running :: proc() -> bool { return command_send({verb = .Ping}) }
+
+// Asks the running cliche to end as its Quit does (--quit: setup.Setup_Options.quit). True when it took the request.
+cliche_quit :: proc() -> bool {
+	return instance.send({name = INSTANCE_NAME, wait_ms = 2000}, transmute([]u8)string(instance.MESSAGE_QUIT)) == .Forwarded
+}
 
 // Hands `c` to the running cliche. False when none runs.
 command_send :: proc(c: Command) -> bool {

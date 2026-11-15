@@ -62,6 +62,7 @@ cliche_identity :: proc() -> desktop.Identity {
 setup_options :: proc() -> setup.Setup_Options {
 	return setup.Setup_Options{
 		identity = cliche_identity(), version = APP_VERSION, install_folder = APP_NAME, icons = ICON_PNGS[:], running = cliche_running,
+		quit = cliche_quit,
 		prepare = proc(o: ^desktop.Integration_Options, choices: []bool, user: rawptr) {
 			desktop.roots_from_env(o, proc(name: string) -> string { return os.get_env(name, context.temp_allocator) })
 		},

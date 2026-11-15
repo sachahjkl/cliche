@@ -362,8 +362,8 @@ app_wake_remove :: proc(app: ^App, w: ^platform.Window) {
 	}
 }
 
-// A message of another start, on the instance's thread: queued for the interface's.
-@(private = "file")
+// A message of another start, or an installer's ping or quit (instance.MESSAGE_*), on the instance's thread: queued
+// for the interface's, where a quit ends the loop as the Quit action does (a recording running is stopped at its end).
 app_message :: proc(user: rawptr, message: []byte) {
 	app := (^App)(user)
 	c, ok := command_parse(string(message))
@@ -374,7 +374,6 @@ app_message :: proc(user: rawptr, message: []byte) {
 	app_wake(app)
 }
 
-@(private = "file")
 app_inbox :: proc(app: ^App) {
 	sync.mutex_lock(&app.inbox_lock)
 	items := make([]Inbox_Item, len(app.inbox), context.temp_allocator)

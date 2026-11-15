@@ -62,8 +62,8 @@ run :: proc(all_args: []string) -> cli.Exit {
 	args, problems := prefs_open(&prefs, all_args)
 	defer config.prefs_destroy(&prefs)
 	for p in problems { fmt.eprintfln("cliche: %s", p) }
-	// (--install, --uninstall and --status: no window, whether cliche runs or not; --setup is a verb: the running cliche
-	// shows it)
+	// (--install, --uninstall, --status and --quit: no window, whether cliche runs or not; --setup is a verb: the running
+	// cliche shows it)
 	if cmd, _ := setup.command_of(args[:]); setup.command_alone(cmd) {
 		return setup.command_run(cmd, setup_options(), process.console_write)
 	}
@@ -81,11 +81,6 @@ run :: proc(all_args: []string) -> cli.Exit {
 	}
 	verb, ok := verb_of_flag(arg)
 	if !ok { fmt.eprint(USAGE); return .Usage }
-	if verb == .Quit {
-		// (no cliche to end: nothing is started for it)
-		command_send({verb = .Quit})
-		return .Done
-	}
 	c := Command{verb = verb}
 	if verb in VERBS_WITH_TOKEN { c.token = platform.activation_token_from_env(context.temp_allocator) }
 	return start(&prefs, c)
