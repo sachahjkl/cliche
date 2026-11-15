@@ -127,7 +127,7 @@ shots_editor :: proc(app: ^App, folder: string) -> bool {
 	if ed == nil { return false }
 	defer editor_dispose(ed)
 	img, ok := pic.webp_decode(SHOTS_EDITOR_PICTURE)
-	if !ok { fmt.eprintln("shots: assets/shots/autumn.webp does not decode (is libwebp there?)"); return false }
+	if !ok { fmt.eprintln("shots: assets/shots/autumn.webp does not decode"); return false }
 	// (the editor takes the pixels, as it takes a capture's)
 	if !editor_open_shot(ed, {rgba = img.pixels, size = {img.width, img.height}, source = .Region, scale = 1}) { return false }
 	m := &ed.model

@@ -287,7 +287,7 @@ node_save :: proc(n: ^flowgraph.Node, shot: Shot, d: Node_Defaults) -> (path: st
 	case .Png_Fast:      file = png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
 	case .Jpeg:          file = pic.jpeg_encode(img, quality)
 	case .Webp, .Webp_Lossless:
-		if !pic.webp_available() { return "", {}, 0, i18n.tr("this system has no WebP encoder (install libwebp)") }
+		if !pic.webp_available() { return "", {}, 0, i18n.tr("this build has no WebP encoder") }
 		file = pic.webp_encode(img, quality, format == .Webp_Lossless)
 	}
 	defer delete(file)

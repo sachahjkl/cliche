@@ -61,7 +61,7 @@ save_encode :: proc(shot: Shot, format: Save_Format, quality: int) -> (file: []u
 	case .Png_Fast:      file = png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
 	case .Jpeg:          file = pic.jpeg_encode(img, clamp(quality, 1, 100))
 	case .Webp, .Webp_Lossless:
-		if !pic.webp_available() { return nil, i18n.tr("this system has no WebP encoder (install libwebp)") }
+		if !pic.webp_available() { return nil, i18n.tr("this build has no WebP encoder") }
 		file = pic.webp_encode(img, clamp(quality, 1, 100), format == .Webp_Lossless)
 	}
 	if file == nil { return nil, i18n.tr(FLOW_ERROR_TEXT[.Empty]) }

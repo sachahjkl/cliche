@@ -1113,8 +1113,8 @@ fr Annuler : l'enregistrement est supprimé
 en no picture came in
 fr aucune image n'est arrivée
 
-en this system has no WebP encoder (install libwebp)
-fr ce système n'a pas d'encodeur WebP (installez libwebp)
+en this build has no WebP encoder
+fr cette version n'a pas d'encodeur WebP
 
 en A click on the icon
 fr Un clic sur l'icône
