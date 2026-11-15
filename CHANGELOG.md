@@ -3,6 +3,14 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.8.0] - 2026-11-15
+
+### Changed
+- **The workflow graph takes the theme's colours**: its groups and its ports are the theme's hues, so another theme changes them with the rest.
+
+### Fixed
+- **The history's tools no longer run past a narrow window's edge**: the filters, the thumbnails' size, the grid or list choice and the buttons beside them are a tool bar that keeps one line; what does not fit goes into its "…" menu (a choice there keeps its segmented control), the least needed first. The bar of the workflows does the same; its buttons say their keys in their tips.
+
 ## [0.7.1] - 2026-11-15
 
 ### Fixed
@@ -211,6 +219,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.8.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.8.0
 [0.7.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.7.1
 [0.7.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.7.0
 [0.6.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.6.0
