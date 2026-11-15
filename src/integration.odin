@@ -61,7 +61,7 @@ cliche_identity :: proc() -> desktop.Identity {
 // notification area as general.autostart says. The places of a test (CLICHE_DESKTOP_*) come from the environment.
 setup_options :: proc() -> setup.Setup_Options {
 	return setup.Setup_Options{
-		identity = cliche_identity(), version = APP_VERSION, install_folder = APP_NAME, icons = ICON_PNGS[:], running = cliche_running,
+		identity = cliche_identity(), version = APP_VERSION, icons = ICON_PNGS[:], running = cliche_running,
 		quit = cliche_quit,
 		vendor_url = "https://froment.software",
 		prepare = proc(o: ^desktop.Integration_Options, choices: []bool, user: rawptr) {
