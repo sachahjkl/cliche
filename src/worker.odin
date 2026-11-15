@@ -13,6 +13,7 @@ import "core:time"
 import capture "gt:capture"
 import flowgraph "gt:flowgraph"
 import png "gt:png"
+import host "gt:host"
 import "gt:platform"
 import setup "gt:setup"
 import tasks "gt:tasks"
@@ -104,7 +105,7 @@ Worker :: struct {
 
 	// the worker's thread only
 	history:   History_Disk,       // the history's copy and its file (history.odin)
-	fonts:     Worker_Fonts,       // a watermark's text (workflow_ops.odin)
+	fonts:     host.Worker_Fonts,       // a watermark's text (workflow_ops.odin)
 	session:   ^capture.Session,
 	session_error: capture.Error,
 }
@@ -180,7 +181,7 @@ worker_close :: proc(data: rawptr) {
 	capture.close(w.session)
 	w.session = nil
 	history_disk_free(&w.history)
-	worker_fonts_destroy(&w.fonts)
+	host.worker_fonts_destroy(&w.fonts)
 }
 
 @(private = "file")

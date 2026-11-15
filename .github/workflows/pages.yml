@@ -33,6 +33,7 @@ jobs:
           submodules: recursive
       - uses: actions/configure-pages@v5
       - uses: ./.github/actions/setup-odin-linux
+      - run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends webp   # (cwebp: the pictures in WebP, site build)
       - run: |
           mkdir -p build && odin build tools/clichetool -collection:gt=ext/gui_toolkit/src -out:build/clichetool
           build/clichetool site build site _site

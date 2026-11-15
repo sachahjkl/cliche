@@ -72,7 +72,7 @@ App :: struct {
 	pins:       [dynamic]^Pin,                             // pin.odin: the pictures pinned over the other windows
 	pin_loads:  [dynamic]^Pin_Load,                        // the files being read for a pin (pin_picture)
 	pin_fallback_said: bool,                               // said once: no window stays on top on this desktop
-	prewarmed:  bool,                                      // an editor was opened ahead (app_prewarm)
+	ahead:      host.Ahead,                                // an editor opened ahead (app_prewarm)
 	notice_entry: u64,                                     // the history's entry of the last notification (a click shows it)
 
 	flow:       Flow,                                      // flow.odin
@@ -233,19 +233,12 @@ app_free :: proc(app: ^App) {
 }
 
 // An editor opened hidden before the first picture, when a screenshot's workflow opens one (Annotate): its window, its
-// surface and the graphics driver are then ready, and a shortcut shows it at once (editor_take). The driver is loaded
-// on a thread first (its done wakes this loop): the interface's thread never waits for it.
+// surface and the graphics driver are then ready, and a shortcut shows it at once (editor_take). The toolkit's
+// host.ahead_due makes the driver on a thread first (its end wakes this loop) and says once when to open it.
 @(private = "file")
 app_prewarm :: proc(app: ^App) {
-	if len(app.editors) > 0 || app.prewarmed || !workflows_want_editor(app) { return }
-	if app.shared.main == nil {
-		#partial switch render.device_preload_state() {
-		case .Not_Started: render.preload_device(done = app_wake, user = app); return
-		case .Creating:    return
-		}
-	}
-	app.prewarmed = true   // (once: a window that cannot open is not asked again at every turn)
-	_ = editor_open(app, headless = false)
+	if len(app.editors) > 0 || !workflows_want_editor(app) { return }
+	if host.ahead_due(&app.ahead, &app.shared, app_wake, app) { _ = editor_open(app, headless = false) }
 }
 
 // The shown windows' frames, else the anchor: what ends the wait is a wake of any window (app_wake), input, the tray.
@@ -278,7 +271,7 @@ app_frames :: proc(app: ^App) {
 		ed := app.editors[i]
 		if !ed.visible { continue }
 		host.host_frame(&ed.host)
-		timing_mark("editor frame")
+		render.trace_mark("editor frame")
 		editor_after_frame(ed)
 	}
 	editors_sweep(app)   // (after every frame: none of them is inside its own)
@@ -457,7 +450,7 @@ app_capture_start :: proc(app: ^App, asked: Source, target: Capture_Target, reco
 	// (the last region asked before there is one: the region overlay)
 	source := source_resolve(asked, app.has_last_region)
 	if !app_step(app, Flow_Trigger{source}) { return false }
-	timing_start(SOURCE_NAMES[source])
+	render.trace_start(SOURCE_NAMES[source])
 	app.capture_target, app.capture_record = target, record
 	// (the renderer's device made while the desktop is read: the overlay's first show does not wait for the driver)
 	if source in SOURCES_SELECTED && app.shared.main == nil && render.device_preload_state() == .Not_Started { render.preload_device() }
@@ -601,7 +594,7 @@ app_region_cancelled :: proc(app: ^App) {
 
 @(private = "file")
 app_shot :: proc(app: ^App, r: Result_Shot) {
-	timing_mark("picture from the worker")
+	render.trace_mark("picture from the worker")
 	r := r
 	#partial switch s in app.flow {
 	case Flow_Capturing:

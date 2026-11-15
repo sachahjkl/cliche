@@ -8,7 +8,7 @@ import "core:math"
 import "core:os"
 import "core:strings"
 import flowgraph "gt:flowgraph"
-import "gt:font"
+import host "gt:host"
 import "gt:platform"
 import pic "gt:image"
 import png "gt:png"
@@ -80,7 +80,7 @@ result_node_free :: proc(r: ^Result_Node) {
 }
 
 // Runs the job (on the worker). Its strings and its copy of the node go; the input's reference goes back in the result.
-node_work :: proc(j: ^Job_Node, fonts: ^Worker_Fonts) -> (out: Result_Node) {
+node_work :: proc(j: ^Job_Node, fonts: ^host.Worker_Fonts) -> (out: Result_Node) {
 	out.run, out.node = j.run, j.node
 	out.input = j.input
 	j.input = {}
@@ -145,7 +145,7 @@ node_work :: proc(j: ^Job_Node, fonts: ^Worker_Fonts) -> (out: Result_Node) {
 		if in_text == "" || !platform.reveal_in_folder(in_text) { return node_failed(out, i18n.tr("the file cannot be shown in its folder")) }
 	case:
 		if shot.rgba == nil { return node_failed(out, i18n.tr("no picture came in")) }
-		made, ok := node_transform(n, shot, Node_Kind(n.kind) == .Watermark ? worker_fonts(fonts) : nil)
+		made, ok := node_transform(n, shot, Node_Kind(n.kind) == .Watermark ? host.worker_fonts(fonts) : nil)
 		if !ok { return node_failed(out, i18n.tr("the picture could not be made")) }
 		made.source, made.scale = shot.source, shot.scale
 		out.result.outputs[0] = run_value(PORT_IMAGE, {shot = made, origin = Node_Kind(n.kind)})
@@ -166,7 +166,7 @@ node_failed :: proc(out: Result_Node, message: string) -> Result_Node {
 
 // The picture `shot` (not changed) through the operation of `n`: a new picture (owned). `fonts`: the worker's, for a
 // watermark's text (nil: a watermark draws nothing).
-node_transform :: proc(n: ^flowgraph.Node, shot: Shot, fonts: ^Worker_Fonts = nil) -> (out: Shot, ok: bool) {
+node_transform :: proc(n: ^flowgraph.Node, shot: Shot, fonts: ^host.Worker_Fonts = nil) -> (out: Shot, ok: bool) {
 	src := pic.Image{pixels = shot.rgba, width = shot.size.x, height = shot.size.y}
 	made: pic.Image
 	switch Node_Kind(n.kind) {
@@ -557,23 +557,3 @@ picture_load :: proc(path: string, workflow: u64) -> Result_Picture {
 	return {shot = {rgba = rgba, size = size, source = .Region, scale = 1}, workflow = workflow, ok = true}
 }
 
-// A font for the text a watermark draws, on the worker's thread (a font.State is one thread's): made at the first
-// watermark, the system's interface font else the toolkit's own.
-Worker_Fonts :: struct {
-	state: font.State,
-	face:  font.Font_Id,
-	made:  bool,
-}
-
-worker_fonts :: proc(f: ^Worker_Fonts) -> ^Worker_Fonts {
-	if f.made { return f }
-	f.made = true
-	font.init(&f.state)
-	f.face, _, _ = font.load_system_or_embedded(&f.state, platform.system_font_path("segoeui.ttf"), font.FALLBACK_UI_DATA)
-	return f
-}
-
-worker_fonts_destroy :: proc(f: ^Worker_Fonts) {
-	if f.made { font.destroy(&f.state) }
-	f^ = {}
-}

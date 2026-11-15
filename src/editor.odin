@@ -326,7 +326,7 @@ Editor :: struct {
 editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
 	app := ed.app
 	shot := shot
-	timing_mark("editor window open")
+	render.trace_mark("editor window open")
 	editor_picture_drop(ed)
 	editor_load_stop(ed)
 	ed.load_problem = ""
@@ -347,7 +347,7 @@ editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
 	}
 	// (mips: a picture shown smaller than its pixels stays sharp, not grainy)
 	render.update_texture_rgba(r, ed.tex, 0, 0, w, h, shot.rgba)
-	timing_mark("picture uploaded")
+	render.trace_mark("picture uploaded")
 	ed.shot, ed.has_picture = shot, true
 	edit_model_init(&ed.model, shot.size, scale, editor_measure, ed, editor_sample)
 	editor_choices_load(app, &ed.model)
@@ -357,7 +357,7 @@ editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
 	ed.color_target = .None
 	ed.shape_menu_due = false
 	editor_show(ed)
-	timing_mark("editor shown")
+	render.trace_mark("editor shown")
 	return true
 }
 
@@ -376,7 +376,7 @@ editor_show :: proc(ed: ^Editor) {
 
 // An editor for a new picture: the one kept hidden for it, else a new window. nil: no window can open.
 editor_take :: proc(app: ^App) -> ^Editor {
-	timing_mark("editor asked")
+	render.trace_mark("editor asked")
 	for ed in app.editors {
 		if editor_free_for_picture(ed) { return ed }
 	}

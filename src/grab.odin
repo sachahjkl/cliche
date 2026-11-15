@@ -4,6 +4,7 @@ package cliche
 // (capture.set_pixel_order), what the renderer's textures, the clipboard and the PNG encoder take.
 
 import capture "gt:capture"
+import "gt:render"
 
 // The desktop, the outputs and the windows, for a region. The frame's pixels are RGBA when it returns.
 grab_desktop :: proc(s: ^capture.Session) -> Result_Desktop {
@@ -29,9 +30,9 @@ grab_screen :: proc(s: ^capture.Session, pointer: proc() -> (Point, bool)) -> Re
 	} else if p, pok := pointer(); pok {
 		at = max(output_at(outs, p), 0)
 	}
-	timing_note("capture asked")
+	render.trace_note("capture asked")
 	f, err := capture.output(s, outs[at].id)
-	timing_note("capture done")
+	render.trace_note("capture done")
 	if err != .None { return {error = flow_error_of(err)} }
 	shot := shot_of_frame(&f, .Screen)
 	return {shot = shot}
