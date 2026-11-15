@@ -6,6 +6,7 @@ package cliche
 
 import "core:fmt"
 import "core:os"
+import cli "gt:cli"
 import config "gt:config"
 import instance "gt:instance"
 import "gt:platform"
@@ -52,10 +53,10 @@ A command starts cliche when it does not run. Bind keys to these commands in you
 `
 
 main :: proc() {
-	os.exit(run(os.args[1:]))
+	cli.exit(run(os.args[1:]))
 }
 
-run :: proc(all_args: []string) -> int {
+run :: proc(all_args: []string) -> cli.Exit {
 	when CLICHE_SHOTS != "" { return shots_run(CLICHE_SHOTS, len(all_args) > 0 ? all_args[0] : "") }
 	prefs: config.Prefs
 	args, problems := prefs_open(&prefs, all_args)
@@ -66,24 +67,24 @@ run :: proc(all_args: []string) -> int {
 	if cmd, _ := setup.command_of(args[:]); setup.command_alone(cmd) {
 		return setup.command_run(cmd, setup_options(), process.console_write)
 	}
-	if len(args) > 1 { fmt.eprint(USAGE); return 2 }
+	if len(args) > 1 { fmt.eprint(USAGE); return .Usage }
 	arg := len(args) > 0 ? args[0] : ""
 	switch arg {
 	case "":
 		return start(&prefs, {verb = .Ping})
 	case "version", "--version":
 		fmt.printfln("cliche %s", APP_VERSION)
-		return 0
+		return .Done
 	case "help", "-h", "--help":
 		fmt.print(USAGE)
-		return 0
+		return .Done
 	}
 	verb, ok := verb_of_flag(arg)
-	if !ok { fmt.eprint(USAGE); return 2 }
+	if !ok { fmt.eprint(USAGE); return .Usage }
 	if verb == .Quit {
 		// (no cliche to end: nothing is started for it)
 		command_send({verb = .Quit})
-		return 0
+		return .Done
 	}
 	c := Command{verb = verb}
 	if verb in VERBS_WITH_TOKEN { c.token = platform.activation_token_from_env(context.temp_allocator) }
@@ -92,17 +93,19 @@ run :: proc(all_args: []string) -> int {
 
 // The running cliche is handed `c`; when none runs, this process becomes it and runs `c` itself.
 @(private = "file")
-start :: proc(prefs: ^config.Prefs, c: Command) -> int {
+start :: proc(prefs: ^config.Prefs, c: Command) -> cli.Exit {
 	outcome, owner := instance.acquire({name = INSTANCE_NAME, wait_ms = ACQUIRE_WAIT_MS}, transmute([]u8)command_format(c))
 	switch outcome {
-	case .First:     return app_run(prefs, owner, c)
-	case .Forwarded: return 0
+	case .First:
+		if !app_run(prefs, owner, c) { return .Failed }
+		return .Done
+	case .Forwarded: return .Done
 	case .Other_Instance:
 		fmt.eprintln("cliche: another copy of cliche runs")
-		return 1
+		return .Failed
 	case .Unresponsive:
 		fmt.eprintln("cliche: a cliche runs and does not answer")
-		return 1
+		return .Failed
 	}
-	return 1
+	return .Failed
 }

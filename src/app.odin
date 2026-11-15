@@ -120,7 +120,8 @@ App :: struct {
 	quit:       bool,
 }
 
-app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> int {
+// False: no window can be opened here, nothing ran.
+app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> bool {
 	app := new(App)
 	defer free(app)
 	app.prefs = prefs^
@@ -154,7 +155,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 		crash.end_session()
 		context.logger = {}
 		tk_log.close(logger)
-		return 1
+		return false
 	}
 	app_wake_add(app, app.anchor)
 	worker_start(&app.worker, app_wake, app)
@@ -215,7 +216,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	crash.end_session()
 	context.logger = {}
 	tk_log.close(logger)
-	return 0
+	return true
 }
 
 @(private = "file")

@@ -8,6 +8,7 @@
 package clichetool
 
 import tk_changelog "gt:changelog"
+import cli "gt:cli"
 import release "gt:release"
 import tk_site "gt:site"
 import toolbox "gt:toolbox"
@@ -57,7 +58,7 @@ main :: proc() {
 	p := project()
 	// (update: the release has the program alone and its manifest, signed by $UPDATE_SIGNING_KEY: what installed copies
 	// update themselves from)
-	r := release.commands({project = p, dist = "build/dist", files = DIST_FILES[:], check = proc() -> int { return run_check(nil) }, update = cliche_update.PRODUCT})
+	r := release.commands({project = p, dist = "build/dist", files = DIST_FILES[:], check = proc() -> cli.Exit { return run_check(nil) }, update = cliche_update.PRODUCT})
 	l := toolbox.licence_commands(LICENCE_TOOL)
 	toolbox.tool_main("clichetool", {
 		{name = "build", usage = "[release]: the toolkit's text library when its sources changed, then build/cliche", run = run_build},
@@ -69,7 +70,7 @@ main :: proc() {
 		toolbox.i18n_command({dirs = {"src"}, folder = "i18n"}),
 		site_command(),
 		toolbox.notices_command(p),
-		toolbox.Command{name = "update", usage = "keygen <file> | pubkey | manifest <program> <version> - <out> | verify <manifest> -: cliche's update key and manifests", run = proc(args: []string) -> int { return toolbox.update_command(cliche_update.PRODUCT, args) }},
+		toolbox.Command{name = "update", usage = "keygen <file> | pubkey | manifest <program> <version> - <out> | verify <manifest> -: cliche's update key and manifests", run = proc(args: []string) -> cli.Exit { return toolbox.update_command(cliche_update.PRODUCT, args) }},
 		r[0], r[1], r[2],
 		l[0], l[1],
 	}, toolbox.ROOT_MARK_DEFAULT)
