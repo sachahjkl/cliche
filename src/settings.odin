@@ -134,6 +134,7 @@ prefs_register :: proc(p: ^config.Prefs) {
 	d.theme, d.app_name = "cliche", APP_NAME
 	prefs_page.standard_register(p, STANDARD_SETS, d)
 	config.register(p, PREF_DEFS[:])
+	prefs_page.changelog_register(p)   // (the version last started: What's new after an update)
 }
 
 prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Settings) {

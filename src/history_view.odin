@@ -370,6 +370,16 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	// (the install read on a task, once the main window is there to show its dialog: offered on Windows; never to a
 	// window of the screenshots)
 	if !headless && !app.install.known { prefs_page.install_offer(&app.install, &hw.host.state, offer = ODIN_OS == .Windows) }
+	// (after an update, once, in this window: a message that stays opens the settings at What's new)
+	if !headless && app.changelog.english == "" {
+		app.changelog.english = CHANGELOG
+		news := ui.Announcer{mode = .Window, state = &hw.host.state}
+		prefs_page.changelog_after_update(&app.changelog, &app.prefs, APP_VERSION, &news, proc(user: rawptr) {
+			app := (^App)(user)
+			settings_show(app)
+			prefs_page.show(&app.history_window.settings_mode.page, &app.prefs, settings_options(app), prefs_page.CHANGELOG_PAGE)
+		}, app)
+	}
 	app_standard_follow(app, &hw.host)
 	views_window(app, &hw.host)
 	// (the preview as the user left it at the last quit; shown at the very first start)

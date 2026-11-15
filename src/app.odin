@@ -114,6 +114,7 @@ App :: struct {
 	default_folder: string,                                // where screenshots go when save.folder is empty (the worker's, owned)
 	integrated: [2]bool,                                   // general.menu and general.autostart as applied last
 	install:    prefs_page.Install,                        // the install: its offer, its dialog, the settings' page (integration.odin)
+	changelog:  prefs_page.Changelog,                       // What's new: CHANGELOG.md on a page of the settings, said once after an update
 	crash_bar:  crash_bar.Bar,                             // the last session's crash, said at the top of the main window
 	updates:    Updates,                                   // the Updater and the restart it asks (updates.odin)
 	quit:       bool,
@@ -292,6 +293,7 @@ app_windows_close :: proc(app: ^App) {
 	overlay_destroy(app)
 	// (the install's thread waited for while the main window's State is there)
 	prefs_page.install_end(&app.install)
+	prefs_page.changelog_destroy(&app.changelog)
 	crash_bar.destroy(&app.crash_bar)
 	// (after the last build, before any window's State goes: which views were open is written, their windows close)
 	ui.views_destroy(&app.views)

@@ -3,13 +3,13 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
-## [0.9.0] - 2026-11-15
+## [0.9.0] - 2026-11-15 12:50
 
 ### Added
 - **Frame rate in Settings.** Settings › Rendering › Frame rate caps how many pictures a second cliche draws when something moves: the screen's rate, 30 to 240, or no limit.
 - **WebP on Windows.** The Windows version ships its own libwebp beside the program: the WebP export works there, and the setup installs it with cliche.
 
-## [0.8.0] - 2026-11-15
+## [0.8.0] - 2026-11-15 08:42
 
 ### Changed
 - **The workflow graph takes the theme's colours**: its groups and its ports are the theme's hues, so another theme changes them with the rest.
@@ -17,17 +17,17 @@ and the versions follow [semantic versioning](https://semver.org/).
 ### Fixed
 - **The history's tools no longer run past a narrow window's edge**: the filters, the thumbnails' size, the grid or list choice and the buttons beside them are a tool bar that keeps one line; what does not fit goes into its "…" menu (a choice there keeps its segmented control), the least needed first. The bar of the workflows does the same; its buttons say their keys in their tips.
 
-## [0.7.1] - 2026-11-15
+## [0.7.1] - 2026-11-15 01:01
 
 ### Fixed
 - **Two copies open at once no longer hide each other's crash**: when two copies of Cliché ran at the same time, a crash or a forced end of one could go unreported, and its report could be hidden by the clean end of the other. Each copy now keeps its own trace, and the next start shows what it did not see.
 
-## [0.7.0] - 2026-11-14
+## [0.7.0] - 2026-11-14 23:47
 
 ### Changed
 - **One command palette, as in the other programs**: the palette of the main window and of the editor has the toolkit's look, keys and prefixes. Type `>` for the commands, `:` for the settings (a switch flips at once and the palette stays open), `@` to go to a capture by its name, and `#` to choose a workflow (the one shown is marked); without a prefix, the palette searches them all. What you chose most and lately comes first, under Recent. The hint row at the foot lists the prefixes. The palette that adds a step to a workflow lists the kinds of step alone.
 
-## [0.6.0] - 2026-11-14
+## [0.6.0] - 2026-11-14 19:23
 
 ### Added
 - **Several captures selected, as in a file manager, in the grid and in the list**: Ctrl+click adds or takes one, Shift+click selects a range (a second one nearer the first makes it smaller), Ctrl+Shift+click adds a range; the arrows with Shift, Ctrl+Shift or Ctrl do the same from the keyboard, by lines in the grid; Ctrl+Space toggles the capture under the cursor and Ctrl+A selects all. The selection stays when you switch between the grid and the list. Open, copy the paths, upload, combine, delete and remove act on every capture selected; the preview, edit, pin and copy the picture on the one under the cursor. Escape with several selected keeps the cursor's alone.
@@ -47,12 +47,12 @@ and the versions follow [semantic versioning](https://semver.org/).
 - **On Windows, the path of a capture has backslashes only**: "Copy the path" in the history, the notification and the saved files gave `C:\Users\you\Pictures/cliche/cliche-….mp4`; they now give `C:\Users\you\Pictures\cliche\cliche-….mp4`. The captures already in the history copy right too.
 - **The font settings apply.** The interface, monospace and reading fonts chosen in the settings changed nothing; they now show at once, in every window, and Default brings cliche's own back.
 
-## [0.5.0] - 2026-11-14
+## [0.5.0] - 2026-11-14 06:34
 
 ### Added
 - **Every step that acts says when it is done**: the steps that copy, save, upload, shorten, notify, open, pin, show in folder, delete or add to the history have a "done" output, and Upload a "failed" one. Link it to another step's "when": that step waits for it, for example Ask once the file is saved, or Save file when the upload failed.
 
-## [0.4.0] - 2026-11-14
+## [0.4.0] - 2026-11-14 03:47
 
 ### Added
 - **The history opens addresses, pins, combines and filters by date; the tray shows recent captures**:
@@ -107,17 +107,17 @@ and the versions follow [semantic versioning](https://semver.org/).
 - **A delay and the pointer for each workflow**: the delay before a capture (0 to 30 s) is now a parameter of the workflow's Capture step, for every source, a region too. A notification counts it down and is gone before the picture is taken. The same step can show the pointer in the picture: on Wayland and Windows; the screenshot portal and X11 cannot. The setting "Delay before a screen or a window" is gone.
 - **The editor's zoom, and a bar that folds tool by tool**: the bar shows the zoom in percent; a click on it offers fit, 50, 100, 200 and 400 %, and Ctrl+1 shows the actual size. In a narrow window, the bar moves its buttons into its "…" panel one at a time: the rare tools and the menus first, the colours late, the everyday tools last. Cancel and Done always stay.
 
-## [0.3.2] - 2026-11-14
+## [0.3.2] - 2026-11-14 01:56
 
 ### Fixed
 - **cliche starts on Windows**: Windows refused to start cliche 0.3.0 and 0.3.1 (their manifest was broken). This version starts.
 
-## [0.3.1] - 2026-11-14
+## [0.3.1] - 2026-11-14 00:53
 
 ### Fixed
 - **cliche starts on Windows again**: Windows refused to start the 0.3.0 program. Dialogs also open at their final size, without a jump.
 
-## [0.3.0] - 2026-11-13
+## [0.3.0] - 2026-11-13 23:51
 
 ### Added
 - **A Diagnostics page in the settings, with a Copy button.** It shows the versions, the system, the graphics adapter (and whether a software rasterizer draws), the window's size and scale, the last frames' times and how much partial redraw drew. If cliche is slow, copy it and send it.
@@ -137,17 +137,17 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The history's tool bar never cuts its text.** The filter, the thumbnail size and Grid or List are as wide as their longest word in every language. If the window is too narrow for them beside the search, they move to their own line.
 - **The editor fits its window.** In a narrow window, the properties, then undo, redo, copy and save, then the tools go into a "…" menu at the end of the tool bar; Cancel and Done always show. The editor takes the size that the desktop gives it: on a tiling desktop (sway), it fills its tile and follows its resizes, and its tool bar is no longer cut. The question before the changes are dropped is as wide as its title and its buttons, and its Cancel is no longer red.
 
-## [0.2.2] - 2026-11-13
+## [0.2.2] - 2026-11-13 18:57
 
 ### Changed
 - **One licence at one price, and a new pricing page**: the cliche licence is now one edition at 15 €, paid once, taxes included; the Patron edition is gone. The pricing page shows cliche's icon and name, one card with the price, what the licence gives as a list, one button, then "Before you buy". The licence is named "cliche licence" on the site, at checkout and in the licence file.
 
-## [0.2.1] - 2026-11-13
+## [0.2.1] - 2026-11-13 18:05
 
 ### Fixed
 - **The Windows download is there again**: 0.2.0 had no Windows archive (its build stopped on a check that read the files with Windows line endings). This version has it.
 
-## [0.2.0] - 2026-11-13
+## [0.2.0] - 2026-11-13 17:00
 
 ### Added
 - **cliche says when it cannot write its preferences**: if the disk is full or the folder cannot be made, a message names the file, instead of a change that is lost without a word.
@@ -170,12 +170,12 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **Renaming a workflow and switching its triggers look smooth**: the name no longer shows only its last letters for a moment when its field opens, and the switches of the triggers slide instead of jumping.
 - **Screenshots work again after the connection to the desktop breaks**: "No screenshot" came back at each capture until cliche restarted. The capture now reconnects by itself.
 
-## [0.1.1] - 2026-11-12
+## [0.1.1] - 2026-11-12 23:23
 
 ### Added
 - **cliche for Linux and Windows, ready to download**: each release has a Linux archive and a Windows one, with their SHA-256, and the site offers the one of your system.
 
-## [0.1.0] - 2026-11-12
+## [0.1.0] - 2026-11-12 23:13
 
 ### Added
 - **Workflows**: what happens after a capture is a graph you edit in the main window's Workflows (Ctrl+Shift+W, `cliche --workflows`). Steps linked one to the next, with branches: resize, crop, rotate, flip, pad, border, rounded corners, drop shadow, a coloured or gradient background, watermark, grayscale, invert, brightness and contrast, saturation, hue, sepia, threshold, blur, sharpen, pixelate, Annotate (the editor), a Condition on the picture's size or source, then copy, save, upload, copy the text, read a QR code or the text, notify, show in folder, add to history. Each step shows its settings under its title; "Run on the last capture" runs the workflow on the newest picture of the history, with nothing copied, saved or sent, and shows what each step made. Undo and redo every change. A run ends with one notification that says what was saved, uploaded, copied, and what failed.
