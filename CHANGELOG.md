@@ -3,6 +3,16 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.13.0] - 2026-11-15 21:05
+
+### Added
+- **"By Froment Software" in the setup.** The install's dialog and the Installation page of the settings show the vendor's mark and name; the name opens froment.software.
+- **Your own keys and aliases for any command.** In the command palette (Ctrl+K), Ctrl+Enter on a command records a key for it, or two keys in a row (Ctrl+M, then T); Backspace gives the command its own keys again. Alt+Enter makes the letters typed an alias: typed whole, the alias puts its command first. Menus, tooltips and the keyboard shortcuts sheet show your keys. A key set for Copy, Pin, Upload, Select all, Undo, Redo, Close or the keyboard shortcuts acts in the history and in the editor alike. The Keys page of the settings holds them, to reset or to carry to another computer.
+
+### Changed
+- **WebP is inside Cliche.** The WebP export and the WebP pictures it opens no longer need anything beside the program: no gt_webp.dll on Windows, no libwebp on Linux. Cliche is one file again.
+- **Cliche, with a capital, and its settings in the vendor's folder.** The windows, the tray, the menus, the notifications and the settings name the program Cliche. Its settings, workflows, uploaders, history, log and licence now live in a `FromentSoftware/Cliche` folder (on Linux `~/.config/FromentSoftware/Cliche` and the like; on Windows `%APPDATA%\FromentSoftware\Cliche`). The first start of this version moves the old `cliche` folders there: nothing is lost. The command stays `cliche`. The palette forgets once which commands you chose often.
+
 ## [0.12.0] - 2026-11-15 17:47
 
 ### Added
@@ -243,6 +253,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.13.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.13.0
 [0.12.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.12.0
 [0.11.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.11.0
 [0.10.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.10.0
