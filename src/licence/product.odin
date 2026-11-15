@@ -12,7 +12,7 @@ PRODUCT :: licence.Product{
 	sign_context   = "cliche-licence-v1\n",
 	file_extension = ".clichelicence",
 	// (`clichetool licence keygen` makes the pair; empty until then: no licence of the real key is accepted)
-	public_key     = "",
+	public_key     = "blQ1xEG1inSgHUbIujJZ2yuPXUgaO_UIKXzvTWoN3ss",
 	// (the development pair: its seed is public on purpose, clichetool's dev_seed)
 	dev_public_key = "4u0W0RNCU5S16f_LtlKwtM4uokN4fZ6m8jIgT26ynyo",
 	editions       = {0 = {id = "supporter", title = "Supporter"}},
