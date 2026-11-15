@@ -3,6 +3,14 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.11.0] - 2026-11-15 16:51
+
+### Added
+- **A license to buy.** The pricing page sells a license of cliche: a payment once through Paddle, the license by mail and on the thank-you page at once, its key or its file to give the program.
+
+### Fixed
+- **Zoom in with Ctrl++ on a French keyboard.** On an AZERTY keyboard + is Shift+=: the editor's Zoom in now answers Ctrl++, as it answers Ctrl+= and the keypad's Ctrl++.
+
 ## [0.10.0] - 2026-11-15 14:24
 
 ### Added
@@ -230,6 +238,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.11.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.11.0
 [0.10.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.10.0
 [0.9.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.9.0
 [0.8.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.8.0
