@@ -74,28 +74,30 @@ Workflow_Mode :: struct {
 	status:     string,               // owned
 }
 
+// A colour of the theme shown: one of its hues, or none (`neutral`: its text's, or its weak text's), so that a theme
+// changes the graph's colours with the rest.
+Graph_Ink :: struct { hue: Maybe(ui.Hue), weak: bool }
+
+graph_ink :: proc(i: Graph_Ink) -> draw.Color {
+	if h, ok := i.hue.?; ok { return ui.hue(h) }
+	return ui.color(i.weak ? "weak text" : "text")
+}
+
 // Each port kind's colour, by flowgraph.Port_Kind (CATALOG.kinds): an action, a picture, a text, an address, a file,
 // anything.
 @(rodata)
-PORT_KIND_COLORS := [6][3]f32{
-	{0.86, 0.86, 0.90},
-	{0.36, 0.56, 0.95},
-	{0.30, 0.74, 0.46},
-	{0.66, 0.45, 0.94},
-	{0.95, 0.62, 0.25},
-	{0.60, 0.62, 0.66},
-}
+PORT_KIND_INKS := [6]Graph_Ink{{}, {hue = .Blue}, {hue = .Green}, {hue = .Purple}, {hue = .Yellow}, {weak = true}}
 
 // Each group's accent on its nodes (flowgraph.Node_Def.group).
-GROUP_COLORS := [?]struct { group: string, color: [3]f32 }{
-	{"Source",       {0.36, 0.56, 0.95}},
-	{"Geometry",     {0.35, 0.68, 0.80}},
-	{"Look",         {0.85, 0.45, 0.70}},
-	{"Colour",       {0.92, 0.70, 0.25}},
-	{"Filters",      {0.55, 0.60, 0.95}},
-	{"Interactive",  {0.95, 0.50, 0.35}},
-	{"Flow control", {0.70, 0.70, 0.72}},
-	{"Outputs",      {0.30, 0.74, 0.46}},
+GROUP_INKS := [?]struct { group: string, ink: Graph_Ink }{
+	{"Source",       {hue = .Blue}},
+	{"Geometry",     {hue = .Cyan}},
+	{"Look",         {hue = .Rose}},
+	{"Colour",       {hue = .Yellow}},
+	{"Filters",      {hue = .Purple}},
+	{"Interactive",  {hue = .Red}},
+	{"Flow control", {weak = true}},
+	{"Outputs",      {hue = .Green}},
 }
 
 // The mode's commands (the palette of the window, the sheet of keys).
@@ -437,18 +439,17 @@ workflow_node_look :: proc(user: rawptr, n: ^flowgraph.Node, def: ^flowgraph.Nod
 	} else {
 		subtitle = node_summary(n)
 	}
-	c := group_color(def.group)
 	l := m.last[n.id]
 	return {
-		subtitle = subtitle, color = draw.srgb(c.x, c.y, c.z), state = ui.flow_state(l.state), message = l.message,
+		subtitle = subtitle, color = group_color(def.group), state = ui.flow_state(l.state), message = l.message,
 		thumbnail = l.tex, thumbnail_size = l.size,
 	}
 }
 
 @(private = "file")
-group_color :: proc(group: string) -> [3]f32 {
-	for g in GROUP_COLORS { if g.group == group { return g.color } }
-	return {0.60, 0.62, 0.66}
+group_color :: proc(group: string) -> draw.Color {
+	for g in GROUP_INKS { if g.group == group { return graph_ink(g.ink) } }
+	return graph_ink({weak = true})
 }
 
 // What a Capture node says under its title: the captures that run its workflow (its own shortcut counts).
@@ -468,8 +469,8 @@ workflow_triggers_text :: proc(wf: ^flowgraph.Graph_Entry) -> string {
 
 @(private = "file")
 workflow_kind_colors :: proc() -> []draw.Color {
-	out := make([]draw.Color, len(PORT_KIND_COLORS), context.temp_allocator)
-	for c, k in PORT_KIND_COLORS { out[k] = draw.srgb(c.x, c.y, c.z) }
+	out := make([]draw.Color, len(PORT_KIND_INKS), context.temp_allocator)
+	for i, k in PORT_KIND_INKS { out[k] = graph_ink(i) }
 	return out
 }
 
