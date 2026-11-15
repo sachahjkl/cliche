@@ -329,17 +329,27 @@ workflow_bar :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.5))
 		if workflow_icon_button("back", lucide.ARROW_LEFT, i18n.tr("Back to the history (Escape)"), em) { workflow_mode_leave(app) }
 		ui.spacer(ui.px(em * 0.5))
-		ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 1.05), text_pad = 0})
+		ui.next({width = ui.text_size(), height = ui.pct(1), font_size = math.round(em * 1.05), text_pad = 0})
 		ui.label(fmt.tprintf("%s###workflow_title", i18n.tr("Workflows")))
-		if workflow_icon_button("add_node", lucide.PLUS, i18n.tr("Add a step (Shift+A, a right click on the graph)"), em) { workflow_action(app, .Add_Node) }
-		if workflow_icon_button("undo", lucide.UNDO_2, i18n.tr("Undo (Ctrl+Z)"), em, undo.can_undo(&m.history)) { workflow_action(app, .Undo) }
-		if workflow_icon_button("redo", lucide.REDO_2, i18n.tr("Redo (Ctrl+Shift+Z)"), em, undo.can_redo(&m.history)) { workflow_action(app, .Redo) }
-		if workflow_icon_button("fit", lucide.ZOOM_OUT, i18n.tr("Show the whole workflow (F)"), em) { workflow_action(app, .Fit) }
+		ui.spacer(ui.px(em * 0.8))
+		// (the toolkit's tool bar: what does not fit folds into its "…" menu, never past the window's edge; the palette
+		// pinned at its end)
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2))})
+		if ui.toolbar("workflow_tools", {overflow = .Fold}) {
+			if ui.toolbar_group("edit", {title = i18n.tr("Workflows"), priority = 1}) {
+				if ui.toolbar_tool("add_node", {command = WORKFLOW_ACTIONS[.Add_Node], disabled = m.shown == 0}) { workflow_action(app, .Add_Node) }
+				if ui.toolbar_tool("undo", {command = WORKFLOW_ACTIONS[.Undo], disabled = !undo.can_undo(&m.history)}) { workflow_action(app, .Undo) }
+				if ui.toolbar_tool("redo", {command = WORKFLOW_ACTIONS[.Redo], disabled = !undo.can_redo(&m.history)}) { workflow_action(app, .Redo) }
+				if ui.toolbar_tool("fit", {command = WORKFLOW_ACTIONS[.Fit]}) { workflow_action(app, .Fit) }
+			}
+			if ui.toolbar_group("run", {title = i18n.tr("Run on the last capture"), priority = 2, separator = true}) {
+				if ui.toolbar_tool("preview", {command = WORKFLOW_ACTIONS[.Preview], words = true, disabled = m.shown == 0}) { workflow_action(app, .Preview) }
+			}
+			if ui.toolbar_group("window", {pinned = true}) {
+				if ui.toolbar_tool("palette", {command = ui.palette_command()}) { history_palette_show(app) }
+			}
+		}
 		ui.spacer(ui.px(em * 0.5))
-		ui.next({height = ui.px(math.round(em * 2))})
-		if ui.button("preview", i18n.tr("Run on the last capture"), lucide.PLAY, {disabled = m.shown == 0}).clicked { workflow_action(app, .Preview) }
-		ui.spacer(ui.px(em * 0.3))
-		history_palette_button(app, em)
 	}
 }
 

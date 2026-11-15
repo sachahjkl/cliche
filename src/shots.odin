@@ -172,6 +172,9 @@ shots_history :: proc(app: ^App, folder: string) -> int {
 	failed := !shots_write(app, &hw.host, folder, "history-grid")
 	app.settings.history_view = .List
 	failed |= !shots_write(app, &hw.host, folder, "history-list")
+	// (narrow: the tool bar under the search, what does not fit folded into its "…" menu)
+	platform.set_size(hw.host.win, {760, 520})
+	failed |= !shots_write(app, &hw.host, folder, "history-narrow")
 	return failed ? 1 : 0
 }
 

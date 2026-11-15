@@ -874,6 +874,9 @@ fr Liste
 en Search names, texts, URLs
 fr Rechercher des noms, des textes, des URL
 
+en Thumbnail size
+fr Taille des miniatures
+
 en Small thumbnails
 fr Petites miniatures
 
@@ -1175,9 +1178,6 @@ fr Le nombre de captures que l'historique garde : les plus anciennes partent d'a
 
 en How the history shows the captures: thumbnails in a grid, or a list with their details.
 fr La façon dont l'historique affiche les captures : des miniatures en grille, ou une liste avec leurs détails.
-
-en Thumbnail size
-fr Taille des miniatures
 
 en The size of the thumbnails in the grid.
 fr La taille des miniatures dans la grille.
@@ -2231,18 +2231,6 @@ fr L'historique ne contient aucune image sur laquelle exécuter le scénario.
 
 en Running on the newest capture…
 fr Exécution sur la capture la plus récente…
-
-en Add a step (Shift+A, a right click on the graph)
-fr Ajouter une étape (Maj+A, un clic droit sur le graphe)
-
-en Undo (Ctrl+Z)
-fr Annuler (Ctrl+Z)
-
-en Redo (Ctrl+Shift+Z)
-fr Rétablir (Ctrl+Maj+Z)
-
-en Show the whole workflow (F)
-fr Afficher tout le scénario (F)
 
 en No workflow
 fr Aucun scénario

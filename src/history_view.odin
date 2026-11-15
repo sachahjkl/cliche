@@ -811,13 +811,14 @@ history_toolbar :: proc(app: ^App, em: f32) {
 	for text, f in HISTORY_FILTER_TEXT { filters[f] = i18n.tr(text) }
 	sizes := [3]string{i18n.tr("thumbnail size, short", "S"), i18n.tr("thumbnail size, short", "M"), i18n.tr("thumbnail size, short", "L")}
 	views := [2]string{i18n.tr("Grid"), i18n.tr("List")}
-	// (each segmented control is as wide as its words need, ui.segmented's own width: the layout reads it first)
+	// (each segmented control is as wide as its words need, ui.segmented's own width: the layout reads it first; the
+	// buttons and the toolkit's room between a bar's items and groups, roughly)
 	segments_w := ui.segmented_width(slice.enumerated_array(&filters)) + ui.segmented_width(sizes[:]) + ui.segmented_width(views[:])
-	tools_w := segments_w + em * (0.8 + 0.8 + 0.6 + 0.6 + 6 * 2.1 + 0.6)
+	tools_w := segments_w + em * (6 * 2.2 + 5 * 0.2 + 3 * 0.8 + 3 * 1.0)
 	placeholder := i18n.tr("Search names, texts, URLs")
 	search_min := max(em * HISTORY_SEARCH_MIN_EM, ui.text_width(ui.top_style().font, em, placeholder) + em * 2.5)
 	// (the search beside the tools while its placeholder fits, as the last layout measured the window; else the tools go
-	// to a line of their own under it)
+	// to a line of their own under it, a tool bar that folds what does not fit into its "…" menu)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = "###toolbar_lines") {
 		r := ui.parent_box().rect
@@ -832,13 +833,20 @@ history_toolbar :: proc(app: ^App, em: f32) {
 			hw.search_focused = s.focused
 			if s.changed { hw.shown_due = true }
 			if s.committed { hw.grid_reveal = true }
-			if stacked { ui.spacer(ui.px(em * 0.6)) } else { history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], em) }
+			ui.spacer(ui.px(em * 0.6))
+			// (beside the search: as wide as its items, at most what the search leaves; never past the window's edge: a
+			// tool that does not fit folds into its "…" menu)
+			if !stacked {
+				room := max(width - search_min - em * 1.8, em * 3)
+				history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], ui.px(math.round(min(tools_w, room))), em)
+			}
 		}
 		if stacked {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.6)), axis = .X, cross = .Center})
 			if ui.row(id = "###toolbar_tools") {
-				ui.spacer(ui.fill())
-				history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], em)
+				ui.spacer(ui.px(em * 0.6))
+				history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], ui.fill(), em)
+				ui.spacer(ui.px(em * 0.6))
 			}
 		}
 	}
@@ -847,39 +855,62 @@ history_toolbar :: proc(app: ^App, em: f32) {
 // The search keeps at least this, in ems, beside the tools (and its placeholder's width).
 HISTORY_SEARCH_MIN_EM :: 16
 
-// The toolbar's choices and buttons, after the search (in its row, or in a row of their own when the window is narrow).
+// The toolbar's choices and buttons, after the search (in its row, or in a row of their own when the window is narrow):
+// the toolkit's tool bar, folding what does not fit into its "…" menu (a choice there is a row with its label and its
+// segmented control; a button a row). The least needed fold first: the open folder, the thumbnails' size, the view, the
+// window's buttons; the filter by kind last. `width`: the bar's.
 @(private = "file")
-history_tools :: proc(app: ^App, filters, sizes, views: []string, em: f32) {
-	hw := &app.history_window
+history_tools :: proc(app: ^App, filters, sizes, views: []string, width: ui.Size, em: f32) {
 	field_h := ui.px(math.round(em * 1.9))
-	ui.spacer(ui.px(em * 0.8))
-	chosen := int(hw.filter)
-	ui.next({height = field_h})
-	if ui.segmented("filter", filters, &chosen) {
-		hw.filter = History_Filter(chosen)
-		hw.shown_due = true
+	ui.next({width = width, height = ui.px(math.round(em * 2.2))})
+	if ui.toolbar("history_tools", {overflow = .Fold}) { history_tools_groups(app, filters, sizes, views, field_h) }
+}
+
+// The groups of the history's tool bar, in its order (inside ui.toolbar's block: its end closes it).
+@(private = "file")
+history_tools_groups :: proc(app: ^App, filters, sizes, views: []string, field_h: ui.Size) {
+	hw := &app.history_window
+	if ui.toolbar_group("kind", {title = i18n.tr("Kind"), priority = 4}) {
+		if ui.toolbar_control("filter", {label = i18n.tr("Kind")}) {
+			chosen := int(hw.filter)
+			ui.next({height = field_h})
+			if ui.segmented("filter", filters, &chosen) {
+				hw.filter = History_Filter(chosen)
+				hw.shown_due = true
+			}
+		}
 	}
-	ui.spacer(ui.px(em * 0.8))
-	tips := [3]string{i18n.tr("Small thumbnails"), i18n.tr("Medium thumbnails"), i18n.tr("Large thumbnails")}
-	step := app.settings.history_thumbnail
-	ui.next({height = field_h})
-	if ui.segmented("thumb_size", sizes, &step, tips[:]) { history_pref(app, "history.thumbnail_size", HISTORY_THUMBNAIL_NAMES[clamp(step, 0, 2)]) }
-	ui.spacer(ui.px(em * 0.6))
-	view := int(app.settings.history_view)
-	ui.next({height = field_h})
-	if ui.segmented("view", views, &view) {
-		if view == 0 { history_action(app, .Grid) } else { history_action(app, .List) }
+	if ui.toolbar_group("size", {title = i18n.tr("Thumbnail size"), priority = 1}) {
+		if ui.toolbar_control("thumb_size", {label = i18n.tr("Thumbnail size")}) {
+			tips := [3]string{i18n.tr("Small thumbnails"), i18n.tr("Medium thumbnails"), i18n.tr("Large thumbnails")}
+			step := app.settings.history_thumbnail
+			ui.next({height = field_h})
+			if ui.segmented("thumb_size", sizes, &step, tips[:]) { history_pref(app, "history.thumbnail_size", HISTORY_THUMBNAIL_NAMES[clamp(step, 0, 2)]) }
+		}
 	}
-	ui.spacer(ui.px(em * 0.6))
-	// (the date's filter in a menu: four choices would make the bar too wide; the tip says the one in use)
-	if history_icon_button("period", lucide.CALENDAR, fmt.tprintf("%s: %s", i18n.tr("Date"), i18n.tr(HISTORY_PERIOD_TEXT[hw.period])), em) { history_action(app, .Period) }
-	// (the keys in the tooltips as the keyboards of the language name them)
-	if history_icon_button("preview", lucide.EYE, ui.key_tip(ui.view_is_open(&app.views, PREVIEW_VIEW) ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}}), em) { history_action(app, .Preview) }
-	if history_icon_button("folder", lucide.FOLDER_OPEN, i18n.tr("Open the save folder"), em) { history_action(app, .Open_Folder) }
-	if history_icon_button("workflows", lucide.GIT_FORK, ui.key_tip(i18n.tr("Workflows: what happens after a capture"), {.W, {.Ctrl, .Shift}}), em) { history_action(app, .Workflows) }
-	if history_icon_button("palette", lucide.COMMAND, ui.command_tip(ui.palette_command()), em) { history_palette_show(app) }
-	if history_icon_button("settings", lucide.SETTINGS, ui.key_tip(i18n.tr("Settings"), {.Comma, {.Ctrl}}), em) { history_action(app, .Settings) }
-	ui.spacer(ui.px(em * 0.6))
+	if ui.toolbar_group("view", {title = i18n.tr("View"), priority = 2}) {
+		if ui.toolbar_control("view", {label = i18n.tr("View")}) {
+			view := int(app.settings.history_view)
+			ui.next({height = field_h})
+			if ui.segmented("view", views, &view) {
+				if view == 0 { history_action(app, .Grid) } else { history_action(app, .List) }
+			}
+		}
+	}
+	if ui.toolbar_group("window", {title = i18n.tr("Window"), priority = 3}) {
+		// (the date's filter in a menu: four choices would make the bar too wide; the tip says the one in use)
+		ui.toolbar_tool("period", {label = i18n.tr("Show by date…"), icon = lucide.CALENDAR, menu = HISTORY_PERIOD_MENU_ID, menu_search = false,
+			tip = fmt.tprintf("%s: %s", i18n.tr("Date"), i18n.tr(HISTORY_PERIOD_TEXT[hw.period]))})
+		// (the keys in the tooltips as the keyboards of the language name them)
+		preview := ui.view_is_open(&app.views, PREVIEW_VIEW)
+		if ui.toolbar_tool("preview", {label = i18n.tr("Preview"), icon = lucide.EYE, shortcut = ui.command_shortcut(HISTORY_ACTIONS[.Preview]), on = preview,
+			tip = ui.key_tip(preview ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}})}) { history_action(app, .Preview) }
+		if ui.toolbar_tool("folder", {label = i18n.tr("Open the save folder"), icon = lucide.FOLDER_OPEN, priority = 0}) { history_action(app, .Open_Folder) }
+		if ui.toolbar_tool("workflows", {label = i18n.tr("Workflows"), icon = lucide.GIT_FORK, shortcut = ui.command_shortcut(HISTORY_ACTIONS[.Workflows]),
+			tip = ui.key_tip(i18n.tr("Workflows: what happens after a capture"), {.W, {.Ctrl, .Shift}})}) { history_action(app, .Workflows) }
+		if ui.toolbar_tool("palette", {command = ui.palette_command()}) { history_palette_show(app) }
+		if ui.toolbar_tool("settings", {label = i18n.tr("Settings"), icon = lucide.SETTINGS, shortcut = ui.command_shortcut(HISTORY_ACTIONS[.Settings])}) { history_action(app, .Settings) }
+	}
 }
 
 @(private = "file")
