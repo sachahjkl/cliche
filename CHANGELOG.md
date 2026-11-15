@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.12.0] - 2026-11-15 17:47
+
+### Added
+- **cliche --quit.** An installer (atelier, a script) asks the running cliche to end before it replaces it: `cliche --quit` closes it as its Quit does and waits for it; `cliche --status` says `quit: yes`.
+
 ## [0.11.0] - 2026-11-15 16:51
 
 ### Added
@@ -238,6 +243,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.12.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.12.0
 [0.11.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.11.0
 [0.10.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.10.0
 [0.9.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.9.0
