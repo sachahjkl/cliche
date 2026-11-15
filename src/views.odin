@@ -21,7 +21,7 @@ EDITOR_INSTANCE :: "editor-"
 
 // Where the views' memory is: the user's state folder, "views.txt".
 views_path :: proc(allocator := context.temp_allocator) -> string {
-	return path_join(platform.user_dir(.State, APP_NAME, context.temp_allocator), "views.txt", allocator)
+	return path_join(platform.user_dir(.State, APP_FOLDER, context.temp_allocator), "views.txt", allocator)
 }
 
 // At the start, before any window opens: the memory read (`path` "": memory only), the backend of the views' windows

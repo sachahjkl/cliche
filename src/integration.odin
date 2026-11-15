@@ -43,7 +43,7 @@ ENTRY_ACTIONS := [?]desktop.Desktop_Action{
 
 cliche_identity :: proc() -> desktop.Identity {
 	return desktop.Identity{
-		name = "cliche", key = "Cliche", slug = APP_NAME,
+		name = APP_TITLE, key = "Cliche", slug = APP_NAME,
 		description = "Fast screenshots and screen recordings, shared at once.",
 		vendor = "Froment Software",
 		entry_marker = "X-Cliche-Integration", registry_mark = "ClicheIntegration", vendor_key = "FromentSoftware",
@@ -63,6 +63,7 @@ setup_options :: proc() -> setup.Setup_Options {
 	return setup.Setup_Options{
 		identity = cliche_identity(), version = APP_VERSION, install_folder = APP_NAME, icons = ICON_PNGS[:], running = cliche_running,
 		quit = cliche_quit,
+		vendor_url = "https://froment.software",
 		prepare = proc(o: ^desktop.Integration_Options, choices: []bool, user: rawptr) {
 			desktop.roots_from_env(o, proc(name: string) -> string { return os.get_env(name, context.temp_allocator) })
 		},
@@ -87,11 +88,11 @@ integration_apply :: proc(menu, autostart: bool) -> string {
 	if !menu && !autostart {
 		st := desktop.status(&o, context.temp_allocator)
 		if st.state == .Absent { return "" }
-		if r := desktop.remove(&o); r.error != .None { return fmt.tprintf("cliche cannot leave the desktop: %s", r.detail) }
+		if r := desktop.remove(&o); r.error != .None { return fmt.tprintf("Cliche cannot leave the desktop: %s", r.detail) }
 		return ""
 	}
 	// (at each start: written again only when something is missing or runs another copy of cliche)
 	if st := desktop.status(&o, context.temp_allocator); st.state == .Installed { return "" }
-	if r := desktop.install(&o); r.error != .None { return fmt.tprintf("cliche cannot be put on the desktop: %s", r.detail) }
+	if r := desktop.install(&o); r.error != .None { return fmt.tprintf("Cliche cannot be put on the desktop: %s", r.detail) }
 	return ""
 }

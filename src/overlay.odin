@@ -83,9 +83,9 @@ overlay_show :: proc(app: ^App, picker := false) -> bool {
 	}
 	if !o.opened {
 		area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}
-		layer := host.Open_Options{title = "cliche region", size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area, overlay_keyboard = .Exclusive}
+		layer := host.Open_Options{title = APP_TITLE + " region", size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area, overlay_keyboard = .Exclusive}
 		o.layer = out.w > 0 && host.host_open(&o.host, &app.shared, layer, overlay_build, app)
-		if !o.layer && !host.host_open(&o.host, &app.shared, {title = "cliche region", size = {1280, 720}}, overlay_build, app) {
+		if !o.layer && !host.host_open(&o.host, &app.shared, {title = APP_TITLE + " region", size = {1280, 720}}, overlay_build, app) {
 			log.error("the region's window cannot open")
 			return false
 		}

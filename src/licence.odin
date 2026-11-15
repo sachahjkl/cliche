@@ -24,8 +24,8 @@ licence_attach :: proc(app: ^App) {
 	if app.licence.store != nil { return }
 	// (a debug build accepts the development pair: the tests and the pictures register with it)
 	prefs_page.licence_init(&app.licence, &app.history_window.host.state, {
-		store = {product = cliche_licence.PRODUCT, program = APP_NAME, memory = app.licence.options.store.memory, accept_dev = ODIN_DEBUG},
-		name = "cliche", pricing_url = PRICING_URL, owner = app.history_window.host.win,
+		store = {product = cliche_licence.PRODUCT, program = APP_FOLDER, memory = app.licence.options.store.memory, accept_dev = ODIN_DEBUG},
+		name = APP_TITLE, pricing_url = PRICING_URL, owner = app.history_window.host.win,
 	})
 }
 

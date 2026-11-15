@@ -31,6 +31,7 @@ import "gt:platform"
 import prefs_page "gt:prefs_page"
 import crash_bar "gt:crash_bar"
 import "gt:render"
+import setup "gt:setup"
 import timefmt "gt:timefmt"
 import "gt:ui"
 import i18n "gt:i18n"
@@ -176,35 +177,38 @@ History_Action :: enum u8 {
 	Preview, Select_All, Search, Period, Grid, List, Open_Folder, Capture_Region, Workflows, Settings, Keys, Close, Quit,
 }
 
+// (the ids: the person's keys and aliases, and the palette's memory, are stored by them. One id in two tables is one
+// command: the history and the editor share "copy", "pin", "upload", "select_all", "shortcuts" and "close", which do
+// the same there)
 HISTORY_ACTIONS := [History_Action]ui.Command{
-	.Open           = {label = i18n.later("Open"), group = i18n.later("Capture"), keys = {{.Return, {}}}, icon = lucide.EXTERNAL_LINK, tags = {"view", "launch"}},
-	.Open_Url       = {label = i18n.later("Open the URL"), group = i18n.later("Capture"), keys = {{.Return, {.Shift}}}, icon = lucide.LINK, tags = {"browser", "address", "link", "upload", "web"}},
-	.Reveal         = {label = i18n.later("Open the folder"), group = i18n.later("Capture"), keys = {{.Return, {.Ctrl}}}, icon = lucide.FOLDER_OPEN, tags = {"reveal", "show", "file manager", "explorer"}},
-	.Copy_Picture   = {label = i18n.later("Copy the picture"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl}}}, icon = lucide.COPY, tags = {"clipboard", "image"}},
-	.Copy_Path      = {label = i18n.later("Copy the path"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl, .Shift}}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "file", "location"}},
-	.Copy_Url       = {label = i18n.later("Copy the URL"), group = i18n.later("Capture"), keys = {{.L, {.Ctrl}}}, icon = lucide.LINK, tags = {"clipboard", "address", "link", "upload"}},
-	.Copy_Text      = {label = i18n.later("Copy the text"), group = i18n.later("Capture"), keys = {{.T, {.Ctrl}}}, icon = lucide.FILE_TEXT, tags = {"clipboard", "ocr", "qr"}},
-	.Edit           = {label = i18n.later("Edit"), group = i18n.later("Capture"), keys = {{.E, {.Ctrl}}}, icon = lucide.PENCIL, tags = {"editor", "annotate", "draw"}},
+	.Open           = {id = "open", label = i18n.later("Open"), group = i18n.later("Capture"), keys = {{.Return, {}}}, icon = lucide.EXTERNAL_LINK, tags = {"view", "launch"}},
+	.Open_Url       = {id = "open_url", label = i18n.later("Open the URL"), group = i18n.later("Capture"), keys = {{.Return, {.Shift}}}, icon = lucide.LINK, tags = {"browser", "address", "link", "upload", "web"}},
+	.Reveal         = {id = "reveal", label = i18n.later("Open the folder"), group = i18n.later("Capture"), keys = {{.Return, {.Ctrl}}}, icon = lucide.FOLDER_OPEN, tags = {"reveal", "show", "file manager", "explorer"}},
+	.Copy_Picture   = {id = "copy", label = i18n.later("Copy the picture"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl}}}, icon = lucide.COPY, tags = {"clipboard", "image"}},
+	.Copy_Path      = {id = "copy_path", label = i18n.later("Copy the path"), group = i18n.later("Capture"), keys = {{.C, {.Ctrl, .Shift}}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "file", "location"}},
+	.Copy_Url       = {id = "copy_url", label = i18n.later("Copy the URL"), group = i18n.later("Capture"), keys = {{.L, {.Ctrl}}}, icon = lucide.LINK, tags = {"clipboard", "address", "link", "upload"}},
+	.Copy_Text      = {id = "copy_text", label = i18n.later("Copy the text"), group = i18n.later("Capture"), keys = {{.T, {.Ctrl}}}, icon = lucide.FILE_TEXT, tags = {"clipboard", "ocr", "qr"}},
+	.Edit           = {id = "edit", label = i18n.later("Edit"), group = i18n.later("Capture"), keys = {{.E, {.Ctrl}}}, icon = lucide.PENCIL, tags = {"editor", "annotate", "draw"}},
 	// (no key: Ctrl+T is Copy the text here; the editor's Pin keeps Ctrl+T)
-	.Pin            = {label = i18n.later("Pin to the screen"), group = i18n.later("Capture"), icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep", "window"}},
-	.Upload         = {label = i18n.later("Upload again"), group = i18n.later("Capture"), keys = {{.U, {.Ctrl}}}, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link"}},
-	.Combine_Side   = {label = i18n.later("Combine side by side"), group = i18n.later("Capture"), icon = lucide.COLUMNS_2, tags = {"join", "merge", "stitch", "horizontal", "together"}},
-	.Combine_Stack  = {label = i18n.later("Combine stacked"), group = i18n.later("Capture"), icon = lucide.ROWS_2, tags = {"join", "merge", "stitch", "vertical", "together"}},
-	.Delete_File    = {label = i18n.later("Delete the file…"), group = i18n.later("Capture"), keys = {{.Delete, {.Shift}}}, icon = lucide.TRASH_2, tags = {"erase", "remove", "disk"}},
-	.Remove         = {label = i18n.later("Remove from the history"), group = i18n.later("Capture"), keys = {{.Delete, {}}}, icon = lucide.X, tags = {"forget", "clear"}},
-	.Preview        = {label = i18n.later("Preview"), group = i18n.later("View"), keys = {{.Space, {}}}, icon = lucide.EYE, tags = {"zoom", "look"}},
-	.Select_All     = {label = i18n.later("Select all"), group = i18n.later("View"), keys = {{.A, {.Ctrl}}}, icon = lucide.LIST_CHECKS, tags = {"every"}},
-	.Search         = {label = i18n.later("Search"), group = i18n.later("View"), keys = {{.F, {.Ctrl}}}, icon = lucide.SEARCH, tags = {"find", "filter"}},
-	.Period         = {label = i18n.later("Show by date…"), group = i18n.later("View"), icon = lucide.CALENDAR, tags = {"date", "today", "week", "month", "filter", "when"}},
-	.Grid           = {label = i18n.later("Show a grid"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}}, icon = lucide.LAYOUT_GRID, tags = {"thumbnails", "pictures"}},
-	.List           = {label = i18n.later("Show a list"), group = i18n.later("View"), keys = {{.N2, {.Ctrl}}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
-	.Open_Folder    = {label = i18n.later("Open the save folder"), group = i18n.later("View"), icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
-	.Capture_Region = {label = i18n.later("Capture a region"), group = i18n.later("Window"), icon = lucide.IMAGE, tags = {"screenshot", "new"}},
-	.Workflows      = {label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}, scope = .Window},
-	.Settings       = {label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}, scope = .Window},
-	.Keys           = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
-	.Close          = {label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"hide"}, scope = .Window},
-	.Quit           = {label = i18n.later("Quit cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}}, icon = lucide.POWER, tags = {"exit", "stop"}, scope = .Window},
+	.Pin            = {id = "pin", label = i18n.later("Pin to the screen"), group = i18n.later("Capture"), icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep", "window"}},
+	.Upload         = {id = "upload", label = i18n.later("Upload again"), group = i18n.later("Capture"), keys = {{.U, {.Ctrl}}}, icon = lucide.SEND_HORIZONAL, tags = {"share", "host", "link"}},
+	.Combine_Side   = {id = "combine_side", label = i18n.later("Combine side by side"), group = i18n.later("Capture"), icon = lucide.COLUMNS_2, tags = {"join", "merge", "stitch", "horizontal", "together"}},
+	.Combine_Stack  = {id = "combine_stack", label = i18n.later("Combine stacked"), group = i18n.later("Capture"), icon = lucide.ROWS_2, tags = {"join", "merge", "stitch", "vertical", "together"}},
+	.Delete_File    = {id = "delete_file", label = i18n.later("Delete the file…"), group = i18n.later("Capture"), keys = {{.Delete, {.Shift}}}, icon = lucide.TRASH_2, tags = {"erase", "remove", "disk"}},
+	.Remove         = {id = "remove", label = i18n.later("Remove from the history"), group = i18n.later("Capture"), keys = {{.Delete, {}}}, icon = lucide.X, tags = {"forget", "clear"}},
+	.Preview        = {id = "preview", label = i18n.later("Preview"), group = i18n.later("View"), keys = {{.Space, {}}}, icon = lucide.EYE, tags = {"zoom", "look"}},
+	.Select_All     = {id = "select_all", label = i18n.later("Select all"), group = i18n.later("View"), keys = {{.A, {.Ctrl}}}, icon = lucide.LIST_CHECKS, tags = {"every"}},
+	.Search         = {id = "search", label = i18n.later("Search"), group = i18n.later("View"), keys = {{.F, {.Ctrl}}}, icon = lucide.SEARCH, tags = {"find", "filter"}},
+	.Period         = {id = "period", label = i18n.later("Show by date…"), group = i18n.later("View"), icon = lucide.CALENDAR, tags = {"date", "today", "week", "month", "filter", "when"}},
+	.Grid           = {id = "grid", label = i18n.later("Show a grid"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}}, icon = lucide.LAYOUT_GRID, tags = {"thumbnails", "pictures"}},
+	.List           = {id = "list", label = i18n.later("Show a list"), group = i18n.later("View"), keys = {{.N2, {.Ctrl}}}, icon = lucide.LAYOUT_LIST, tags = {"table", "details", "columns"}},
+	.Open_Folder    = {id = "open_folder", label = i18n.later("Open the save folder"), group = i18n.later("View"), icon = lucide.FOLDER_OPEN, tags = {"files", "explorer", "screenshots"}},
+	.Capture_Region = {id = "capture_region", label = i18n.later("Capture a region"), group = i18n.later("Window"), icon = lucide.IMAGE, tags = {"screenshot", "new"}},
+	.Workflows      = {id = "workflows", label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}, scope = .Window},
+	.Settings       = {id = "settings", label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}, scope = .Window},
+	.Keys           = {id = "shortcuts", label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
+	.Close          = {id = "close", label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"hide"}, scope = .Window},
+	.Quit           = {id = "quit", label = i18n.later("Quit Cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}}, icon = lucide.POWER, tags = {"exit", "stop"}, scope = .Window},
 }
 
 History_Actions :: bit_set[History_Action]
@@ -361,12 +365,17 @@ history_window_show :: proc(app: ^App, select: u64 = 0) {
 // Opens the window (hidden). `headless`: offscreen, on the software renderer (shots.odin).
 history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw := &app.history_window
-	if !host.host_open(&hw.host, &app.shared, {title = "cliche", size = HISTORY_WINDOW_SIZE, headless = headless, integrated_title = !app.settings.system_title}, history_build, app) {
+	if !host.host_open(&hw.host, &app.shared, {title = APP_TITLE, size = HISTORY_WINDOW_SIZE, headless = headless, integrated_title = !app.settings.system_title}, history_build, app) {
 		log.error("the main window cannot open")
 		return false
 	}
 	hw.opened = true
 	licence_attach(app)   // (the settings' Licence page answers in this window)
+	// (the setup's "By" line, in its modal and on the settings' Installation page: a texture of this window's renderer,
+	// made before the offer opens the modal)
+	if app.install.vendor_mark == nil {
+		if mark, ok := setup.logo_make(&app.shared.r, #load("../assets/froment-software-64.png"), {16, 16}); ok { app.install.vendor_mark = mark }
+	}
 	// (the install read on a task, once the main window is there to show its dialog: offered on Windows; never to a
 	// window of the screenshots)
 	if !headless && !app.install.known { prefs_page.install_offer(&app.install, &hw.host.state, offer = ODIN_OS == .Windows) }
@@ -502,6 +511,7 @@ history_after_frame :: proc(app: ^App) {
 history_window_free :: proc(app: ^App) {
 	hw := &app.history_window
 	history_textures_drop(app)
+	setup.logo_destroy(&app.shared.r, &app.install.vendor_mark)
 	delete(hw.thumbs)
 	ui.palette_destroy(&hw.palette)   // (its usage memory written)
 	// (the screenshots open the window again after this: its sources are added to the next palette)
@@ -576,7 +586,7 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###history") {   // (the theme's surface: the host only clears to black)
 		// (cliche's title bar across the whole window, over the views docked at its edges)
-		window_title_bar(h, "cliche", em)
+		window_title_bar(h, APP_TITLE, em)
 		// (the views docked at the window's edges, and the floating ones, are built first: their keys are theirs first)
 		if ui.views_frame(&app.views) {
 			dialog := history_views_open(app) || ui.menu_any_open()
@@ -633,7 +643,7 @@ history_views_open :: proc(app: ^App) -> bool {
 history_page :: proc(app: ^App, em: f32) {
 	history_toolbar(app, em)
 	ui.hline(ui.fill())
-	crash_bar.bar(&app.crash_bar, {name = "cliche", version = APP_VERSION, repository = "sachahjkl/cliche"})
+	crash_bar.bar(&app.crash_bar, {name = APP_TITLE, version = APP_VERSION, repository = "sachahjkl/cliche"})
 	ui.next({width = ui.fill(), height = ui.fill()})
 	if ui.views_dock(&app.views, HISTORY_SPACE, {content = true}) {
 		history_main(app, em)
@@ -935,7 +945,7 @@ history_main :: proc(app: ^App, em: f32) {
 	hw := &app.history_window
 	if len(hw.history.entries) == 0 {
 		keys := shortcut_keys(app, .Region)
-		note := keys != "" ? fmt.tprintf(i18n.tr("Press %s, or click cliche's icon in the notification area: each capture comes here."), keys) : i18n.tr("Click cliche's icon in the notification area, or run cliche --region: each capture comes here.")
+		note := keys != "" ? fmt.tprintf(i18n.tr("Press %s, or click Cliche's icon in the notification area: each capture comes here."), keys) : i18n.tr("Click Cliche's icon in the notification area, or run cliche --region: each capture comes here.")
 		if !hw.loaded { note = i18n.tr("Reading the history…") }
 		if ui.empty_state("empty", {icon = lucide.HISTORY, title = i18n.tr("No capture yet"), note = note, actions = {{text = i18n.tr("Capture a region"), icon = lucide.SCISSORS, intent = .Primary}}}) == 0 {
 			history_action(app, .Capture_Region)
@@ -1609,7 +1619,7 @@ history_action :: proc(app: ^App, a: History_Action) {
 		settings_enter(app)
 	case .Keys:
 		history_sheet_keep(app)
-		ui.shortcuts_sheet_open(&hw.sheet, hw.sheet_table.commands, i18n.tr("cliche's keys"), hw.sheet_table.version)
+		ui.shortcuts_sheet_open(&hw.sheet, hw.sheet_table.commands, i18n.tr("Cliche's keys"), hw.sheet_table.version)
 	case .Close:
 		hw.hide_due = true
 	case .Quit:

@@ -22,3 +22,25 @@ the_keys_that_type_text :: proc(t: ^testing.T) {
 	settings := ui.command_typing_keys(slice.enumerated_array(&SETTINGS_ACTIONS))
 	testing.expectf(t, len(settings) == 0, "the settings': %v", settings)
 }
+
+// Every command has an id (the person's keys and aliases, and the palette's memory, are stored by it). The main window's
+// palette lists the history's, the settings' and the workflows' commands together: one table there.
+@(test)
+every_command_has_an_id :: proc(t: ^testing.T) {
+	main_window := slice.concatenate([][]ui.Command{slice.enumerated_array(&HISTORY_ACTIONS), slice.enumerated_array(&SETTINGS_ACTIONS), slice.enumerated_array(&WORKFLOW_ACTIONS)}, context.temp_allocator)
+	wrong := ui.command_ids_check(main_window, slice.enumerated_array(&EDITOR_ACTIONS))
+	testing.expectf(t, len(wrong) == 0, "%v", wrong)
+}
+
+// One id in two tables is one command for the person's keys: the editor shares an id with the main window only for the
+// same act. A new shared id fails here until it is listed on purpose.
+@(test)
+the_ids_the_editor_shares :: proc(t: ^testing.T) {
+	shared := make([dynamic]string, context.temp_allocator)
+	for e in EDITOR_ACTIONS {
+		for h in HISTORY_ACTIONS { if h.id == e.id { append(&shared, e.id) } }
+		for w in WORKFLOW_ACTIONS { if w.id == e.id { append(&shared, e.id) } }
+		for s in SETTINGS_ACTIONS { if s.id == e.id { append(&shared, e.id) } }
+	}
+	testing.expectf(t, slice.equal(shared[:], []string{"undo", "redo", "select_all", "copy", "upload", "pin", "close", "shortcuts"}), "%v", shared)
+}

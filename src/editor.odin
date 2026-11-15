@@ -84,60 +84,62 @@ EDITOR_ORDERS := [?]struct { action: Editor_Action, order: Edit_Order }{
 	{.Bring_To_Front, .Front}, {.Bring_Forward, .Forward}, {.Send_Backward, .Backward}, {.Send_To_Back, .Back},
 }
 
+// (the ids, as the history's: "copy", "pin", "upload", "select_all", "shortcuts" and "close" are one command with the
+// history's, and "undo" and "redo" with the workflows': a key the person sets for one acts in both)
 EDITOR_ACTIONS := [Editor_Action]ui.Command{
-	.Tool_Select      = {label = i18n.later("Select and move"), group = i18n.later("Tools"), keys = {{.V, {}}}, icon = lucide.MOUSE_POINTER_2, tags = {"pointer", "move", "resize"}},
-	.Tool_Rectangle   = {label = i18n.later("Rectangle"), group = i18n.later("Tools"), keys = {{.R, {}}}, icon = lucide.SQUARE, tags = {"box", "square", "frame"}},
-	.Tool_Ellipse     = {label = i18n.later("Ellipse"), group = i18n.later("Tools"), keys = {{.E, {}}}, icon = lucide.CIRCLE, tags = {"circle", "oval", "round"}},
-	.Tool_Arrow       = {label = i18n.later("Arrow"), group = i18n.later("Tools"), keys = {{.A, {}}}, icon = lucide.ARROW_UP_RIGHT, tags = {"point", "show"}},
-	.Tool_Line        = {label = i18n.later("Line"), group = i18n.later("Tools"), keys = {{.L, {}}}, icon = lucide.SLASH, tags = {"straight", "rule"}},
-	.Tool_Pen         = {label = i18n.later("Pen"), group = i18n.later("Tools"), keys = {{.P, {}}}, icon = lucide.PENCIL, tags = {"freehand", "draw", "brush", "freehand arrow"}},
-	.Tool_Text        = {label = i18n.later("Text"), group = i18n.later("Tools"), keys = {{.T, {}}}, icon = lucide.TYPE, tags = {"label", "write", "words"}},
-	.Tool_Balloon     = {label = i18n.later("Speech balloon"), group = i18n.later("Tools"), keys = {{.Q, {}}}, icon = lucide.MESSAGE_SQUARE_TEXT, tags = {"bubble", "callout", "comment", "say", "quote"}},
-	.Tool_Highlighter = {label = i18n.later("Highlighter"), group = i18n.later("Tools"), keys = {{.H, {}}}, icon = lucide.HIGHLIGHTER, tags = {"marker", "yellow", "emphasis"}},
-	.Tool_Pixelate    = {label = i18n.later("Pixelate"), group = i18n.later("Tools"), keys = {{.B, {}}}, icon = lucide.LAYOUT_GRID, tags = {"hide", "censor", "mosaic", "redact"}},
-	.Tool_Blur        = {label = i18n.later("Blur"), group = i18n.later("Tools"), keys = {{.G, {}}}, icon = lucide.DROPLETS, tags = {"hide", "censor", "gaussian", "soft", "redact"}},
-	.Tool_Eraser      = {label = i18n.later("Smart eraser"), group = i18n.later("Tools"), keys = {{.X, {}}}, icon = lucide.ERASER, tags = {"hide", "remove", "fill", "background", "redact"}},
-	.Tool_Magnify     = {label = i18n.later("Magnifier"), group = i18n.later("Tools"), keys = {{.M, {}}}, icon = lucide.SEARCH, tags = {"zoom", "loupe", "enlarge", "detail"}},
-	.Tool_Step        = {label = i18n.later("Step number"), group = i18n.later("Tools"), keys = {{.N, {}}}, icon = lucide.LIST_ORDERED, tags = {"counter", "badge", "numbered"}},
-	.Tool_Crop        = {label = i18n.later("Crop"), group = i18n.later("Tools"), keys = {{.C, {}}}, icon = lucide.CROP, tags = {"cut", "trim"}},
-	.Tool_Cut_Out     = {label = i18n.later("Cut out a band"), group = i18n.later("Tools"), keys = {{.K, {}}}, icon = lucide.SCISSORS, tags = {"remove", "strip", "join", "rows", "columns"}},
-	.Undo             = {label = i18n.later("Undo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl}}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
-	.Redo             = {label = i18n.later("Redo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again", "forward"}},
-	.Paste            = {label = i18n.later("Paste a picture or a text"), group = i18n.later("Edit"), keys = {{.V, {.Ctrl}}, {.Insert, {.Shift}}}, icon = lucide.CLIPBOARD_PASTE, tags = {"clipboard", "image", "insert"}},
-	.Select_All       = {label = i18n.later("Select every annotation"), group = i18n.later("Edit"), keys = {{.A, {.Ctrl}}}, icon = lucide.BOX_SELECT, tags = {"all", "everything", "pick"}},
-	.Delete           = {label = i18n.later("Delete the selection"), group = i18n.later("Edit"), keys = {{.Delete, {}}, {.Backspace, {}}}, icon = lucide.TRASH_2, tags = {"remove", "erase"}},
-	.Delete_All       = {label = i18n.later("Delete every annotation"), group = i18n.later("Edit"), keys = {{.Delete, {.Ctrl, .Shift}}}, icon = lucide.BRUSH_CLEANING, tags = {"clear", "remove", "all", "erase"}},
-	.Duplicate        = {label = i18n.later("Duplicate the selection"), group = i18n.later("Edit"), keys = {{.D, {.Ctrl}}}, icon = lucide.COPY, tags = {"clone", "copy"}},
-	.Bring_To_Front   = {label = i18n.later("Bring to front"), group = i18n.later("Edit"), keys = {{.Home, {}}}, icon = lucide.BRING_TO_FRONT, tags = {"order", "top", "raise", "above"}},
-	.Bring_Forward    = {label = i18n.later("Bring forward"), group = i18n.later("Edit"), keys = {{.Page_Up, {}}}, icon = lucide.ARROW_UP, tags = {"order", "raise", "up"}},
-	.Send_Backward    = {label = i18n.later("Send backward"), group = i18n.later("Edit"), keys = {{.Page_Down, {}}}, icon = lucide.ARROW_DOWN, tags = {"order", "lower", "down"}},
-	.Send_To_Back     = {label = i18n.later("Send to back"), group = i18n.later("Edit"), keys = {{.End, {}}}, icon = lucide.SEND_TO_BACK, tags = {"order", "bottom", "lower", "below"}},
-	.Remove_Crop      = {label = i18n.later("Remove the crop"), group = i18n.later("Edit"), icon = lucide.CROP, tags = {"uncrop", "whole", "reset"}},
-	.Insert_File      = {label = i18n.later("Insert a picture from a file…"), group = i18n.later("Insert"), keys = {{.I, {.Ctrl}}}, icon = lucide.IMAGE_PLUS, tags = {"image", "open", "add", "logo"}},
-	.Insert_Last      = {label = i18n.later("Insert the last screenshot"), group = i18n.later("Insert"), keys = {{.I, {.Ctrl, .Shift}}}, icon = lucide.HISTORY, tags = {"image", "screen", "capture", "history", "add"}},
-	.Insert_Cursor    = {label = i18n.later("Insert a mouse pointer"), group = i18n.later("Insert"), icon = lucide.MOUSE_POINTER, tags = {"cursor", "arrow", "click", "add"}},
-	.Rotate_Right     = {label = i18n.later("Turn the picture right"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl}}}, icon = lucide.ROTATE_CW, tags = {"rotate", "clockwise", "90"}},
-	.Rotate_Left      = {label = i18n.later("Turn the picture left"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl, .Shift}}}, icon = lucide.ROTATE_CCW, tags = {"rotate", "counterclockwise", "90"}},
-	.Rotate_Half      = {label = i18n.later("Turn the picture upside down"), group = i18n.later("Picture"), icon = lucide.REFRESH_CW, tags = {"rotate", "180", "half"}},
-	.Flip_Across      = {label = i18n.later("Mirror the picture left to right"), group = i18n.later("Picture"), icon = lucide.FLIP_HORIZONTAL, tags = {"flip", "horizontal", "mirror"}},
-	.Flip_Down        = {label = i18n.later("Mirror the picture top to bottom"), group = i18n.later("Picture"), icon = lucide.FLIP_VERTICAL, tags = {"flip", "vertical", "mirror"}},
-	.Resize           = {label = i18n.later("Resize the picture…"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl, .Alt}}}, icon = lucide.SCALING, tags = {"scale", "size", "smaller", "larger", "width", "height"}},
-	.Canvas           = {label = i18n.later("Add margins to the picture…"), group = i18n.later("Picture"), keys = {{.M, {.Ctrl, .Alt}}}, icon = lucide.FRAME, tags = {"canvas", "pad", "border", "space", "expand"}},
-	.Auto_Crop        = {label = i18n.later("Trim the picture's plain edges"), group = i18n.later("Picture"), keys = {{.X, {.Ctrl, .Shift}}}, icon = lucide.SHRINK, tags = {"auto crop", "trim", "border", "whitespace"}},
-	.Zoom_In          = {label = i18n.later("Zoom in"), group = i18n.later("View"), keys = ui.ZOOM_IN_KEYS[:], icon = lucide.ZOOM_IN, tags = {"larger", "magnify"}},
-	.Zoom_Out         = {label = i18n.later("Zoom out"), group = i18n.later("View"), keys = ui.ZOOM_OUT_KEYS[:], icon = lucide.ZOOM_OUT, tags = {"smaller"}},
-	.Zoom_Fit         = {label = i18n.later("Fit the picture to the window"), group = i18n.later("View"), keys = ui.ZOOM_RESET_KEYS[:], icon = lucide.MAXIMIZE, tags = {"zoom", "whole", "reset"}},
-	.Zoom_Actual      = {label = i18n.later("Actual size (100 %)"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}}, icon = lucide.SCAN, tags = {"zoom", "pixels", "one to one", "100"}},
-	.Copy             = {label = i18n.later("Copy the picture"), group = i18n.later("Picture"), keys = {{.C, {.Ctrl}}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard"}},
-	.Save             = {label = i18n.later("Save the picture"), group = i18n.later("Picture"), keys = {{.S, {.Ctrl}}}, icon = lucide.SAVE, tags = {"file", "png", "write"}},
-	.Save_As          = {label = i18n.later("Save the picture as…"), group = i18n.later("Picture"), keys = {{.S, {.Ctrl, .Shift}}}, icon = lucide.FILE_INPUT, tags = {"file", "folder", "name", "format", "jpeg", "webp", "png", "dialog"}},
-	.Upload           = {label = i18n.later("Upload the picture"), group = i18n.later("Picture"), keys = {{.U, {.Ctrl}}}, icon = lucide.CLOUD_UPLOAD, tags = {"share", "host", "link", "url", "address", "imgur", "sxcu"}},
-	.Pin              = {label = i18n.later("Pin the picture to the screen"), group = i18n.later("Picture"), keys = {{.T, {.Ctrl}}}, icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep", "window"}},
-	.Print            = {label = i18n.later("Print the picture"), group = i18n.later("Picture"), keys = {{.P, {.Ctrl}}}, icon = lucide.PRINTER, tags = {"paper", "printer", "page"}},
-	.Done             = {label = i18n.later("Done: the workflow goes on"), group = i18n.later("Picture"), keys = {{.Return, {}}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
-	.Close            = {label = i18n.later("Close the editor"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}, scope = .Window},
-	.Keys             = {label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
-	.Nudge            = {label = i18n.later("Move the selection a pixel (arrows; with Shift, ten)"), group = i18n.later("Edit"), keys = {{.Left, {}}, {.Left, {.Shift}}}, icon = lucide.MOUSE_POINTER_2, tags = {"nudge"}},
+	.Tool_Select      = {id = "tool_select", label = i18n.later("Select and move"), group = i18n.later("Tools"), keys = {{.V, {}}}, icon = lucide.MOUSE_POINTER_2, tags = {"pointer", "move", "resize"}},
+	.Tool_Rectangle   = {id = "tool_rectangle", label = i18n.later("Rectangle"), group = i18n.later("Tools"), keys = {{.R, {}}}, icon = lucide.SQUARE, tags = {"box", "square", "frame"}},
+	.Tool_Ellipse     = {id = "tool_ellipse", label = i18n.later("Ellipse"), group = i18n.later("Tools"), keys = {{.E, {}}}, icon = lucide.CIRCLE, tags = {"circle", "oval", "round"}},
+	.Tool_Arrow       = {id = "tool_arrow", label = i18n.later("Arrow"), group = i18n.later("Tools"), keys = {{.A, {}}}, icon = lucide.ARROW_UP_RIGHT, tags = {"point", "show"}},
+	.Tool_Line        = {id = "tool_line", label = i18n.later("Line"), group = i18n.later("Tools"), keys = {{.L, {}}}, icon = lucide.SLASH, tags = {"straight", "rule"}},
+	.Tool_Pen         = {id = "tool_pen", label = i18n.later("Pen"), group = i18n.later("Tools"), keys = {{.P, {}}}, icon = lucide.PENCIL, tags = {"freehand", "draw", "brush", "freehand arrow"}},
+	.Tool_Text        = {id = "tool_text", label = i18n.later("Text"), group = i18n.later("Tools"), keys = {{.T, {}}}, icon = lucide.TYPE, tags = {"label", "write", "words"}},
+	.Tool_Balloon     = {id = "tool_balloon", label = i18n.later("Speech balloon"), group = i18n.later("Tools"), keys = {{.Q, {}}}, icon = lucide.MESSAGE_SQUARE_TEXT, tags = {"bubble", "callout", "comment", "say", "quote"}},
+	.Tool_Highlighter = {id = "tool_highlighter", label = i18n.later("Highlighter"), group = i18n.later("Tools"), keys = {{.H, {}}}, icon = lucide.HIGHLIGHTER, tags = {"marker", "yellow", "emphasis"}},
+	.Tool_Pixelate    = {id = "tool_pixelate", label = i18n.later("Pixelate"), group = i18n.later("Tools"), keys = {{.B, {}}}, icon = lucide.LAYOUT_GRID, tags = {"hide", "censor", "mosaic", "redact"}},
+	.Tool_Blur        = {id = "tool_blur", label = i18n.later("Blur"), group = i18n.later("Tools"), keys = {{.G, {}}}, icon = lucide.DROPLETS, tags = {"hide", "censor", "gaussian", "soft", "redact"}},
+	.Tool_Eraser      = {id = "tool_eraser", label = i18n.later("Smart eraser"), group = i18n.later("Tools"), keys = {{.X, {}}}, icon = lucide.ERASER, tags = {"hide", "remove", "fill", "background", "redact"}},
+	.Tool_Magnify     = {id = "tool_magnify", label = i18n.later("Magnifier"), group = i18n.later("Tools"), keys = {{.M, {}}}, icon = lucide.SEARCH, tags = {"zoom", "loupe", "enlarge", "detail"}},
+	.Tool_Step        = {id = "tool_step", label = i18n.later("Step number"), group = i18n.later("Tools"), keys = {{.N, {}}}, icon = lucide.LIST_ORDERED, tags = {"counter", "badge", "numbered"}},
+	.Tool_Crop        = {id = "tool_crop", label = i18n.later("Crop"), group = i18n.later("Tools"), keys = {{.C, {}}}, icon = lucide.CROP, tags = {"cut", "trim"}},
+	.Tool_Cut_Out     = {id = "tool_cut_out", label = i18n.later("Cut out a band"), group = i18n.later("Tools"), keys = {{.K, {}}}, icon = lucide.SCISSORS, tags = {"remove", "strip", "join", "rows", "columns"}},
+	.Undo             = {id = "undo", label = i18n.later("Undo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl}}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
+	.Redo             = {id = "redo", label = i18n.later("Redo"), group = i18n.later("Edit"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again", "forward"}},
+	.Paste            = {id = "paste", label = i18n.later("Paste a picture or a text"), group = i18n.later("Edit"), keys = {{.V, {.Ctrl}}, {.Insert, {.Shift}}}, icon = lucide.CLIPBOARD_PASTE, tags = {"clipboard", "image", "insert"}},
+	.Select_All       = {id = "select_all", label = i18n.later("Select every annotation"), group = i18n.later("Edit"), keys = {{.A, {.Ctrl}}}, icon = lucide.BOX_SELECT, tags = {"all", "everything", "pick"}},
+	.Delete           = {id = "delete", label = i18n.later("Delete the selection"), group = i18n.later("Edit"), keys = {{.Delete, {}}, {.Backspace, {}}}, icon = lucide.TRASH_2, tags = {"remove", "erase"}},
+	.Delete_All       = {id = "delete_all", label = i18n.later("Delete every annotation"), group = i18n.later("Edit"), keys = {{.Delete, {.Ctrl, .Shift}}}, icon = lucide.BRUSH_CLEANING, tags = {"clear", "remove", "all", "erase"}},
+	.Duplicate        = {id = "duplicate", label = i18n.later("Duplicate the selection"), group = i18n.later("Edit"), keys = {{.D, {.Ctrl}}}, icon = lucide.COPY, tags = {"clone", "copy"}},
+	.Bring_To_Front   = {id = "bring_to_front", label = i18n.later("Bring to front"), group = i18n.later("Edit"), keys = {{.Home, {}}}, icon = lucide.BRING_TO_FRONT, tags = {"order", "top", "raise", "above"}},
+	.Bring_Forward    = {id = "bring_forward", label = i18n.later("Bring forward"), group = i18n.later("Edit"), keys = {{.Page_Up, {}}}, icon = lucide.ARROW_UP, tags = {"order", "raise", "up"}},
+	.Send_Backward    = {id = "send_backward", label = i18n.later("Send backward"), group = i18n.later("Edit"), keys = {{.Page_Down, {}}}, icon = lucide.ARROW_DOWN, tags = {"order", "lower", "down"}},
+	.Send_To_Back     = {id = "send_to_back", label = i18n.later("Send to back"), group = i18n.later("Edit"), keys = {{.End, {}}}, icon = lucide.SEND_TO_BACK, tags = {"order", "bottom", "lower", "below"}},
+	.Remove_Crop      = {id = "remove_crop", label = i18n.later("Remove the crop"), group = i18n.later("Edit"), icon = lucide.CROP, tags = {"uncrop", "whole", "reset"}},
+	.Insert_File      = {id = "insert_file", label = i18n.later("Insert a picture from a file…"), group = i18n.later("Insert"), keys = {{.I, {.Ctrl}}}, icon = lucide.IMAGE_PLUS, tags = {"image", "open", "add", "logo"}},
+	.Insert_Last      = {id = "insert_last", label = i18n.later("Insert the last screenshot"), group = i18n.later("Insert"), keys = {{.I, {.Ctrl, .Shift}}}, icon = lucide.HISTORY, tags = {"image", "screen", "capture", "history", "add"}},
+	.Insert_Cursor    = {id = "insert_cursor", label = i18n.later("Insert a mouse pointer"), group = i18n.later("Insert"), icon = lucide.MOUSE_POINTER, tags = {"cursor", "arrow", "click", "add"}},
+	.Rotate_Right     = {id = "rotate_right", label = i18n.later("Turn the picture right"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl}}}, icon = lucide.ROTATE_CW, tags = {"rotate", "clockwise", "90"}},
+	.Rotate_Left      = {id = "rotate_left", label = i18n.later("Turn the picture left"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl, .Shift}}}, icon = lucide.ROTATE_CCW, tags = {"rotate", "counterclockwise", "90"}},
+	.Rotate_Half      = {id = "rotate_half", label = i18n.later("Turn the picture upside down"), group = i18n.later("Picture"), icon = lucide.REFRESH_CW, tags = {"rotate", "180", "half"}},
+	.Flip_Across      = {id = "flip_across", label = i18n.later("Mirror the picture left to right"), group = i18n.later("Picture"), icon = lucide.FLIP_HORIZONTAL, tags = {"flip", "horizontal", "mirror"}},
+	.Flip_Down        = {id = "flip_down", label = i18n.later("Mirror the picture top to bottom"), group = i18n.later("Picture"), icon = lucide.FLIP_VERTICAL, tags = {"flip", "vertical", "mirror"}},
+	.Resize           = {id = "resize", label = i18n.later("Resize the picture…"), group = i18n.later("Picture"), keys = {{.R, {.Ctrl, .Alt}}}, icon = lucide.SCALING, tags = {"scale", "size", "smaller", "larger", "width", "height"}},
+	.Canvas           = {id = "canvas", label = i18n.later("Add margins to the picture…"), group = i18n.later("Picture"), keys = {{.M, {.Ctrl, .Alt}}}, icon = lucide.FRAME, tags = {"canvas", "pad", "border", "space", "expand"}},
+	.Auto_Crop        = {id = "auto_crop", label = i18n.later("Trim the picture's plain edges"), group = i18n.later("Picture"), keys = {{.X, {.Ctrl, .Shift}}}, icon = lucide.SHRINK, tags = {"auto crop", "trim", "border", "whitespace"}},
+	.Zoom_In          = {id = "zoom_in", label = i18n.later("Zoom in"), group = i18n.later("View"), keys = ui.ZOOM_IN_KEYS[:], icon = lucide.ZOOM_IN, tags = {"larger", "magnify"}},
+	.Zoom_Out         = {id = "zoom_out", label = i18n.later("Zoom out"), group = i18n.later("View"), keys = ui.ZOOM_OUT_KEYS[:], icon = lucide.ZOOM_OUT, tags = {"smaller"}},
+	.Zoom_Fit         = {id = "zoom_fit", label = i18n.later("Fit the picture to the window"), group = i18n.later("View"), keys = ui.ZOOM_RESET_KEYS[:], icon = lucide.MAXIMIZE, tags = {"zoom", "whole", "reset"}},
+	.Zoom_Actual      = {id = "zoom_actual", label = i18n.later("Actual size (100 %)"), group = i18n.later("View"), keys = {{.N1, {.Ctrl}}}, icon = lucide.SCAN, tags = {"zoom", "pixels", "one to one", "100"}},
+	.Copy             = {id = "copy", label = i18n.later("Copy the picture"), group = i18n.later("Picture"), keys = {{.C, {.Ctrl}}}, icon = lucide.CLIPBOARD_COPY, tags = {"clipboard"}},
+	.Save             = {id = "save", label = i18n.later("Save the picture"), group = i18n.later("Picture"), keys = {{.S, {.Ctrl}}}, icon = lucide.SAVE, tags = {"file", "png", "write"}},
+	.Save_As          = {id = "save_as", label = i18n.later("Save the picture as…"), group = i18n.later("Picture"), keys = {{.S, {.Ctrl, .Shift}}}, icon = lucide.FILE_INPUT, tags = {"file", "folder", "name", "format", "jpeg", "webp", "png", "dialog"}},
+	.Upload           = {id = "upload", label = i18n.later("Upload the picture"), group = i18n.later("Picture"), keys = {{.U, {.Ctrl}}}, icon = lucide.CLOUD_UPLOAD, tags = {"share", "host", "link", "url", "address", "imgur", "sxcu"}},
+	.Pin              = {id = "pin", label = i18n.later("Pin the picture to the screen"), group = i18n.later("Picture"), keys = {{.T, {.Ctrl}}}, icon = lucide.PIN, tags = {"float", "on top", "sticky", "keep", "window"}},
+	.Print            = {id = "print", label = i18n.later("Print the picture"), group = i18n.later("Picture"), keys = {{.P, {.Ctrl}}}, icon = lucide.PRINTER, tags = {"paper", "printer", "page"}},
+	.Done             = {id = "done", label = i18n.later("Done: the workflow goes on"), group = i18n.later("Picture"), keys = {{.Return, {}}}, icon = lucide.CHECK, tags = {"finish", "apply", "upload", "ok"}},
+	.Close            = {id = "close", label = i18n.later("Close the editor"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"discard", "cancel", "quit"}, scope = .Window},
+	.Keys             = {id = "shortcuts", label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
+	.Nudge            = {id = "nudge", label = i18n.later("Move the selection a pixel (arrows; with Shift, ten)"), group = i18n.later("Edit"), keys = {{.Left, {}}, {.Left, {.Shift}}}, icon = lucide.MOUSE_POINTER_2, tags = {"nudge"}},
 }
 
 EDITOR_COLOR_NAMES := [len(EDIT_COLORS)]string{i18n.later("Red"), i18n.later("Orange"), i18n.later("Yellow"), i18n.later("Green"), i18n.later("Blue"), i18n.later("Purple"), i18n.later("Black"), i18n.later("White")}
@@ -438,7 +440,7 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 	ed := new(Editor)
 	app.editor_next_id += 1
 	ed.app, ed.id = app, app.editor_next_id
-	if !host.host_open(&ed.host, &app.shared, {title = i18n.tr("cliche editor"), size = EDITOR_SIZE, headless = headless, integrated_title = !app.settings.system_title}, editor_build, ed) {
+	if !host.host_open(&ed.host, &app.shared, {title = i18n.tr("Cliche editor"), size = EDITOR_SIZE, headless = headless, integrated_title = !app.settings.system_title}, editor_build, ed) {
 		log.error("the editor's window cannot open")
 		free(ed)
 		return nil
@@ -1509,7 +1511,7 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 	canvas: ui.Rect
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###editor") {   // (the theme's surface: the host only clears to black)
-		window_title_bar(&ed.host, i18n.tr("cliche editor"), em)
+		window_title_bar(&ed.host, i18n.tr("Cliche editor"), em)
 		editor_tools_bar(ed, em)
 		ui.next({width = ui.fill(), height = ui.fill(), cursor = ed.hover, bg = ui.color("well")})
 		b := ui.build_box({.Clickable, .Clip, .Draw_Background}, "###canvas")
@@ -1539,7 +1541,7 @@ editor_waiting :: proc(ed: ^Editor, em: f32) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(flags = {.Draw_Background}, id = "###editor_waiting") {
 		// (its title bar while it waits too: the window moves and closes as always)
-		window_title_bar(&ed.host, i18n.tr("cliche editor"), em)
+		window_title_bar(&ed.host, i18n.tr("Cliche editor"), em)
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, cross = .Center})
 		if ui.column(id = "###waiting") {
 			ui.spacer(ui.pct(0.4))

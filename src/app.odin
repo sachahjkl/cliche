@@ -21,6 +21,7 @@ package cliche
 
 import "core:fmt"
 import "core:log"
+import "core:slice"
 import "core:strings"
 import "core:sync"
 import capture "gt:capture"
@@ -99,6 +100,7 @@ App :: struct {
 	backend:    capture.Backend,                           // the session's, once open
 	announcer:  ui.Announcer,                              // where cliche says what it did (general.messages): app_announce
 	standards:  [dynamic]^prefs_page.Standard_Watch,       // the toolkit's standard settings on each open window (app_standard_follow)
+	keymap:     ui.Keymap,                                 // the person's keys and aliases, every window's (keys.custom, keys.aliases)
 	themes_file: prefs_page.Themes_File,                   // cliche's themes, then the user's own (themes.txt beside the preferences)
 	licence:    prefs_page.Licence,                        // licence.odin: the settings' Licence page
 	shortcuts:  ^shortcuts.Service,                        // shortcuts.odin
@@ -130,15 +132,17 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	prefs_page.install_init(&app.install, &app.prefs, setup_options())
 	app.flow = Flow_Idle{}
 	app.record = Record_Idle{}
+	app_keymap_start(app)
 
 	// (this process is the one that runs: its log and its crash reports, before any thread starts, so that each has them)
-	logger := tk_log.install({program = APP_NAME, echo = ODIN_DEBUG})
+	// (the file keeps the technical name; its folder is the vendor's)
+	logger := tk_log.install({program = APP_NAME, dir = tk_log.default_dir(APP_FOLDER, context.temp_allocator), echo = ODIN_DEBUG})
 	context.logger = logger
 	// (here: the language is a setting, read above, and its unreadable lines go to the log, installed above; every text
 	// shown, the tray's menu and the default workflows' names included, is made below)
 	prefs_page.language_start(&app.prefs, PROGRAM_CATALOGUES)
 	crash_settings_keep(&app.crash_settings, &app.prefs)
-	_ = crash.install({program = APP_NAME, version = APP_VERSION, log_tail = {tk_log.tail, logger.data}, settings = {crash_settings_text, &app.crash_settings}})
+	_ = crash.install({program = APP_NAME, report_dir = crash.default_report_dir(APP_FOLDER, context.temp_allocator), version = APP_VERSION, log_tail = {tk_log.tail, logger.data}, settings = {crash_settings_text, &app.crash_settings}})
 	crash.begin_session()
 	// (said in a bar at the top of the main window when it shows: cliche starts in the notification area)
 	if crashed, has_crashed := crash.last_report(context.temp_allocator); has_crashed {
@@ -147,8 +151,8 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	}
 
 	platform.set_app_id(APP_NAME)
-	platform.notify_set_app({name = "cliche"})
-	app.anchor = platform.open_window("cliche", {1, 1})
+	platform.notify_set_app({name = APP_TITLE})
+	app.anchor = platform.open_window(APP_TITLE, {1, 1})
 	if app.anchor == nil {
 		log.error("no window can be opened here")
 		app_free(app)
@@ -230,8 +234,18 @@ app_free :: proc(app: ^App) {
 	uploaders_result_free(&app.uploaders)
 	delete(app.default_folder)
 	settings_free(&app.settings)
+	ui.keymap_destroy(&app.keymap)
 	config.prefs_destroy(&app.prefs)
 	delete(app.wakes)
+}
+
+// Every table's ids, before any window reads a key: a person's key on an id not known yet would take no chord, and the
+// command's own key would act once. The texts themselves come with each window's standard watch (app_standard_follow).
+app_keymap_start :: proc(app: ^App) {
+	ui.keymap_known(&app.keymap, slice.enumerated_array(&HISTORY_ACTIONS))
+	ui.keymap_known(&app.keymap, slice.enumerated_array(&SETTINGS_ACTIONS))
+	ui.keymap_known(&app.keymap, slice.enumerated_array(&WORKFLOW_ACTIONS))
+	ui.keymap_known(&app.keymap, slice.enumerated_array(&EDITOR_ACTIONS))
 }
 
 // An editor opened hidden before the first picture, when a screenshot's workflow opens one (Annotate): its window, its
@@ -320,8 +334,9 @@ app_windows_close :: proc(app: ^App) {
 // A window opened: the toolkit's standard settings apply to its interface now, then each one again as it changes
 // (prefs_page.standard_watch). The renderer and the fonts are every window's: each watch gives them the same values.
 app_standard_follow :: proc(app: ^App, h: ^host.Host) {
+	ui.keymap_use(&h.state, &app.keymap)
 	w := new(prefs_page.Standard_Watch)
-	prefs_page.standard_watch(w, &app.prefs, &h.state, {renderer = &app.shared.r, fonts = &app.shared.fonts, partial_redraw = &h.partial_redraw, pacer = &h.pacer})
+	prefs_page.standard_watch(w, &app.prefs, &h.state, {renderer = &app.shared.r, fonts = &app.shared.fonts, partial_redraw = &h.partial_redraw, pacer = &h.pacer, keymap = &app.keymap})
 	append(&app.standards, w)
 }
 
@@ -700,7 +715,7 @@ app_anchor_events :: proc(app: ^App) {
 
 @(private = "file")
 app_tray_open :: proc(app: ^App) {
-	app.tray = platform.tray_create(app.anchor, nil, "cliche")
+	app.tray = platform.tray_create(app.anchor, nil, APP_TITLE)
 	if app.tray == nil { return }   // (no notification area: the commands still work)
 	app_tray_icon(app, recording = false)
 	app_tray_menu(app)
@@ -761,7 +776,7 @@ app_tray_menu :: proc(app: ^App) {
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Workflows), text = i18n.tr("Workflows")})
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Settings), text = i18n.tr("Settings"), default = app.tray_menu == .Rest && app.settings.tray_click == .Settings})
-	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Quit), text = i18n.tr("Quit cliche")})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Quit), text = i18n.tr("Quit Cliche")})
 	platform.tray_set_menu(app.tray, items[:])
 }
 

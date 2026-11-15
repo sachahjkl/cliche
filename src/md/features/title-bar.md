@@ -24,7 +24,7 @@ cliche's normal windows draw their own title bar, as every program of the toolki
   - Not the pins, the region's overlay and the recording's overlay. They are layers over the other programs, without
     decorations by nature: a pin is its picture and moves by its own drag. Their fallback windows (no layer shell) keep
     what the system gives, as before.
-- **What the bar holds.** cliche's mark, the window's name ("cliche", "cliche editor"), then the toolkit's window
+- **What the bar holds.** cliche's mark, the window's name ("Cliche", "Cliche editor"), then the toolkit's window
   buttons. Its empty parts and its text move the window; a double click maximises it. Refused: putting the history's
   search or the editor's tools in it: each mode keeps its own bar, and a title bar the same in every window.
 

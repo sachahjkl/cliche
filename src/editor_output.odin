@@ -203,7 +203,7 @@ editor_print :: proc(ed: ^Editor, shot: Shot) {
 		switch ask.status {
 		case .Printed:     app_announce(ask.app, .Good, i18n.tr("Sent to the printer"), "", window)
 		case .Cancelled:
-		case .Unsupported: app_announce(ask.app, .Bad, i18n.tr("Printing is not available here"), i18n.tr("The desktop has no print dialog cliche can use (Linux: the print portal)."), window)
+		case .Unsupported: app_announce(ask.app, .Bad, i18n.tr("Printing is not available here"), i18n.tr("The desktop has no print dialog Cliche can use (Linux: the print portal)."), window)
 		case .Failed:      app_announce(ask.app, .Bad, i18n.tr("Not printed"), i18n.tr("The printer or its dialog refused the page."), window)
 		}
 	}

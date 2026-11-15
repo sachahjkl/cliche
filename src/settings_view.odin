@@ -47,6 +47,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "timing",     title = i18n.later("Delays and menus"), icon = lucide.TIMER},
 	{category = "update",     title = i18n.later("Updates"),       icon = lucide.REFRESH_CW},
 	{category = "rendering",  title = i18n.later("Rendering"),     icon = lucide.CPU},
+	{category = "keys",       title = i18n.later("Keys"),          icon = lucide.KEYBOARD},
 }
 
 // The actions of the palette and of the sheet of keys that the history's (History_Action) do not hold already.
@@ -56,22 +57,22 @@ Settings_Action :: enum u8 {
 }
 
 SETTINGS_ACTIONS := [Settings_Action]ui.Command{
-	.Capture_Screen   = {label = i18n.later("Capture the screen under the pointer"), group = i18n.later("Capture"), icon = lucide.MONITOR, tags = {"screenshot", "monitor", "full"}},
-	.Capture_Window   = {label = i18n.later("Capture the window in front"), group = i18n.later("Capture"), icon = lucide.IMAGE, tags = {"screenshot", "active"}},
-	.Capture_All_Screens = {label = i18n.later("Capture all the screens"), group = i18n.later("Capture"), icon = lucide.MONITOR, tags = {"screenshot", "monitors", "desktop", "full"}},
-	.Capture_Last_Region = {label = i18n.later("Capture the last region again"), group = i18n.later("Capture"), icon = lucide.IMAGE, tags = {"screenshot", "repeat", "same", "again"}},
-	.Capture_Edit     = {label = i18n.later("Capture a region and edit"), group = i18n.later("Capture"), icon = lucide.PENCIL, tags = {"screenshot", "annotate", "editor", "draw"}},
-	.Pick_Color       = {label = i18n.later("Pick a colour on the screen"), group = i18n.later("Capture"), icon = lucide.PALETTE, tags = {"colour", "color", "eyedropper", "picker", "hex", "rgb"}},
-	.Read_Qr          = {label = i18n.later("Read a QR code"), group = i18n.later("Capture"), icon = lucide.QR_CODE, tags = {"scan", "barcode"}},
-	.Read_Text        = {label = i18n.later("Read the text"), group = i18n.later("Capture"), icon = lucide.CLIPBOARD, tags = {"ocr", "recognition", "copy"}},
-	.Record           = {label = i18n.later("Record a video"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"mp4", "screencast", "video"}},
-	.Record_Gif       = {label = i18n.later("Record a GIF"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"gif", "animation", "screencast"}},
-	.Choose_Folder    = {label = i18n.later("Choose the save folder…"), group = i18n.later("Save"), icon = lucide.FOLDER, tags = {"directory", "where", "browse"}},
-	.Open_Uploaders   = {label = i18n.later("Open the uploaders' folder"), group = i18n.later("Upload"), icon = lucide.FOLDER_OPEN, tags = {"sxcu", "sharex", "host"}},
-	.Import_Uploader  = {label = i18n.later("Import a ShareX uploader…"), group = i18n.later("Upload"), icon = lucide.EXTERNAL_LINK, tags = {"sxcu", "sharex", "host", "add"}},
-	.Shortcuts_Page   = {label = i18n.later("Shortcuts"), group = i18n.later("Settings"), icon = lucide.KEYBOARD, tags = {"hotkey", "keys", "keybinding"}},
-	.System_Shortcuts = {label = i18n.later("The system's shortcut settings…"), group = i18n.later("Settings"), icon = lucide.EXTERNAL_LINK, tags = {"hotkey", "portal", "keys"}},
-	.Check_Updates    = {label = i18n.later("Check for updates"), group = i18n.later("Settings"), icon = lucide.REFRESH_CW, tags = {"upgrade", "version", "release"}},
+	.Capture_Screen   = {id = "capture_screen", label = i18n.later("Capture the screen under the pointer"), group = i18n.later("Capture"), icon = lucide.MONITOR, tags = {"screenshot", "monitor", "full"}},
+	.Capture_Window   = {id = "capture_window", label = i18n.later("Capture the window in front"), group = i18n.later("Capture"), icon = lucide.IMAGE, tags = {"screenshot", "active"}},
+	.Capture_All_Screens = {id = "capture_all_screens", label = i18n.later("Capture all the screens"), group = i18n.later("Capture"), icon = lucide.MONITOR, tags = {"screenshot", "monitors", "desktop", "full"}},
+	.Capture_Last_Region = {id = "capture_last_region", label = i18n.later("Capture the last region again"), group = i18n.later("Capture"), icon = lucide.IMAGE, tags = {"screenshot", "repeat", "same", "again"}},
+	.Capture_Edit     = {id = "capture_edit", label = i18n.later("Capture a region and edit"), group = i18n.later("Capture"), icon = lucide.PENCIL, tags = {"screenshot", "annotate", "editor", "draw"}},
+	.Pick_Color       = {id = "pick_color", label = i18n.later("Pick a colour on the screen"), group = i18n.later("Capture"), icon = lucide.PALETTE, tags = {"colour", "color", "eyedropper", "picker", "hex", "rgb"}},
+	.Read_Qr          = {id = "read_qr", label = i18n.later("Read a QR code"), group = i18n.later("Capture"), icon = lucide.QR_CODE, tags = {"scan", "barcode"}},
+	.Read_Text        = {id = "read_text", label = i18n.later("Read the text"), group = i18n.later("Capture"), icon = lucide.CLIPBOARD, tags = {"ocr", "recognition", "copy"}},
+	.Record           = {id = "record", label = i18n.later("Record a video"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"mp4", "screencast", "video"}},
+	.Record_Gif       = {id = "record_gif", label = i18n.later("Record a GIF"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"gif", "animation", "screencast"}},
+	.Choose_Folder    = {id = "choose_folder", label = i18n.later("Choose the save folder…"), group = i18n.later("Save"), icon = lucide.FOLDER, tags = {"directory", "where", "browse"}},
+	.Open_Uploaders   = {id = "open_uploaders", label = i18n.later("Open the uploaders' folder"), group = i18n.later("Upload"), icon = lucide.FOLDER_OPEN, tags = {"sxcu", "sharex", "host"}},
+	.Import_Uploader  = {id = "import_uploader", label = i18n.later("Import a ShareX uploader…"), group = i18n.later("Upload"), icon = lucide.EXTERNAL_LINK, tags = {"sxcu", "sharex", "host", "add"}},
+	.Shortcuts_Page   = {id = "shortcuts_page", label = i18n.later("Shortcuts"), group = i18n.later("Settings"), icon = lucide.KEYBOARD, tags = {"hotkey", "keys", "keybinding"}},
+	.System_Shortcuts = {id = "system_shortcuts", label = i18n.later("The system's shortcut settings…"), group = i18n.later("Settings"), icon = lucide.EXTERNAL_LINK, tags = {"hotkey", "portal", "keys"}},
+	.Check_Updates    = {id = "check_updates", label = i18n.later("Check for updates"), group = i18n.later("Settings"), icon = lucide.REFRESH_CW, tags = {"upgrade", "version", "release"}},
 }
 
 // `cliche --settings`, the tray's Settings: the main window, shown, in settings mode.
@@ -168,7 +169,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		page_foot = settings_page_foot,
 		pages = SETTINGS_PAGES[:], icon_font = app.history_window.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = prefs_file(),
-		version = "cliche " + APP_VERSION,
+		version = APP_TITLE + " " + APP_VERSION,
 		changelog = &app.changelog, licence = app.licence.store != nil ? &app.licence : nil, install = &app.install, diagnostics = &app.history_window.host,
 		// (the Updates page: the Updater's state and its buttons under update.auto, as in every program of the toolkit)
 		updater = app.updates.updater, restart = updates_page_restart,
@@ -212,7 +213,7 @@ settings_problem :: proc(user: rawptr, name: string) -> string {
 	app := (^App)(user)
 	w := app.history_window.host.win
 	if name == prefs_page.SYSTEM_TITLE_PREF && app.settings.system_title && w != nil && !platform.system_title_available(w) {
-		return i18n.tr("This desktop draws no title bar for cliche's windows (GNOME): cliche keeps its own.")
+		return i18n.tr("This desktop draws no title bar for Cliche's windows (GNOME): Cliche keeps its own.")
 	}
 	return ""
 }
@@ -260,13 +261,13 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.8))
 	switch shortcuts.backend(app.shortcuts) {
 	case .Portal:
-		foot_text(i18n.tr("The desktop keeps cliche's shortcuts while cliche runs. It may ask you to confirm them, and you may change the keys in its own settings."), em)
+		foot_text(i18n.tr("The desktop keeps Cliche's shortcuts while Cliche runs. It may ask you to confirm them, and you may change the keys in its own settings."), em)
 		if shortcuts.can_configure(app.shortcuts) {
 			ui.spacer(ui.px(em * 0.5))
 			if foot_button("system", i18n.tr("The system's shortcut settings…"), em) { settings_action(app, .System_Shortcuts) }
 		}
 	case .Windows:
-		foot_text(i18n.tr("Windows gives these keys to cliche in every program. Keys that another program holds cannot be used."), em)
+		foot_text(i18n.tr("Windows gives these keys to Cliche in every program. Keys that another program holds cannot be used."), em)
 	case .None:
 		foot_text(i18n.tr("This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = CTRL, Print, exec, cliche --region; sway: bindsym Ctrl+Print exec cliche --region):"), em)
 	}

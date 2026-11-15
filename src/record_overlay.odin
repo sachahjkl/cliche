@@ -53,7 +53,7 @@ record_overlay_show :: proc(app: ^App, headless := false) -> bool {
 	if !ro.opened {
 		area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}
 		// (headless: offscreen, on the software renderer: clichetool shots)
-		o := host.Open_Options{title = "cliche recording", size = {max(area[2], 1), max(area[3], 1)}, overlay = !headless, overlay_area = area, headless = headless}
+		o := host.Open_Options{title = APP_TITLE + " recording", size = {max(area[2], 1), max(area[3], 1)}, overlay = !headless, overlay_area = area, headless = headless}
 		if !host.host_open(&ro.host, &app.shared, o, record_overlay_build, app) { return false }
 		ro.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).record_overlay.decision = .Cancel }
 		ro.opened = true

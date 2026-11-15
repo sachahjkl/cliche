@@ -50,7 +50,7 @@ LICENCE_TOOL :: toolbox.Licence_Tool{
 	product  = cliche_licence.PRODUCT,
 	// (the development pair's private key, public on purpose: "cliche-dev-licence-test-seed-01!")
 	dev_seed = "Y2xpY2hlLWRldi1saWNlbmNlLXRlc3Qtc2VlZC0wMSE",
-	hint     = "Open cliche's settings, the General page, Licence: choose this file, or paste the key there.",
+	hint     = "Open Cliche's settings, the General page, Licence: choose this file, or paste the key there.",
 	paddle   = {name = "Cliche User License", description = "A personal, perpetual licence of cliche, the screenshot and screen-recording tool.", amounts = "supporter=1500", currency = "EUR"},
 }
 
@@ -82,7 +82,7 @@ main :: proc() {
 
 SITE_META :: tk_site.Meta{
 	url         = "https://cliche.froment.software/",
-	name        = "cliche",
+	name        = "Cliche",
 	repository  = "https://github.com/sachahjkl/cliche",
 	tagline     = "Fast screenshots and screen recordings, shared at once",
 	changes     = "CHANGELOG.md",
@@ -129,7 +129,7 @@ site_meta :: proc() -> tk_site.Meta {
 // until the client token, the price id and the Worker are there, the button says "Coming soon".
 
 SHOP :: tk_site.Shop{
-	name           = "cliche",
+	name           = "Cliche",
 	icon           = "../img/logo.png",
 	product_title  = "Cliche User License",
 	price          = "15&nbsp;&euro;",
@@ -141,13 +141,13 @@ SHOP :: tk_site.Shop{
 	worker         = "https://cliche-licence.sacha-42a.workers.dev",
 	thanks         = "https://cliche.froment.software/thanks/",
 	help           = "https://github.com/sachahjkl/cliche/issues/new",
-	register       = "Open cliche's settings (Ctrl+,), the <b>General</b> page, <b>Licence</b>: paste the key, or choose the file.",
+	register       = "Open Cliche's settings (Ctrl+,), the <b>General</b> page, <b>Licence</b>: paste the key, or choose the file.",
 	extension      = ".clichelicence",
 	repository     = "https://github.com/sachahjkl/cliche",
 	seller         = SELLER,
 	code_licence   = "MIT License",
 	platform       = "Linux, x64 (Wayland), and Windows 10 or 11, x64.",
-	network        = "cliche connects to the network only when you ask it to: the <em>Upload</em> action sends the picture to the host you chose, by default Litterbox, catbox.moe's host of temporary files, which deletes it after 72 hours. That host receives the picture under its own terms.",
+	network        = "Cliche connects to the network only when you ask it to: the <em>Upload</em> action sends the picture to the host you chose, by default Litterbox, catbox.moe's host of temporary files, which deletes it after 72 hours. That host receives the picture under its own terms.",
 	stylesheet     = "../style.css",
 	home           = "../",
 	updated        = "2026-11-13",

@@ -7,7 +7,7 @@ import licence "gt:licence"
 
 PRODUCT :: licence.Product{
 	name           = "cliche",
-	title          = "cliche",
+	title          = "Cliche",
 	version_tag    = "CLICHE1",
 	sign_context   = "cliche-licence-v1\n",
 	file_extension = ".clichelicence",

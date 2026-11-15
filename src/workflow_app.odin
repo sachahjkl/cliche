@@ -451,7 +451,7 @@ workflow_ask :: proc(app: ^App, run: ^Run, task: flowgraph.Task) {
 	key := questions_ask(&app.desk.questions, run.flow.id, task.node)
 	actions := []platform.Notification_Action{{QUESTION_YES, i18n.tr("Yes")}, {QUESTION_NO, i18n.tr("No")}}
 	// (Critical: a server does not take it away by itself, and the run waits for the person)
-	n := platform.Notification{title = q, body = i18n.tr("cliche waits for your answer."), actions = actions, urgency = .Critical}
+	n := platform.Notification{title = q, body = i18n.tr("Cliche waits for your answer."), actions = actions, urgency = .Critical}
 	shown := new_clone(Shown{app, key})
 	sent := platform.notify_async(app.anchor, n, proc(user: rawptr, id: platform.Notification_Id, ok: bool) {
 		s := (^Shown)(user)

@@ -162,7 +162,7 @@ call :: proc(e: ^Expander, name: string, params: []string) -> string {
 		return text
 	}
 	if name == "" { return fail(e, i18n.tr("an empty {} in the uploader")) }
-	return fail(e, fmt.tprintf(i18n.tr("the uploader uses {%s}, which cliche does not know"), name))
+	return fail(e, fmt.tprintf(i18n.tr("the uploader uses {%s}, which Cliche does not know"), name))
 }
 
 // Percent-encoding of everything but A-Z a-z 0-9 - _ . ~ (ShareX's URLHelpers.URLEncode).
@@ -206,7 +206,7 @@ json_select :: proc(text, path: string) -> (out: string, problem: string) {
 				v = obj[inner[1:len(inner) - 1]] or_else nil
 			} else {
 				index, ok := strconv.parse_int(inner, 10)
-				if !ok { return "", fmt.tprintf(i18n.tr("the JSON path %q has an index cliche does not read: [%s]"), path, inner) }
+				if !ok { return "", fmt.tprintf(i18n.tr("the JSON path %q has an index Cliche does not read: [%s]"), path, inner) }
 				arr, is_arr := v.(json.Array)
 				if !is_arr { return "", "" }
 				if index < 0 { index += len(arr) }
@@ -273,7 +273,7 @@ xml_select :: proc(text, xpath: string) -> (out: string, problem: string) {
 			if !strings.has_suffix(step, "]") { return "", fmt.tprintf(i18n.tr("the XPath %q has a [ with no ]"), xpath) }
 			ok: bool
 			position, ok = strconv.parse_int(step[open + 1:len(step) - 1], 10)
-			if !ok || position < 1 { return "", fmt.tprintf(i18n.tr("the XPath %q has a condition cliche does not read: %s"), xpath, step[open:]) }
+			if !ok || position < 1 { return "", fmt.tprintf(i18n.tr("the XPath %q has a condition Cliche does not read: %s"), xpath, step[open:]) }
 			name = step[:open]
 		}
 		next := make([dynamic]xml.Element_ID, context.temp_allocator)
@@ -342,7 +342,7 @@ xml_write_text :: proc(doc: ^xml.Document, el: xml.Element_ID, deep: bool, into:
 regex_select :: proc(text, pattern, group: string) -> (out: string, problem: string) {
 	plain, names := regex_names(pattern)
 	re, err := regex.create(plain, {.Unicode}, context.temp_allocator, context.temp_allocator)
-	if err != nil { return "", fmt.tprintf(i18n.tr("cliche cannot read the regular expression %q (no lookahead or lookbehind here)"), pattern) }
+	if err != nil { return "", fmt.tprintf(i18n.tr("Cliche cannot read the regular expression %q (no lookahead or lookbehind here)"), pattern) }
 	capture, matched := regex.match(re, text, context.temp_allocator, context.temp_allocator)
 	if !matched { return "", "" }
 	index := 0

@@ -3,7 +3,7 @@ package cliche
 // The Upload action: the picture sent to a host, the URL it answers given back. An uploader is described as ShareX's
 // custom uploaders are, in a .sxcu file (JSON; https://getsharex.com/docs/custom-uploader), so a file made for ShareX
 // works here as it is. The uploaders are the built-in ones (Litterbox; the URL shorteners is.gd and v.gd, which the
-// Shorten URL node uses) and the .sxcu files of <config dir>/cliche/uploaders. Everything here that reads a file or the
+// Shorten URL node uses) and the .sxcu files of <config dir>/FromentSoftware/Cliche/uploaders. Everything here that reads a file or the
 // network runs on the worker.
 
 import "core:encoding/json"
@@ -408,7 +408,7 @@ uploader_request :: proc(u: Uploader, file: []u8, file_name: string, input := ""
 	case .Binary:
 		r.body, content_type = file, mime_type(file_name)
 	case:
-		return {}, fmt.tprintf(i18n.tr("the uploader's body is %s: cliche sends a file as MultipartFormData or Binary"), UPLOADER_BODY_NAMES[u.body])
+		return {}, fmt.tprintf(i18n.tr("the uploader's body is %s: Cliche sends a file as MultipartFormData or Binary"), UPLOADER_BODY_NAMES[u.body])
 	}
 	if !has_type { append(&headers, http.Header{"Content-Type", content_type}) }
 	r.headers = headers[:]
@@ -499,9 +499,9 @@ shorten_url :: proc(u: Uploader, address: string, allocator := context.allocator
 
 UPLOADER_EXTENSION :: ".sxcu"
 
-// <config dir>/cliche/uploaders.
+// <config dir>/FromentSoftware/Cliche/uploaders.
 uploaders_folder :: proc(allocator := context.temp_allocator) -> string {
-	return path_join(platform.user_dir(.Config, APP_NAME, context.temp_allocator), "uploaders", allocator)
+	return path_join(platform.user_dir(.Config, APP_FOLDER, context.temp_allocator), "uploaders", allocator)
 }
 
 // The built-in uploader and shorteners, then those of the folder, sorted by file name. problems: one line per file that cannot be used

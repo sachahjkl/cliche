@@ -43,6 +43,7 @@ shots_run :: proc(folder: string, which: string) -> cli.Exit {
 	app.settings = prefs_read(&app.prefs)
 	app.flow = Flow_Idle{}
 	app.record = Record_Idle{}
+	app_keymap_start(app)
 	// (no file of the user's: the pictures show cliche's themes, and a licence kept in memory only)
 	prefs_page.themes_file_init(&app.themes_file, "", themes())
 	licence_init(app, memory = true)
@@ -53,6 +54,7 @@ shots_run :: proc(folder: string, which: string) -> cli.Exit {
 	defer {
 		ui.views_destroy(&app.views)
 		settings_free(&app.settings)
+		ui.keymap_destroy(&app.keymap)
 		config.prefs_destroy(&app.prefs)
 		delete(app.editors)
 		delete(app.wakes)

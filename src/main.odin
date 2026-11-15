@@ -58,6 +58,9 @@ main :: proc() {
 
 run :: proc(all_args: []string) -> cli.Exit {
 	when CLICHE_SHOTS != "" { return shots_run(CLICHE_SHOTS, len(all_args) > 0 ? all_args[0] : "") }
+	// (once, before the preferences are read: the folders of the old lowercase name become the vendor's; the log is not
+	// open yet, so a folder that cannot move is said on stderr)
+	if _, why := platform.user_dirs_move(APP_NAME, APP_FOLDER); why != "" { fmt.eprintfln("cliche: %s", why) }
 	prefs: config.Prefs
 	args, problems := prefs_open(&prefs, all_args)
 	defer config.prefs_destroy(&prefs)

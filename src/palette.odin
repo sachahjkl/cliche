@@ -19,7 +19,7 @@ EDITOR_PALETTE_CHOICES_FILE :: "editor_palette_choices.txt"
 // Where a palette's usage memory is ("" in a headless window: the screenshots, the tests, memory only).
 palette_choices_path :: proc(name: string, headless: bool, allocator := context.temp_allocator) -> string {
 	if headless { return "" }
-	return path_join(platform.user_dir(.State, APP_NAME, context.temp_allocator), name, allocator)
+	return path_join(platform.user_dir(.State, APP_FOLDER, context.temp_allocator), name, allocator)
 }
 
 // An item's id: an entry's or a workflow's number, as text (the usage memory's key: never a title).

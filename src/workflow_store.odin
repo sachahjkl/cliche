@@ -24,7 +24,7 @@ import i18n "gt:i18n"
 WORKFLOWS_FORMAT :: flowgraph.Store_Format{version = 1, list = "workflows", labels = "triggers"}
 
 workflows_file :: proc(allocator := context.temp_allocator) -> string {
-	return path_join(platform.user_dir(.Config, APP_NAME, context.temp_allocator), "workflows.json", allocator)
+	return path_join(platform.user_dir(.Config, APP_FOLDER, context.temp_allocator), "workflows.json", allocator)
 }
 
 // The workflows of the file, or the defaults (on the worker: it reads the disk). problem: why the file was not used

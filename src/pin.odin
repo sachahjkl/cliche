@@ -160,7 +160,7 @@ pin_open :: proc(app: ^App, shot: Shot) {
 	if shot.scale <= 0 { shot.scale = 1 }
 	p := new(Pin)
 	p^ = {app = app, shot = shot}
-	p.on_top = host.host_open(&p.host, &app.shared, {title = "cliche pin", overlay = true}, pin_build, p)
+	p.on_top = host.host_open(&p.host, &app.shared, {title = APP_TITLE + " pin", overlay = true}, pin_build, p)
 	if !p.on_top {
 		// (no layer shell here: a normal window, as large as the picture)
 		natural := pin_size(shot.size, shot.scale, 1)
@@ -253,7 +253,7 @@ pins_frame :: proc(app: ^App) {
 			pin_open(app, work.shot)
 			work.shot = {}
 		} else {
-			app_announce(app, .Bad, i18n.tr("The picture cannot be pinned"), i18n.tr("The file is not a picture cliche reads, or it is gone."))
+			app_announce(app, .Bad, i18n.tr("The picture cannot be pinned"), i18n.tr("The file is not a picture Cliche reads, or it is gone."))
 		}
 		pin_load_free(work)
 	}

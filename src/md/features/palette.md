@@ -40,6 +40,16 @@ by sources. Code: `src/palette.odin` (cliche's sources), `history_palette_feed` 
   toggle the palette (`ui.palette_toggle`), their tip the toolkit's command's.
 - **Two usage memories**: the main window's (`palette_choices.txt`) and the editors' (`editor_palette_choices.txt`), in
   the state folder. One memory per path, shared by the toolkit: the editors open together share theirs.
+- **Each command has an id** (`ui.Command.id`, the enum's name in lower case, written out): the memory's key and the
+  key of the person's keys and aliases (gui_toolkit's `src/md/features/keymap.md`). The memory was keyed by the English
+  label before: it was lost once, at the change. An id never follows a label's wording.
+- **One id in two tables is one command.** The editor shares `copy`, `pin`, `upload`, `select_all`, `shortcuts` and
+  `close` with the history, and `undo` and `redo` with the Workflows mode: the same act, so a key the person sets for
+  it acts in both. Two acts of one name take two ids (the history's Preview is `preview`, the Workflows mode's Run on
+  the last capture `workflow_preview`). `the_ids_the_editor_shares` lists the shared ids: a new one is a decision.
+- **One `ui.Keymap` for the process** (`App.keymap`): every window reads it (`app_standard_follow`), and every table's
+  ids are known at the start, before a window reads a key. Each window's `standard_watch` reads `keys.custom` and
+  `keys.aliases` into it and writes the person's changes back, whichever windows have closed since.
 
 ## Subtle points
 

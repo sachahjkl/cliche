@@ -104,13 +104,13 @@ GROUP_INKS := [?]struct { group: string, ink: Graph_Ink }{
 Workflow_Action :: enum u8 { Back, Add_Node, Add_Workflow, Undo, Redo, Fit, Preview }
 
 WORKFLOW_ACTIONS := [Workflow_Action]ui.Command{
-	.Back         = {label = i18n.later("Back to the history"), group = i18n.later("Workflows"), keys = {{.Escape, {}}}, icon = lucide.ARROW_LEFT, tags = {"close", "leave"}},
-	.Add_Node     = {label = i18n.later("Add a step…"), group = i18n.later("Workflows"), keys = {{.A, {.Shift}}}, icon = lucide.PLUS, tags = {"node", "new", "insert"}},
-	.Add_Workflow = {label = i18n.later("New workflow"), group = i18n.later("Workflows"), icon = lucide.FILE_PLUS, tags = {"create", "graph"}},
-	.Undo         = {label = i18n.later("Undo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl}}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
-	.Redo         = {label = i18n.later("Redo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again"}},
-	.Fit          = {label = i18n.later("Show the whole workflow"), group = i18n.later("Workflows"), keys = {{.F, {}}}, icon = lucide.ZOOM_OUT, tags = {"fit", "zoom", "all"}},
-	.Preview      = {label = i18n.later("Run on the last capture"), group = i18n.later("Workflows"), keys = {{.R, {.Ctrl}}}, icon = lucide.PLAY, tags = {"preview", "test", "try"}},
+	.Back         = {id = "workflow_back", label = i18n.later("Back to the history"), group = i18n.later("Workflows"), keys = {{.Escape, {}}}, icon = lucide.ARROW_LEFT, tags = {"close", "leave"}},
+	.Add_Node     = {id = "workflow_add_step", label = i18n.later("Add a step…"), group = i18n.later("Workflows"), keys = {{.A, {.Shift}}}, icon = lucide.PLUS, tags = {"node", "new", "insert"}},
+	.Add_Workflow = {id = "workflow_new", label = i18n.later("New workflow"), group = i18n.later("Workflows"), icon = lucide.FILE_PLUS, tags = {"create", "graph"}},
+	.Undo         = {id = "undo", label = i18n.later("Undo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl}}}, icon = lucide.UNDO_2, tags = {"back", "revert"}},
+	.Redo         = {id = "redo", label = i18n.later("Redo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again"}},
+	.Fit          = {id = "workflow_fit", label = i18n.later("Show the whole workflow"), group = i18n.later("Workflows"), keys = {{.F, {}}}, icon = lucide.ZOOM_OUT, tags = {"fit", "zoom", "all"}},
+	.Preview      = {id = "workflow_preview", label = i18n.later("Run on the last capture"), group = i18n.later("Workflows"), keys = {{.R, {.Ctrl}}}, icon = lucide.PLAY, tags = {"preview", "test", "try"}},
 }
 
 ////////////////////////////////

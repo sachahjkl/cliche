@@ -54,7 +54,7 @@ app_record_chosen :: proc(app: ^App, r: Rect) {
 	app_record_start(app)
 	if !record_running(app.record) || !app.settings.record_notify { return }
 	keys := app.tray_keys[record_format(app.record) == .Gif ? .Record_Gif : .Record]
-	body := keys != "" ? fmt.tprintf(i18n.tr("Press %s again, or click cliche's icon, to stop it."), keys) : i18n.tr("Click cliche's icon in the notification area to stop it.")
+	body := keys != "" ? fmt.tprintf(i18n.tr("Press %s again, or click Cliche's icon, to stop it."), keys) : i18n.tr("Click Cliche's icon in the notification area to stop it.")
 	app_announce(app, .Info, i18n.tr("Recording"), body)
 }
 
@@ -121,7 +121,7 @@ app_record_messages :: proc(app: ^App) {
 			record_overlay_redraw(app)
 		case Record_Tick:
 			app_record_step(app, Record_Progress{v.elapsed_ms})
-			if app.tray != nil { platform.tray_set_tooltip(app.tray, fmt.tprintf(i18n.tr("cliche: recording, %s"), record_clock_text(v.elapsed_ms))) }
+			if app.tray != nil { platform.tray_set_tooltip(app.tray, fmt.tprintf(i18n.tr("Cliche: recording, %s"), record_clock_text(v.elapsed_ms))) }
 			record_overlay_redraw(app)
 		case Record_Ended:
 			_, discarding := app.record.(Record_Discarding)
@@ -140,7 +140,7 @@ app_record_messages :: proc(app: ^App) {
 app_record_end :: proc(app: ^App) {
 	record_overlay_close(app)
 	app_tray_icon(app, recording = false)
-	if app.tray != nil { platform.tray_set_tooltip(app.tray, "cliche") }
+	if app.tray != nil { platform.tray_set_tooltip(app.tray, APP_TITLE) }
 	app_tray_menu(app)
 }
 

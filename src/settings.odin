@@ -1,6 +1,6 @@
 package cliche
 
-// The preferences: one registry (gt:config). The user's file is <config dir>/cliche/prefs; `--pref name=value`
+// The preferences: one registry (gt:config). The user's file is <config dir>/FromentSoftware/Cliche/prefs; `--pref name=value`
 // overrides a preference for one run. A preference is applied as soon as it changes (app_prefs_changed).
 
 import "core:os"
@@ -12,6 +12,11 @@ import "gt:platform"
 import prefs_page "gt:prefs_page"
 
 APP_NAME :: "cliche"
+// The name a person reads (windows, tray, menus, texts); APP_NAME stays the technical name (binary, slug, sockets).
+APP_TITLE :: "Cliche"
+// The program's folders, inside its vendor's (gui_toolkit src/md/features/folders.md). The runtime folder keeps
+// APP_NAME: an older copy and a newer one still meet there for --quit and the instance's messages.
+APP_FOLDER :: "FromentSoftware" + platform.USER_DIR_SEPARATOR + APP_TITLE
 
 DEFAULT_NAME_PATTERN :: "cliche-%Y%m%d-%H%M%S.png"
 
@@ -22,7 +27,7 @@ DEFAULT_NAME_PATTERN :: "cliche-%Y%m%d-%H%M%S.png"
 // gui_toolkit docs/settings.md).
 PREF_DEFS := [?]config.Def{
 	// General
-	{name = "general.tray_click", title = i18n.later("A click on the icon"), description = i18n.later("What a click on cliche's icon in the notification area does."), kind = .String, default = {s = "region"}, tags = {"tray", "icon", "notification area", "panel"}},
+	{name = "general.tray_click", title = i18n.later("A click on the icon"), description = i18n.later("What a click on Cliche's icon in the notification area does."), kind = .String, default = {s = "region"}, tags = {"tray", "icon", "notification area", "panel"}},
 
 	// Capture
 	{name = "capture.ocr_languages", title = i18n.later("Languages of the text read"), description = i18n.later("The languages of the text read in a region (cliche --ocr), as the engine names them, \"+\" between them (Tesseract: eng+fra). Empty: your languages."), kind = .String, default = {s = ""}, tags = {"ocr", "text", "language", "tesseract", "recognition"}},
@@ -106,12 +111,12 @@ Settings :: struct {
 }
 
 prefs_file :: proc(allocator := context.temp_allocator) -> string {
-	return path_join(platform.user_dir(.Config, APP_NAME, context.temp_allocator), "prefs", allocator)
+	return path_join(platform.user_dir(.Config, APP_FOLDER, context.temp_allocator), "prefs", allocator)
 }
 
 // The user's own themes, beside the preferences (prefs_page.Themes_File).
 themes_file :: proc(allocator := context.temp_allocator) -> string {
-	return path_join(platform.user_dir(.Config, APP_NAME, context.temp_allocator), "themes.txt", allocator)
+	return path_join(platform.user_dir(.Config, APP_FOLDER, context.temp_allocator), "themes.txt", allocator)
 }
 
 // The registry with the user's file and `args`' --pref read in. Returns the arguments that are not preferences.
@@ -131,7 +136,7 @@ STANDARD_SETS :: prefs_page.STANDARD_ALL
 // theme and its name (its windows draw their own title bar, as every program of the toolkit: window.system_title off).
 prefs_register :: proc(p: ^config.Prefs) {
 	d := prefs_page.STANDARD_DEFAULTS
-	d.theme, d.app_name = "cliche", APP_NAME
+	d.theme, d.app_name = "cliche", APP_TITLE
 	prefs_page.standard_register(p, STANDARD_SETS, d)
 	config.register(p, PREF_DEFS[:])
 	prefs_page.changelog_register(p)   // (the version last started: What's new after an update)

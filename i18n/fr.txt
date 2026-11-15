@@ -85,8 +85,8 @@ fr Scénarios
 en Settings
 fr Réglages
 
-en Quit cliche
-fr Quitter cliche
+en Quit Cliche
+fr Quitter Cliche
 
 en The preferences cannot be written
 fr Les réglages ne peuvent pas être écrits
@@ -304,8 +304,8 @@ fr Blanc
 en The picture cannot be read.
 fr L'image ne peut pas être lue.
 
-en cliche editor
-fr éditeur de cliche
+en Cliche editor
+fr Éditeur de Cliche
 
 en The picture cannot be read: it is not a PNG, JPEG, WebP or BMP file, or it is gone.
 fr L'image ne peut pas être lue : ce n'est pas un fichier PNG, JPEG, WebP ou BMP, ou il n'existe plus.
@@ -682,8 +682,8 @@ fr Envoyée à l'imprimante
 en Printing is not available here
 fr L'impression n'est pas disponible ici
 
-en The desktop has no print dialog cliche can use (Linux: the print portal).
-fr Le bureau n'a pas de fenêtre d'impression que cliche peut utiliser (Linux : le portail d'impression).
+en The desktop has no print dialog Cliche can use (Linux: the print portal).
+fr Le bureau n'a pas de fenêtre d'impression que Cliche peut utiliser (Linux : le portail d'impression).
 
 en Not printed
 fr Non imprimée
@@ -892,11 +892,11 @@ fr Masquer l'aperçu
 en Workflows: what happens after a capture
 fr Scénarios : ce qui se passe après une capture
 
-en Press %s, or click cliche's icon in the notification area: each capture comes here.
-fr Appuyez sur %s, ou cliquez sur l'icône de cliche dans la zone de notification : chaque capture arrive ici.
+en Press %s, or click Cliche's icon in the notification area: each capture comes here.
+fr Appuyez sur %s, ou cliquez sur l'icône de Cliche dans la zone de notification : chaque capture arrive ici.
 
-en Click cliche's icon in the notification area, or run cliche --region: each capture comes here.
-fr Cliquez sur l'icône de cliche dans la zone de notification, ou lancez cliche --region : chaque capture arrive ici.
+en Click Cliche's icon in the notification area, or run cliche --region: each capture comes here.
+fr Cliquez sur l'icône de Cliche dans la zone de notification, ou lancez cliche --region : chaque capture arrive ici.
 
 en Reading the history…
 fr Lecture de l'historique…
@@ -995,8 +995,8 @@ fr Le fichier reste.
 en The files stay.
 fr Les fichiers restent.
 
-en cliche's keys
-fr Les touches de cliche
+en Cliche's keys
+fr Les touches de Cliche
 
 en Captures
 fr Captures
@@ -1019,8 +1019,8 @@ fr Épinglée dans une fenêtre normale
 en This desktop lets no window stay above the others.
 fr Ce bureau ne laisse aucune fenêtre rester au-dessus des autres.
 
-en The file is not a picture cliche reads, or it is gone.
-fr Le fichier n'est pas une image que cliche lit, ou il n'existe plus.
+en The file is not a picture Cliche reads, or it is gone.
+fr Le fichier n'est pas une image que Cliche lit, ou il n'existe plus.
 
 en Close the pinned picture
 fr Fermer l'image épinglée
@@ -1055,17 +1055,17 @@ fr %s Mo
 en %s GB
 fr %s Go
 
-en Press %s again, or click cliche's icon, to stop it.
-fr Appuyez de nouveau sur %s, ou cliquez sur l'icône de cliche, pour l'arrêter.
+en Press %s again, or click Cliche's icon, to stop it.
+fr Appuyez de nouveau sur %s, ou cliquez sur l'icône de Cliche, pour l'arrêter.
 
-en Click cliche's icon in the notification area to stop it.
-fr Cliquez sur l'icône de cliche dans la zone de notification pour l'arrêter.
+en Click Cliche's icon in the notification area to stop it.
+fr Cliquez sur l'icône de Cliche dans la zone de notification pour l'arrêter.
 
 en Recording
 fr Enregistrement
 
-en cliche: recording, %s
-fr cliche : enregistrement, %s
+en Cliche: recording, %s
+fr Cliche : enregistrement, %s
 
 en GIF saved
 fr GIF sauvegardé
@@ -1119,8 +1119,8 @@ fr ce système n'a pas d'encodeur WebP (installez libwebp)
 en A click on the icon
 fr Un clic sur l'icône
 
-en What a click on cliche's icon in the notification area does.
-fr Ce que fait un clic sur l'icône de cliche dans la zone de notification.
+en What a click on Cliche's icon in the notification area does.
+fr Ce que fait un clic sur l'icône de Cliche dans la zone de notification.
 
 en Languages of the text read
 fr Langues du texte lu
@@ -1287,6 +1287,9 @@ fr Mises à jour
 en Rendering
 fr Rendu
 
+en Keys
+fr Touches
+
 en Capture the screen under the pointer
 fr Capturer l'écran sous le pointeur
 
@@ -1332,8 +1335,8 @@ fr Moyenne
 en Large
 fr Grande
 
-en This desktop draws no title bar for cliche's windows (GNOME): cliche keeps its own.
-fr Ce bureau ne dessine pas de barre de titre pour les fenêtres de cliche (GNOME) : cliche garde la sienne.
+en This desktop draws no title bar for Cliche's windows (GNOME): Cliche keeps its own.
+fr Ce bureau ne dessine pas de barre de titre pour les fenêtres de Cliche (GNOME) : Cliche garde la sienne.
 
 en For example: %s
 fr Par exemple : %s
@@ -1344,11 +1347,11 @@ fr Actuellement : %s
 en Choose a folder…
 fr Choisir un dossier…
 
-en The desktop keeps cliche's shortcuts while cliche runs. It may ask you to confirm them, and you may change the keys in its own settings.
-fr Le bureau garde les raccourcis de cliche tant que cliche tourne. Il peut vous demander de les confirmer, et vous pouvez changer les touches dans ses propres réglages.
+en The desktop keeps Cliche's shortcuts while Cliche runs. It may ask you to confirm them, and you may change the keys in its own settings.
+fr Le bureau garde les raccourcis de Cliche tant que Cliche tourne. Il peut vous demander de les confirmer, et vous pouvez changer les touches dans ses propres réglages.
 
-en Windows gives these keys to cliche in every program. Keys that another program holds cannot be used.
-fr Windows donne ces touches à cliche dans tous les programmes. Les touches qu'un autre programme tient ne peuvent pas servir.
+en Windows gives these keys to Cliche in every program. Keys that another program holds cannot be used.
+fr Windows donne ces touches à Cliche dans tous les programmes. Les touches qu'un autre programme tient ne peuvent pas servir.
 
 en This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = CTRL, Print, exec, cliche --region; sway: bindsym Ctrl+Print exec cliche --region):
 fr Ce bureau ne donne pas de raccourcis propres aux programmes. Associez des touches à ces commandes dans ses réglages (Hyprland : bind = CTRL, Print, exec, cliche --region ; sway : bindsym Ctrl+Print exec cliche --region) :
@@ -1425,8 +1428,8 @@ fr le corps de l'hébergeur est %s : il envoie un fichier, pas une adresse
 en the uploader has no FileFormName: the form field of the file
 fr l'hébergeur n'a pas de FileFormName : le champ de formulaire du fichier
 
-en the uploader's body is %s: cliche sends a file as MultipartFormData or Binary
-fr le corps de l'hébergeur est %s : cliche envoie un fichier en MultipartFormData ou en Binary
+en the uploader's body is %s: Cliche sends a file as MultipartFormData or Binary
+fr le corps de l'hébergeur est %s : Cliche envoie un fichier en MultipartFormData ou en Binary
 
 en %s answered: %s
 fr %s a répondu : %s
@@ -1461,8 +1464,8 @@ fr {random} a besoin de valeurs : {random:a|b}
 en an empty {} in the uploader
 fr un {} vide dans l'hébergeur
 
-en the uploader uses {%s}, which cliche does not know
-fr l'hébergeur utilise {%s}, que cliche ne connaît pas
+en the uploader uses {%s}, which Cliche does not know
+fr l'hébergeur utilise {%s}, que Cliche ne connaît pas
 
 en the host's answer is not JSON
 fr la réponse de l'hébergeur n'est pas du JSON
@@ -1470,8 +1473,8 @@ fr la réponse de l'hébergeur n'est pas du JSON
 en the JSON path %q has a [ with no ]
 fr le chemin JSON %q a un [ sans ]
 
-en the JSON path %q has an index cliche does not read: [%s]
-fr le chemin JSON %q a un index que cliche ne lit pas : [%s]
+en the JSON path %q has an index Cliche does not read: [%s]
+fr le chemin JSON %q a un index que Cliche ne lit pas : [%s]
 
 en the JSON path %q is a list or an object, not a text
 fr le chemin JSON %q est une liste ou un objet, pas un texte
@@ -1485,11 +1488,11 @@ fr le XPath %q a une étape vide
 en the XPath %q has a [ with no ]
 fr le XPath %q a un [ sans ]
 
-en the XPath %q has a condition cliche does not read: %s
-fr le XPath %q a une condition que cliche ne lit pas : %s
+en the XPath %q has a condition Cliche does not read: %s
+fr le XPath %q a une condition que Cliche ne lit pas : %s
 
-en cliche cannot read the regular expression %q (no lookahead or lookbehind here)
-fr cliche ne peut pas lire l'expression régulière %q (pas de lookahead ni de lookbehind ici)
+en Cliche cannot read the regular expression %q (no lookahead or lookbehind here)
+fr Cliche ne peut pas lire l'expression régulière %q (pas de lookahead ni de lookbehind ici)
 
 en the regular expression %q has no group named %q
 fr l'expression régulière %q n'a pas de groupe nommé %q
@@ -1581,8 +1584,8 @@ fr Oui
 en No
 fr Non
 
-en cliche waits for your answer.
-fr cliche attend votre réponse.
+en Cliche waits for your answer.
+fr Cliche attend votre réponse.
 
 en the question cannot be shown: no notification
 fr la question ne peut pas être posée : aucune notification

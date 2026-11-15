@@ -657,7 +657,7 @@ history_offset_minutes :: proc() -> int {
 // The history's file: what cliche keeps of its own past belongs to the state folder, not to the preferences. It reads
 // the environment: the worker calls it.
 history_file :: proc(allocator := context.allocator) -> string {
-	dir := platform.user_dir(.State, APP_NAME, context.temp_allocator)
+	dir := platform.user_dir(.State, APP_FOLDER, context.temp_allocator)
 	if dir == "" { return "" }
 	return path_join(dir, "history", allocator)
 }
