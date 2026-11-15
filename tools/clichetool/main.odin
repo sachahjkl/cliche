@@ -36,8 +36,8 @@ project :: proc() -> toolbox.Project {
 		name = "cliche", repository = "https://github.com/sachahjkl/cliche", changelog = "CHANGELOG.md",
 		version_file = "src/main.odin", version_line = "APP_VERSION :: ", program = PROGRAM,
 		linux_defines = LINUX_DEFINES[:],
-		// (a release has only the icons cliche names: lucide.<NAME> constants everywhere)
-		features = {.Lucide_Subset},
+		// (a release has only the icons cliche names: lucide.<NAME> constants everywhere; WebP on Windows: its export)
+		features = {.Lucide_Subset, .Webp},
 		// (what Windows shows of it: src/integration.odin's identity says the same)
 		title = "cliche", description = "Fast screenshots and screen recordings, shared at once.",
 		publisher = "Froment Software", copyright = "Copyright (c) 2026 sachahjkl",
