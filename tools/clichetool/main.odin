@@ -134,9 +134,11 @@ SHOP :: tk_site.Shop{
 	product_title  = "Cliche User License",
 	price          = "15&nbsp;&euro;",
 	price_note     = "",
-	environment    = "sandbox",
+	environment    = "production",
+	client_token   = "live_94fe083b50757639ed26ec5ca77",   // Paddle's client-side token (public: it is in the page)
 	edition        = "supporter",
-	price_id       = "",
+	price_id       = "pri_01m7fyasmyjra4t0qsx91zpaxx",
+	worker         = "https://cliche-licence.sacha-42a.workers.dev",
 	thanks         = "https://cliche.froment.software/thanks/",
 	help           = "https://github.com/sachahjkl/cliche/issues/new",
 	register       = "Open cliche's settings (Ctrl+,), the <b>General</b> page, <b>Licence</b>: paste the key, or choose the file.",
