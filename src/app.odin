@@ -318,7 +318,7 @@ app_windows_close :: proc(app: ^App) {
 // (prefs_page.standard_watch). The renderer and the fonts are every window's: each watch gives them the same values.
 app_standard_follow :: proc(app: ^App, h: ^host.Host) {
 	w := new(prefs_page.Standard_Watch)
-	prefs_page.standard_watch(w, &app.prefs, &h.state, {renderer = &app.shared.r, fonts = &app.shared.fonts, partial_redraw = &h.partial_redraw})
+	prefs_page.standard_watch(w, &app.prefs, &h.state, {renderer = &app.shared.r, fonts = &app.shared.fonts, partial_redraw = &h.partial_redraw, pacer = &h.pacer})
 	append(&app.standards, w)
 }
 
