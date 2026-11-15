@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.7.1] - 2026-11-15
+
+### Fixed
+- **Two copies open at once no longer hide each other's crash**: when two copies of Cliché ran at the same time, a crash or a forced end of one could go unreported, and its report could be hidden by the clean end of the other. Each copy now keeps its own trace, and the next start shows what it did not see.
+
 ## [0.7.0] - 2026-11-14
 
 ### Changed
@@ -206,6 +211,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.7.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.7.1
 [0.7.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.7.0
 [0.6.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.6.0
 [0.5.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.5.0
