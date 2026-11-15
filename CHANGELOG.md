@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.10.0] - 2026-11-15 14:24
+
+### Added
+- **What's new in the settings.** The settings have a What's new page: each version on a timeline with its day and time, its changes under pills of their kind. After an update, cliche says what changed and opens it on request.
+
 ## [0.9.0] - 2026-11-15 12:50
 
 ### Added
@@ -225,6 +230,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.10.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.10.0
 [0.9.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.9.0
 [0.8.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.8.0
 [0.7.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.7.1
