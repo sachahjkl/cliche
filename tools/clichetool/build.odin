@@ -39,6 +39,7 @@ run_check :: proc(args: []string) -> int {
 	if !toolbox.run(toolbox.odin_command(p, "check"), {echo = true}) { return toolbox.EXIT_FAILED }
 	when ODIN_OS != .Windows {
 		if !toolbox.check_windows(p) { return toolbox.EXIT_FAILED }   // (the Linux code is checked on Linux)
+		if !toolbox.check_darwin(p) { return toolbox.EXIT_FAILED }
 	}
 	if !toolbox.run(toolbox.odin_command(p, "check", "tools/clichetool"), {echo = true}) { return toolbox.EXIT_FAILED }
 	if !toolbox.check_scopes("src") { return toolbox.EXIT_FAILED }
