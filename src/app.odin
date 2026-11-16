@@ -261,7 +261,7 @@ app_prewarm :: proc(app: ^App) {
 @(private = "file")
 app_wait :: proc(app: ^App) {
 	shown := make([dynamic]^host.Host, 0, 4, context.temp_allocator)
-	if app.overlay.visible { append(&shown, &app.overlay.host) }
+	if app.overlay.visible { append(&shown, app.overlay.host) }
 	if app.history_window.visible { append(&shown, &app.history_window.host) }
 	for ed in app.editors { if ed.visible { append(&shown, &ed.host) } }
 	if app.record_overlay.visible { append(&shown, &app.record_overlay.host) }
@@ -275,7 +275,7 @@ app_wait :: proc(app: ^App) {
 app_frames :: proc(app: ^App) {
 	if app.overlay.visible {
 		overlay_prepare(app)
-		host.host_frame(&app.overlay.host)
+		host.host_frame(app.overlay.host)
 		overlay_after_frame(app)
 	}
 	if app.history_window.visible {
@@ -317,7 +317,7 @@ app_windows_close :: proc(app: ^App) {
 	history_window_free(app)
 	for ed in app.editors { editor_destroy(ed) }
 	hosts := make([dynamic]^host.Host, 0, 3 + len(app.editors), context.temp_allocator)
-	if app.overlay.opened { append(&hosts, &app.overlay.host) }
+	if app.overlay.opened { append(&hosts, app.overlay.host) }
 	if app.history_window.opened { append(&hosts, &app.history_window.host) }
 	for ed in app.editors { append(&hosts, &ed.host) }
 	if app.record_overlay.opened { append(&hosts, &app.record_overlay.host) }

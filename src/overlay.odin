@@ -45,7 +45,11 @@ HANDLE_PX         :: 7     // the side of a grip's square on the rectangle chose
 Overlay_Decision :: enum u8 { None, Confirm, Cancel, Pick }
 
 Overlay :: struct {
-	host:     host.Host,
+	// two places for its window: on another output, a Wayland layer surface cannot move, so a new one opens in the other
+	// place before the old one closes (the renderer passes to it when the old one was the first window: the toolkit's
+	// first-window.md). A Host stays where it is while it is open
+	hosts:    [2]host.Host,
+	host:     ^host.Host,       // the one in use (nil before the first opening)
 	opened:   bool,
 	visible:  bool,
 	tex:      render.Texture,   // the frozen desktop (RGBA), uploaded at each show
@@ -75,33 +79,25 @@ overlay_show :: proc(app: ^App, picker := false) -> bool {
 	if !app.has_desktop { return false }
 	out := overlay_pointer_output(app)
 	// (the pointer is on another output: the overlay moves there where the system lets a window move (Windows, X11);
-	// a Wayland layer surface stays on the output it was made for, so another surface is made, unless it is the
-	// renderer's own window, which stays: started from the tray, the overlay is the first window)
+	// a Wayland layer surface stays on the output it was made for: a new one opens there, then the old one closes)
 	if o.opened && o.layer && o.out != out {
 		if platform.overlay_move(o.host.win, {int(out.x), int(out.y), int(out.w), int(out.h)}) {
 			o.out = out
-		} else if app.shared.main != &o.host {
-			app_wake_remove(app, o.host.win)
-			app_host_close(app, &o.host)
-			o.opened, o.visible = false, false
+		} else {
+			old := o.host
+			o.host = old == &o.hosts[0] ? &o.hosts[1] : &o.hosts[0]
+			if overlay_open(app, out) {
+				app_wake_remove(app, old.win)
+				app_host_close(app, old)
+				o.visible = false
+			} else {
+				o.host, o.layer = old, true   // (no new window: the overlay stays on its output)
+			}
 		}
 	}
 	if !o.opened {
-		area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}
-		layer := host.Open_Options{title = APP_TITLE + " region", size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area, overlay_keyboard = .Exclusive}
-		o.layer = out.w > 0 && host.host_open(&o.host, &app.shared, layer, overlay_build, app)
-		if !o.layer && !host.host_open(&o.host, &app.shared, {title = APP_TITLE + " region", size = {1280, 720}}, overlay_build, app) {
-			log.error("the region's window cannot open")
-			return false
-		}
-		if o.layer { o.out = out }
-		o.opened = true
-		app_standard_follow(app, &o.host)
-		views_window(app, &o.host)
-		o.host.input = overlay_input
-		o.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).overlay.decision = .Cancel }
-		o.host.after_input = 2
-		app_wake_add(app, o.host.win)
+		if o.host == nil { o.host = &o.hosts[0] }
+		if !overlay_open(app, out) { return false }
 	}
 	f := app.desktop.frame
 	r := &app.shared.r
@@ -127,7 +123,7 @@ overlay_show :: proc(app: ^App, picker := false) -> bool {
 	defer delete(token)
 	if !o.layer { platform.set_fullscreen(o.host.win, true) }
 	if !o.visible {
-		host.host_show(&o.host)
+		host.host_show(o.host)
 		o.visible = true
 	}
 	if !o.layer { platform.raise_window_token(o.host.win, token) }   // (a layer surface has the keyboard from its showing)
@@ -135,10 +131,33 @@ overlay_show :: proc(app: ^App, picker := false) -> bool {
 	return true
 }
 
+// Opens the overlay's window in its place `o.host`, over `out` (a layer surface; else a window the compositor places).
+// False: no window could open, and the place is left closed.
+@(private = "file")
+overlay_open :: proc(app: ^App, out: Rect) -> bool {
+	o := &app.overlay
+	area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}
+	layer := host.Open_Options{title = APP_TITLE + " region", size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area, overlay_keyboard = .Exclusive}
+	o.layer = out.w > 0 && host.host_open(o.host, &app.shared, layer, overlay_build, app)
+	if !o.layer && !host.host_open(o.host, &app.shared, {title = APP_TITLE + " region", size = {1280, 720}}, overlay_build, app) {
+		log.error("the region's window cannot open")
+		return false
+	}
+	if o.layer { o.out = out }
+	o.opened = true
+	app_standard_follow(app, o.host)
+	views_window(app, o.host)
+	o.host.input = overlay_input
+	o.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).overlay.decision = .Cancel }
+	o.host.after_input = 2
+	app_wake_add(app, o.host.win)
+	return true
+}
+
 overlay_hide :: proc(app: ^App) {
 	o := &app.overlay
 	if !o.visible { return }
-	host.host_hide(&o.host)
+	host.host_hide(o.host)
 	o.visible = false
 	o.decision = .None
 }
@@ -209,7 +228,7 @@ overlay_output :: proc(app: ^App) -> Rect {
 
 @(private = "file")
 overlay_scale :: proc(o: ^Overlay) -> f32 {
-	s := o.host.win != nil ? o.host.win.dpi_scale : 1
+	s := o.host != nil && o.host.win != nil ? o.host.win.dpi_scale : 1
 	return s > 0 ? s : 1
 }
 

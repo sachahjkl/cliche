@@ -17,9 +17,13 @@ So a region is taken on one output. To take one on another output, the person pu
 At each trigger, if the pointer is on another output than the overlay's, the overlay goes there:
 
 - **Windows, X11:** the window moves (`platform.overlay_move`), at the new output's size and scale.
-- **Wayland:** a layer surface cannot move. The overlay is closed and another is made over the new output.
+- **Wayland:** a layer surface cannot move. A new overlay opens over the new output, then the old one closes.
 
 **The subtle point:** started from the tray, the overlay is the program's first window, the one that holds the
-renderer, and that window cannot be closed while the program runs. Before `overlay_move`, the overlay of a program
-started from the tray stayed on the output of its first trigger, the primary in practice. On Windows and X11 it moves
-now. On Wayland the first window still stays on its output (see `ROADMAP.md`).
+renderer. Closing it first would end the renderer, and the frozen picture's texture with it. So the order is fixed:
+open the new one, then close the old one. The toolkit then hands the renderer to the new one (`host_close` of the
+first window: the toolkit's `first-window.md`).
+
+A `Host` stays where it is while it is open, so the overlay has two places for its window (`Overlay.hosts`) and a
+pointer to the one in use (`Overlay.host`): the new window opens in the free place. Refused: a heap `Host` per
+opening, which the program would have to free on every path that closes it.
