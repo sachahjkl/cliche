@@ -31,7 +31,8 @@ under, once per picture. ShareX's editor has the same split.
   disc, or a label and its slider, go to the next line together, never split. A group goes to the next line whole; a
   group wider than a line wraps its properties, each whole. Bold is a tool (`on` while the text is bold).
 - **Cancel and Done never wrap away from each other.** They are the pinned group at the end of the bar under. In a
-  narrow window the actions wrap before them.
+  narrow window the actions wrap before them. Each is the tool of its command (Close, Done) with its own short words:
+  the palette's Shift+Enter on Close or Done comes to it, and its tip is the command's.
 - **The bar under has no separate zoom bar.** The zoom is the first item of the bar under, as in ShareX.
 - **Both bars are centred** (`align = .Center`; the toolkit's default is the start). The picture is centred in the
   editor, and the bars that frame it are centred with it; each wrapped line is centred too.

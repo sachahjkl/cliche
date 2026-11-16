@@ -15,6 +15,7 @@ package cliche
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import config "gt:config"
 import "gt:draw"
 import flowgraph "gt:flowgraph"
 import lucide "gt:lucide"
@@ -101,7 +102,13 @@ GROUP_INKS := [?]struct { group: string, ink: Graph_Ink }{
 }
 
 // The mode's commands (the palette of the window, the sheet of keys).
-Workflow_Action :: enum u8 { Back, Add_Node, Add_Workflow, Undo, Redo, Fit, Preview }
+Workflow_Action :: enum u8 { Back, Add_Node, Add_Workflow, Undo, Redo, Fit, Preview, Rename }
+
+// What Rename takes in the palette: the workflow's new name, typed in its form (gui_toolkit's commands with arguments).
+// The list's Rename button and a double click type it in the list instead: the same command, its value from the field.
+WORKFLOW_RENAME_ARGUMENTS := [?]config.Def{
+	{name = "name", title = i18n.later("Name"), description = i18n.later("The workflow's new name."), kind = .String, default = {s = ""}},
+}
 
 WORKFLOW_ACTIONS := [Workflow_Action]ui.Command{
 	.Back         = {id = "workflow_back", label = i18n.later("Back to the history"), group = i18n.later("Workflows"), keys = {{.Escape, {}}}, icon = lucide.ARROW_LEFT, tags = {"close", "leave"}},
@@ -111,6 +118,7 @@ WORKFLOW_ACTIONS := [Workflow_Action]ui.Command{
 	.Redo         = {id = "redo", label = i18n.later("Redo"), group = i18n.later("Workflows"), keys = {{.Z, {.Ctrl, .Shift}}, {.Y, {.Ctrl}}}, icon = lucide.REDO_2, tags = {"again"}},
 	.Fit          = {id = "workflow_fit", label = i18n.later("Show the whole workflow"), group = i18n.later("Workflows"), keys = {{.F, {}}}, icon = lucide.ZOOM_OUT, tags = {"fit", "zoom", "all"}},
 	.Preview      = {id = "workflow_preview", label = i18n.later("Run on the last capture"), group = i18n.later("Workflows"), keys = {{.R, {.Ctrl}}}, icon = lucide.PLAY, tags = {"preview", "test", "try"}},
+	.Rename       = {id = "workflow_rename", label = i18n.later("Rename the workflow"), group = i18n.later("Workflows"), icon = lucide.PENCIL, tags = {"name", "title"}, arguments = WORKFLOW_RENAME_ARGUMENTS[:]},
 }
 
 ////////////////////////////////
@@ -285,10 +293,15 @@ workflow_keys :: proc(app: ^App) {
 	}
 }
 
-workflow_action :: proc(app: ^App, a: Workflow_Action) {
+// `arguments`: a command's values from the palette's form, in its arguments' order (nil: from a key or a button).
+workflow_action :: proc(app: ^App, a: Workflow_Action, arguments: []string = nil) {
 	m := &app.history_window.workflow_mode
 	wf := workflows_find(&app.workflows, m.shown)
 	switch a {
+	case .Rename:
+		if wf == nil { return }
+		// (the name from the palette's form; from the list's button, typed in the list)
+		if len(arguments) > 0 { workflow_rename(app, wf, arguments[0]) } else { workflow_rename_start(app, wf.id) }
 	case .Back:         workflow_mode_leave(app)
 	case .Add_Node:     workflow_add_open(app, workflow_view_center(m), nil)
 	case .Add_Workflow: workflow_new(app)
@@ -310,6 +323,7 @@ workflow_build :: proc(app: ^App, em: f32) {
 		workflows_save(app)
 		m.inspector.last_change = {}   // (the next change of the same parameter is a step of its own)
 	}
+	workflow_add_take(app)
 	workflow_bar(app, em)
 	ui.hline(ui.fill())
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
@@ -323,13 +337,25 @@ workflow_build :: proc(app: ^App, em: f32) {
 	workflow_dialogs(app, em)
 }
 
+// The add palette given what it lists now, and the kind chosen in it taken: at each build of the mode, before its
+// content, so the node added shows in this frame.
+@(private = "file")
+workflow_add_take :: proc(app: ^App) {
+	m := &app.history_window.workflow_mode
+	workflow_add_feed(app)
+	// (the kind chosen: its index, the catalog's order; its id is the kind's name)
+	if c, ok := ui.palette_chosen(&m.add); ok && c.source == &m.add_flow.source && c.index >= 0 && c.index < len(CATALOG.nodes) {
+		workflow_add_chosen(app, c.index)
+	}
+}
+
 @(private = "file")
 workflow_bar :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.6)), axis = .X, cross = .Center})
 	if ui.row(id = "###workflow_bar") {
 		ui.space(ui.SPACE_2)
-		if workflow_icon_button("back", lucide.ARROW_LEFT, i18n.tr("Back to the history (Escape)"), em) { workflow_mode_leave(app) }
+		if workflow_icon_button("back", lucide.ARROW_LEFT, i18n.tr("Back to the history (Escape)"), em, act = .Back) { workflow_action(app, .Back) }
 		ui.space(ui.CONTROL_GAP)
 		ui.next({width = ui.text_size(), height = ui.pct(1), font_size = math.round(em * 1.05), text_pad = 0})
 		ui.label(fmt.tprintf("%s###workflow_title", i18n.tr("Workflows")))
@@ -606,17 +632,11 @@ workflow_undo :: proc(app: ^App, back: bool) {
 ////////////////////////////////
 // Dialogs
 
-// The answers of the mode's views (the add palette's kind, the question before a workflow is deleted), and the node's
-// menu.
+// The answers of the mode's views (the question before a workflow is deleted), and the node's menu. (The add palette's
+// kind is taken before the content: workflow_add_take.)
 @(private = "file")
 workflow_dialogs :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
-	// (the add palette's source given what it lists now, at each build of the mode)
-	workflow_add_feed(app)
-	// (the kind chosen: its index, the catalog's order; its id is the kind's name)
-	if c, ok := ui.palette_chosen(&m.add); ok && c.source == &m.add_flow.source && c.index >= 0 && c.index < len(CATALOG.nodes) {
-		workflow_add_chosen(app, c.index)
-	}
 	if ui.palette_is_open(&m.add) && workflows_find(&app.workflows, m.shown) == nil { ui.palette_close(&m.add) }
 	if ui.menu(WORKFLOW_NODE_MENU_ID) {
 		wf := workflows_find(&app.workflows, m.shown)
@@ -696,6 +716,17 @@ workflow_defaults_back :: proc(app: ^App) {
 	workflows_changed(app, now = true)
 }
 
+// Workflow `wf` takes the name `typed`, its spaces trimmed. True when the name changed (an empty name, or the same,
+// leaves it).
+workflow_rename :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, typed: string) -> bool {
+	name := strings.trim_space(typed)
+	if name == "" || name == wf.name { return false }
+	delete(wf.name)
+	wf.name = strings.clone(name)
+	workflows_changed(app, now = true)
+	return true
+}
+
 workflow_rename_start :: proc(app: ^App, id: u64) {
 	m := &app.history_window.workflow_mode
 	wf := workflows_find(&app.workflows, id)
@@ -705,8 +736,11 @@ workflow_rename_start :: proc(app: ^App, id: u64) {
 	ui.line_edit_select_all(&m.rename)
 }
 
+// `act`: the command it runs, its act name stated (the palette's Shift+Enter on it comes here); nil: none of the table.
 @(private = "file")
-workflow_icon_button :: proc(id, glyph, tip: string, em: f32, enabled := true) -> bool {
+workflow_icon_button :: proc(id, glyph, tip: string, em: f32, enabled := true, act: Maybe(Workflow_Action) = nil) -> bool {
 	ui.next({width = ui.px(math.round(em * 2.1)), height = ui.px(math.round(em * 2.1)), font_size = em * 1.15})
-	return ui.button(fmt.tprintf("wf_%s", id), icon = glyph, o = {tip = tip, disabled = !enabled}).clicked && enabled
+	sig := ui.button(fmt.tprintf("wf_%s", id), icon = glyph, o = {tip = tip, disabled = !enabled})
+	if a, ok := act.?; ok { ui.act_command(sig.box, WORKFLOW_ACTIONS[a].id) }
+	return sig.clicked && enabled
 }

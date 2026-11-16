@@ -2214,6 +2214,9 @@ fr %s ne peut pas être lu : les scénarios par défaut sont à sa place.
 en %s cannot be read (%s): it is kept as %s, and the default workflows are in its place.
 fr %s ne peut pas être lu (%s) : il est gardé sous le nom %s, et les scénarios par défaut sont à sa place.
 
+en The workflow's new name.
+fr Le nouveau nom du scénario.
+
 en Back to the history
 fr Retour à l'historique
 
@@ -2225,6 +2228,9 @@ fr Afficher tout le scénario
 
 en Run on the last capture
 fr Exécuter sur la dernière capture
+
+en Rename the workflow
+fr Renommer le scénario
 
 en The preview ran on the newest capture of the history: nothing was copied, saved or sent.
 fr L'aperçu s'est exécuté sur la capture la plus récente de l'historique : rien n'a été copié, enregistré ni envoyé.

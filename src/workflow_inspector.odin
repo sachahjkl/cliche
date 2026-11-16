@@ -68,8 +68,8 @@ workflow_list_body :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.78), text_pad = 0})
 			ui.label(fmt.tprintf("%s###wf_list_title", i18n.tr("WORKFLOWS")))
 		}
-		if list_icon_button("new", lucide.PLUS, i18n.tr("New workflow"), em, true) { workflow_new(app) }
-		if list_icon_button("rename", lucide.PENCIL, i18n.tr("Rename (or double-click its name)"), em, m.shown != 0) { workflow_rename_start(app, m.shown) }
+		if list_icon_button("new", lucide.PLUS, i18n.tr("New workflow"), em, true, .Add_Workflow) { workflow_action(app, .Add_Workflow) }
+		if list_icon_button("rename", lucide.PENCIL, i18n.tr("Rename (or double-click its name)"), em, m.shown != 0, .Rename) { workflow_action(app, .Rename) }
 		if list_icon_button("duplicate", lucide.COPY, i18n.tr("Duplicate"), em, m.shown != 0) { workflow_duplicate(app, m.shown) }
 		if list_icon_button("delete", lucide.TRASH_2, i18n.tr("Delete…"), em, m.shown != 0) { workflow_delete_ask(app, m.shown) }
 		ui.space(ui.SPACE_2)
@@ -115,12 +115,7 @@ workflow_list_item_body :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) 
 		switch {
 		case r.committed || (!r.focused && !m.rename_focus && r.box != nil && ui.focus_key() != r.box.key):
 			// (Enter, or the keyboard gone elsewhere: the name typed is kept)
-			name := strings.trim_space(ui.line_edit_string(&m.rename))
-			if name != "" && name != wf.name {
-				delete(wf.name)
-				wf.name = strings.clone(name)
-				workflows_changed(app, now = true)
-			}
+			workflow_rename(app, wf, ui.line_edit_string(&m.rename))
 			m.renaming = 0
 		case r.cancelled:
 			m.renaming = 0
@@ -152,10 +147,13 @@ workflow_duplicate :: proc(app: ^App, id: u64) {
 	workflows_changed(app, now = true)
 }
 
+// `act`: the command it runs, its act name stated (the palette's Shift+Enter on it comes here); nil: none of the table.
 @(private = "file")
-list_icon_button :: proc(id, glyph, tip: string, em: f32, enabled: bool) -> bool {
+list_icon_button :: proc(id, glyph, tip: string, em: f32, enabled: bool, act: Maybe(Workflow_Action) = nil) -> bool {
 	ui.next({width = ui.px(math.round(em * 1.9)), height = ui.px(math.round(em * 1.9)), font_size = em * 1.05})
-	return ui.button(fmt.tprintf("wf_list_%s", id), icon = glyph, o = {tip = tip, disabled = !enabled}).clicked && enabled
+	sig := ui.button(fmt.tprintf("wf_list_%s", id), icon = glyph, o = {tip = tip, disabled = !enabled})
+	if a, ok := act.?; ok { ui.act_command(sig.box, WORKFLOW_ACTIONS[a].id) }
+	return sig.clicked && enabled
 }
 
 ////////////////////////////////

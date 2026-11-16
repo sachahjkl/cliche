@@ -1493,6 +1493,11 @@ editor_build :: proc(h: ^host.Host, size: host.Vec2) {
 			if ui.command_pressed(EDITOR_ACTIONS[a], !editor_action_enabled(ed, a)) { editor_action(ed, a); break }
 		}
 	}
+	// (the palette's choice before the content: a command chosen shows in this frame. A view's move acts in
+	// palette_chosen itself; a command is an index in the table: an action)
+	if c, ok := ui.palette_chosen(&ed.palette); ok {
+		if i, is := ui.palette_chosen_command(&ed.palette, c); is { editor_action(ed, Editor_Action(i)) }
+	}
 	// (while a text is typed, its field has the keys: no command takes a letter from it; nor while the colour popover
 	// is open: its field takes a colour's letters)
 	_, typing := m.mode.(Edit_Typing)
@@ -1672,12 +1677,23 @@ editor_actions_bar :: proc(ed: ^Editor, em: f32) {
 			// (Cancel ends the workflow's step as given up: what hangs on its "cancelled" runs, what needs its picture does
 			// not; Cancel and Done never part)
 			if ui.toolbar_group("end", {pinned = true}) {
-				if ui.toolbar_tool("cancel", {label = i18n.tr("Cancel"), shortcut = ui.command_shortcut(EDITOR_ACTIONS[.Close]), words = true}) { editor_action(ed, .Close) }
-				if ui.toolbar_tool("done", {label = i18n.tr("Done"), shortcut = ui.command_shortcut(EDITOR_ACTIONS[.Done]), words = true, intent = .Primary, disabled = !editor_action_enabled(ed, .Done)}) { editor_action(ed, .Done) }
+				// (their own words, their commands' act names: the palette's Shift+Enter on Close or Done comes here)
+				if ui.toolbar_tool("cancel", {label = i18n.tr("Cancel"), words = true, command = EDITOR_ACTIONS[.Close]}) { editor_action(ed, .Close) }
+				if ui.toolbar_tool("done", {label = i18n.tr("Done"), words = true, intent = .Primary, disabled = !editor_action_enabled(ed, .Done), command = EDITOR_ACTIONS[.Done]}) { editor_action(ed, .Done) }
 			}
 		}
 		ui.space(ui.SPACE_2)
 	}
+}
+
+// A line of a menu: an action, its keys and its icon from the table, greyed when it cannot act; its act name stated (a
+// menu open, the palette's Shift+Enter on the action comes to its line).
+@(private = "file")
+editor_menu_item :: proc(ed: ^Editor, a: Editor_Action) {
+	c := EDITOR_ACTIONS[a]
+	sig := ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), icon = c.icon, disabled = !editor_action_enabled(ed, a))
+	ui.act_command(sig.box, c.id)
+	if sig.clicked { editor_action(ed, a) }
 }
 
 @(private = "file") EDITOR_ZOOM_MENU :: "editor_zoom_menu"
@@ -1697,10 +1713,7 @@ EDITOR_STICKER_NAMES := [len(EDIT_STICKERS)]string{
 // menu stays open while the bar wraps under it.
 @(private = "file")
 editor_menus :: proc(ed: ^Editor) {
-	item :: proc(ed: ^Editor, a: Editor_Action) {
-		c := EDITOR_ACTIONS[a]
-		if ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), icon = c.icon, disabled = !editor_action_enabled(ed, a)).clicked { editor_action(ed, a) }
-	}
+	item :: proc(ed: ^Editor, a: Editor_Action) { editor_menu_item(ed, a) }
 	if ui.menu(EDITOR_INSERT_MENU) {
 		item(ed, .Insert_File)
 		item(ed, .Insert_Last)
@@ -1737,11 +1750,15 @@ editor_zoom_menu :: proc(ed: ^Editor) {
 	m := &ed.model
 	if ui.menu(EDITOR_ZOOM_MENU) {
 		c := EDITOR_ACTIONS[.Zoom_Fit]
-		if ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), checked = m.view.fit).clicked { edit_view_fit(m) }
+		fit := ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), checked = m.view.fit)
+		ui.act_command(fit.box, c.id)   // (what the Zoom_Fit action does)
+		if fit.clicked { edit_view_fit(m) }
 		ui.menu_separator()
 		for z in EDIT_ZOOMS {
 			keys := z == 1 ? ui.command_shortcut(EDITOR_ACTIONS[.Zoom_Actual]) : ""
-			if ui.menu_item(fmt.tprintf("%d %%", int(z * 100)), keys, checked = !m.view.fit && abs(m.view.zoom - z) < 0.001).clicked { edit_view_zoom_to(m, z) }
+			zoom := ui.menu_item(fmt.tprintf("%d %%", int(z * 100)), keys, checked = !m.view.fit && abs(m.view.zoom - z) < 0.001)
+			if z == 1 { ui.act_command(zoom.box, EDITOR_ACTIONS[.Zoom_Actual].id) }   // (what the Zoom_Actual action does)
+			if zoom.clicked { edit_view_zoom_to(m, z) }
 		}
 	}
 }
@@ -1979,10 +1996,7 @@ editor_shape_menu :: proc(ed: ^Editor) {
 		ed.shape_menu_due = false
 		ui.menu_open(EDITOR_SHAPE_MENU, ed.shape_menu_at, search = false)
 	}
-	item :: proc(ed: ^Editor, a: Editor_Action) {
-		c := EDITOR_ACTIONS[a]
-		if ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), icon = c.icon, disabled = !editor_action_enabled(ed, a)).clicked { editor_action(ed, a) }
-	}
+	item :: proc(ed: ^Editor, a: Editor_Action) { editor_menu_item(ed, a) }
 	if ui.menu(EDITOR_SHAPE_MENU) {
 		item(ed, .Duplicate)
 		item(ed, .Delete)
@@ -2070,15 +2084,11 @@ editor_palette_feed :: proc(ed: ^Editor) {
 }
 
 
-// The answers of the editor's views (the palette's choice, the question before the changes are dropped, the size
-// dialog), and the question opened when a close asked for it.
+// The answers of the editor's views (the question before the changes are dropped, the size dialog), and the question
+// opened when a close asked for it. (The palette's choice is taken before the content: editor_build.)
 @(private = "file")
 editor_dialogs :: proc(ed: ^Editor) {
 	app := ed.app
-	// (a view's move acts in palette_chosen itself; a command is an index in the table: an action)
-	if c, ok := ui.palette_chosen(&ed.palette); ok {
-		if i, is := ui.palette_chosen_command(&ed.palette, c); is { editor_action(ed, Editor_Action(i)) }
-	}
 	if ed.drop_due {
 		ed.drop_due = false
 		ui.confirm_open(EDITOR_DROP_VIEW, {title = i18n.tr("Close the editor and drop the changes?"), note = i18n.tr("The annotations on this picture are lost. Nothing is copied or saved."), act = i18n.tr("Drop the changes")}, ed.name)

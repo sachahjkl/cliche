@@ -51,6 +51,26 @@ by sources. Code: `src/palette.odin` (cliche's sources), `history_palette_feed` 
   ids are known at the start, before a window reads a key. Each window's `standard_watch` reads `keys.custom` and
   `keys.aliases` into it and writes the person's changes back, whichever windows have closed since.
 
+- **Each palette's choice is taken before its window's content** (`ui.palette_chosen` after the keys, before the
+  page): the run mode's writes and a command chosen show in the same frame as the palette. The main window takes its
+  palette's there and the add palette's at the top of the Workflows mode (`workflow_add_take`); the editor after its
+  window's keys. A command may change the mode: the main window reads its mode again after the choice.
+- **Go to: every element that runs a command states its act name** (`ui.act_command`; a toolbar tool given its
+  `command` states it itself, `tool-bars.md`). The settings' footer buttons (Choose a folder, Open the folder, which is
+  the history's `open_folder`, the uploaders, the system's shortcuts), the Workflows mode's Back, New workflow and
+  Rename, the lines of the history's menu and of the editor's menus (the zoom's Fit and 100 %). Shift+Enter on the
+  command goes there. A button of no command (Duplicate, Delete a workflow, a shortcut's Copy) states none.
+- **Rename the workflow is a command with an argument** (`workflow_rename`, `WORKFLOW_RENAME_ARGUMENTS`): its form in
+  the palette asks the new name, `Palette_Choice.arguments` gives it to `workflow_action`. The settings source installs
+  the forms runner. The form's field starts empty: a `config.Def`'s default is a constant, not the workflow's name. The
+  list's Rename button, a double click and the command with no value (a key) type the name in the list: the same
+  command, the field in place, beside the name it replaces.
+- **Kept as dialogs**: the editor's size and margins (a width and a height that keep a ratio, four sides and a
+  colour: several values that follow each other), the questions before files or a workflow are deleted (a
+  confirmation, with the names that go), the preview (a picture). cliche asks no capture's name and no delay in a
+  dialog: a capture's name comes from the pattern of the settings, a delay is a parameter of a workflow's Capture step,
+  set in its inspector.
+
 ## Subtle points
 
 - A source's `poll` follows its data: the captures the history's version, the workflows theirs. The add palette's

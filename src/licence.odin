@@ -26,6 +26,7 @@ licence_attach :: proc(app: ^App) {
 	prefs_page.licence_init(&app.licence, &app.history_window.host.state, {
 		store = {product = cliche_licence.PRODUCT, program = APP_FOLDER, memory = app.licence.options.store.memory, accept_dev = ODIN_DEBUG},
 		name = APP_TITLE, pricing_url = PRICING_URL, owner = app.history_window.host.win,
+		logo = #load("../assets/logo_256.png"), vendor = "Froment Software",   // (the licence card: its logo, its back)
 	})
 }
 

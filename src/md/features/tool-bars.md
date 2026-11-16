@@ -24,3 +24,10 @@ and its last tools are cut: the history's "Grid | List" was. The toolkit's bar n
   bar goes to a line of its own, as wide as the window.
 - **The workflows' buttons are the commands' tools** (`WORKFLOW_ACTIONS`): their tips and their menu rows say their
   keys as everywhere.
+- **Every tool that runs a command is given it** (`Toolbar_Tool.command`), even with words or a tip of its own: the bar
+  then states the command's act name, where the palette's Shift+Enter on it goes. The history's date, Preview, save
+  folder, Workflows and Settings, the editor's Cancel and Done. A tool with its own words keeps them; its tip becomes
+  the command's (the editor's Cancel says "Close the editor"). The calendar opens the menu the Period action opens: the
+  same act. A tool that runs no command of a table (the editor's Insert, Picture and zoom menus, Bold) names none.
+- **A segmented control that runs commands holds their act names**: the history's view (Show a grid, Show a list). The
+  filter by kind and the thumbnails' size run no command.

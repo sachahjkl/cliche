@@ -599,6 +599,10 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 				ui.palette_keys(&hw.palette)
 				history_window_keys(app)
 			}
+			// (the palette's choice before the content: the run mode's writes and a command chosen show in this frame; a
+			// command may change the mode)
+			history_palette_chosen(app)
+			workflows, settings = hw.workflow_mode.open, hw.settings_mode.open
 			if !dialog && workflows {
 				workflow_keys(app)
 			} else if !dialog && settings {
@@ -722,7 +726,8 @@ history_palette_chosen :: proc(app: ^App) {
 		switch {
 		case i < settings_at: history_action(app, History_Action(i))
 		case i < flows_at:    settings_action(app, Settings_Action(i - settings_at))
-		case:                 workflow_action(app, Workflow_Action(i - flows_at))
+		// (a command with arguments, Rename: their values from its form)
+		case:                 workflow_action(app, Workflow_Action(i - flows_at), c.arguments)
 		}
 		return
 	}
@@ -916,21 +921,29 @@ history_tools_groups :: proc(app: ^App, filters, sizes, views: []string, field_h
 			if ui.segmented("view", views, &view) {
 				if view == 0 { history_action(app, .Grid) } else { history_action(app, .List) }
 			}
+			// (its two segments run Show a grid and Show a list: the control holds their act names; segmented gives no
+			// box, it is the last one built)
+			if b := ui.parent_box().last; b != nil {
+				ui.act_command(b, HISTORY_ACTIONS[.Grid].id)
+				ui.act_command(b, HISTORY_ACTIONS[.List].id)
+			}
 		}
 	}
 	if ui.toolbar_group("window", {title = i18n.tr("Window"), priority = 3}) {
 		// (the date's filter in a menu: four choices would make the bar too wide; the tip says the one in use)
+		// (each tool of an action is given it: the bar states its act name, where the palette's Shift+Enter on it comes. The
+		// calendar opens the menu the Period action opens)
 		ui.toolbar_tool("period", {label = i18n.tr("Show by date…"), icon = lucide.CALENDAR, menu = HISTORY_PERIOD_MENU_ID, menu_search = false,
-			tip = fmt.tprintf("%s: %s", i18n.tr("Date"), i18n.tr(HISTORY_PERIOD_TEXT[hw.period]))})
+			tip = fmt.tprintf("%s: %s", i18n.tr("Date"), i18n.tr(HISTORY_PERIOD_TEXT[hw.period])), command = HISTORY_ACTIONS[.Period]})
 		// (the keys in the tooltips as the keyboards of the language name them)
 		preview := ui.view_is_open(&app.views, PREVIEW_VIEW)
-		if ui.toolbar_tool("preview", {label = i18n.tr("Preview"), icon = lucide.EYE, shortcut = ui.command_shortcut(HISTORY_ACTIONS[.Preview]), on = preview,
+		if ui.toolbar_tool("preview", {label = i18n.tr("Preview"), icon = lucide.EYE, on = preview, command = HISTORY_ACTIONS[.Preview],
 			tip = ui.key_tip(preview ? i18n.tr("Hide the preview") : i18n.tr("Preview"), {.Space, {}})}) { history_action(app, .Preview) }
-		if ui.toolbar_tool("folder", {label = i18n.tr("Open the save folder"), icon = lucide.FOLDER_OPEN, priority = 0}) { history_action(app, .Open_Folder) }
-		if ui.toolbar_tool("workflows", {label = i18n.tr("Workflows"), icon = lucide.GIT_FORK, shortcut = ui.command_shortcut(HISTORY_ACTIONS[.Workflows]),
+		if ui.toolbar_tool("folder", {label = i18n.tr("Open the save folder"), icon = lucide.FOLDER_OPEN, priority = 0, command = HISTORY_ACTIONS[.Open_Folder]}) { history_action(app, .Open_Folder) }
+		if ui.toolbar_tool("workflows", {label = i18n.tr("Workflows"), icon = lucide.GIT_FORK, command = HISTORY_ACTIONS[.Workflows],
 			tip = ui.key_tip(i18n.tr("Workflows: what happens after a capture"), {.W, {.Ctrl, .Shift}})}) { history_action(app, .Workflows) }
 		if ui.toolbar_tool("palette", {command = ui.palette_command()}) { history_palette_show(app) }
-		if ui.toolbar_tool("settings", {label = i18n.tr("Settings"), icon = lucide.SETTINGS, shortcut = ui.command_shortcut(HISTORY_ACTIONS[.Settings])}) { history_action(app, .Settings) }
+		if ui.toolbar_tool("settings", {label = i18n.tr("Settings"), icon = lucide.SETTINGS, command = HISTORY_ACTIONS[.Settings]}) { history_action(app, .Settings) }
 	}
 }
 
@@ -1392,7 +1405,9 @@ history_menu :: proc(app: ^App, em: f32) {
 		for a in HISTORY_MENU {
 			if a in HISTORY_MENU_BREAKS { ui.menu_separator() }
 			c := HISTORY_ACTIONS[a]
-			if ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), false, c.icon, a not_in enabled, icon_font = hw.icons).clicked { history_action(app, a) }
+			sig := ui.menu_item(i18n.tr(c.label), ui.command_shortcut(c), false, c.icon, a not_in enabled, icon_font = hw.icons)
+			ui.act_command(sig.box, c.id)
+			if sig.clicked { history_action(app, a) }
 		}
 	}
 	if ui.menu(HISTORY_PERIOD_MENU_ID, em * 13) {
@@ -1417,12 +1432,11 @@ history_sheet_keep :: proc(app: ^App) -> bool {
 	return true
 }
 
-// The answers of the window's views: the palette's choice, the question before files are deleted; and the sheet's table
-// kept while it is open.
+// The answers of the window's views: the question before files are deleted; and the sheet's table kept while it is
+// open. (The palette's choice is taken before the content: history_build.)
 @(private = "file")
 history_dialogs :: proc(app: ^App) {
 	hw := &app.history_window
-	history_palette_chosen(app)
 	// (an open sheet lists from the table, which the making empties: it gets the new one at once)
 	if ui.shortcuts_sheet_is_open(&hw.sheet) && history_sheet_keep(app) {
 		hw.sheet.commands, hw.sheet.version = hw.sheet_table.commands, hw.sheet_table.version

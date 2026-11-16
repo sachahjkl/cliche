@@ -235,8 +235,7 @@ settings_status :: proc(user: rawptr, name: string) -> string {
 }
 
 // Under a page: the save folder's buttons; the shortcuts' system settings and commands; the uploaders. (The licence has
-// the toolkit's page.)
-@(private = "file")
+// the toolkit's page.) (Not private to the file: a test builds it.)
 settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	app := (^App)(user)
 	switch category {
@@ -244,9 +243,10 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 		ui.space(ui.SPACE_3)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###save_buttons") {
-			if foot_button("choose", i18n.tr("Choose a folder…"), em) { settings_action(app, .Choose_Folder) }
+			if foot_button("choose", i18n.tr("Choose a folder…"), em, SETTINGS_ACTIONS[.Choose_Folder].id) { settings_action(app, .Choose_Folder) }
 			ui.space(ui.CONTROL_GAP)
-			if foot_button("open", i18n.tr("Open the folder"), em) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
+			// (the history's Open the save folder: the same job)
+			if foot_button("open", i18n.tr("Open the folder"), em, HISTORY_ACTIONS[.Open_Folder].id) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
 		}
 	case "shortcut":
 		shortcuts_foot(app, em)
@@ -264,7 +264,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 		foot_text(i18n.tr("The desktop keeps Cliche's shortcuts while Cliche runs. It may ask you to confirm them, and you may change the keys in its own settings."), em)
 		if shortcuts.can_configure(app.shortcuts) {
 			ui.space(ui.LINE_GAP)
-			if foot_button("system", i18n.tr("The system's shortcut settings…"), em) { settings_action(app, .System_Shortcuts) }
+			if foot_button("system", i18n.tr("The system's shortcut settings…"), em, SETTINGS_ACTIONS[.System_Shortcuts].id) { settings_action(app, .System_Shortcuts) }
 		}
 	case .Windows:
 		foot_text(i18n.tr("Windows gives these keys to Cliche in every program. Keys that another program holds cannot be used."), em)
@@ -348,9 +348,9 @@ upload_foot :: proc(app: ^App, em: f32) {
 	ui.space(ui.LINE_GAP)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###upload_buttons") {
-		if foot_button("import", i18n.tr("Import a .sxcu file…"), em) { settings_action(app, .Import_Uploader) }
+		if foot_button("import", i18n.tr("Import a .sxcu file…"), em, SETTINGS_ACTIONS[.Import_Uploader].id) { settings_action(app, .Import_Uploader) }
 		ui.space(ui.CONTROL_GAP)
-		if foot_button("uploaders", i18n.tr("Open the uploaders' folder"), em) { settings_action(app, .Open_Uploaders) }
+		if foot_button("uploaders", i18n.tr("Open the uploaders' folder"), em, SETTINGS_ACTIONS[.Open_Uploaders].id) { settings_action(app, .Open_Uploaders) }
 	}
 }
 
@@ -372,9 +372,12 @@ labels_shown :: proc(out, english: []string) -> []string {
 	return out
 }
 
-// A button as wide as its words.
+// A button as wide as its words. `command`: the id of the command it runs, its act name stated (the palette's
+// Shift+Enter on that command comes to it).
 @(private = "file")
-foot_button :: proc(id, text: string, em: f32) -> bool {
+foot_button :: proc(id, text: string, em: f32, command := "") -> bool {
 	ui.next({width = ui.text_size(em * 0.9), height = ui.px(math.round(em * 2)), radius = em * 0.4})
-	return ui.button(id, text).clicked
+	sig := ui.button(id, text)
+	ui.act_command(sig.box, command)
+	return sig.clicked
 }
