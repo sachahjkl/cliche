@@ -3,6 +3,14 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.17.1] - 2026-11-16 22:19
+
+### Changed
+- **A region opens in the editor first.** By default, the region's shortcut (Ctrl+Print) now runs "Edit then share": the region opens in the editor, and is copied and saved only when you press Done; Cancel keeps nothing. The screen, the window and all the screens are still copied and saved at once. Ctrl+Alt+E, which did the same as the region's shortcut now, is gone from the default workflows. Workflows you already have stay as they are.
+
+### Fixed
+- **The command palette appears at once, with its rows.** Ctrl+K showed it after a few empty frames, faded it in before its rows came, and jumped when a frame was late; now it comes in the frame its rows are ready, and fades in over 70 ms.
+
 ## [0.17.0] - 2026-11-16 18:02
 
 ### Added
@@ -286,6 +294,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.17.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.17.0
 [0.16.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.16.0
 [0.15.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.15.1
