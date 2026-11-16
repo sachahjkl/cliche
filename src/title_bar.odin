@@ -22,9 +22,9 @@ window_title_bar :: proc(h: ^host.Host, title: string, em: f32) {
 	if h.win == nil || !platform.is_integrated_title(h.win) { return }
 	ui.next({width = ui.fill(), height = ui.px(math.round(ui.dense(em * TITLE_BAR_EM)))})
 	if ui.title_bar("###titlebar") {
-		ui.spacer(ui.px(math.round(em * 0.6)))
+		ui.space(ui.SPACE_2)
 		ui.icon(lucide.SCAN, math.round(em * 1.5), ui.color("accent"))
-		ui.spacer(ui.px(math.round(em * 0.4)))
+		ui.space(ui.ICON_GAP)
 		// (a text that is not clickable moves the window too)
 		ui.next({width = ui.text_size(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###apptitle", title))

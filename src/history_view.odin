@@ -662,7 +662,7 @@ history_views_register :: proc(app: ^App) {
 // The palette's button at the right end of a mode's bar (the settings', the workflows'), as in the history's toolbar.
 history_palette_button :: proc(app: ^App, em: f32) {
 	if history_icon_button("palette", lucide.COMMAND, ui.command_tip(ui.palette_command()), em) { history_palette_show(app) }
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 }
 
 // What the window's palette lists, given to its sources: at the top of each build, before its keys open it. The commands
@@ -843,30 +843,31 @@ history_toolbar :: proc(app: ^App, em: f32) {
 	if ui.column(id = "###toolbar_lines") {
 		r := ui.parent_box().rect
 		width := r.max.x - r.min.x
-		stacked := width > 0 && width - tools_w - em * 0.6 < search_min
+		// (the row's gaps, at its start and after the search, are ui.SPACE_2: this test and the tools' room count them)
+		stacked := width > 0 && width - tools_w - em * ui.SPACE_2 < search_min
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.9)), axis = .X, cross = .Center})
 		if ui.row(id = "###toolbar") {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			ui.next({width = ui.fill(), height = field_h})
 			s := ui.line_edit("###search", &hw.search, {placeholder = placeholder, clearable = true})
 			if s.box != nil { hw.search_key = s.box.key }
 			hw.search_focused = s.focused
 			if s.changed { hw.shown_due = true }
 			if s.committed { hw.grid_reveal = true }
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.CONTROL_GAP)
 			// (beside the search: as wide as its items, at most what the search leaves; never past the window's edge: a
 			// tool that does not fit folds into its "…" menu)
 			if !stacked {
-				room := max(width - search_min - em * 1.8, em * 3)
+				room := max(width - search_min - em * 3 * ui.SPACE_2, em * 3)
 				history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], ui.px(math.round(min(tools_w, room))), em)
 			}
 		}
 		if stacked {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.6)), axis = .X, cross = .Center})
 			if ui.row(id = "###toolbar_tools") {
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 				history_tools(app, slice.enumerated_array(&filters), sizes[:], views[:], ui.fill(), em)
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 			}
 		}
 	}
@@ -972,11 +973,11 @@ history_footer :: proc(app: ^App, em: f32) {
 	ui.hline(ui.fill())
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(id = "###footer") {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		// (an update on offer, coming or in place: the one place that shows it, as in every program of the toolkit)
 		if app.updates.updater != nil {
 			ui.next({height = ui.px(math.round(em * 1.5))})
-			if prefs_page.update_badge(app.updates.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.spacer(ui.px(em * 0.6)) }
+			if prefs_page.update_badge(app.updates.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.space(ui.CONTROL_GAP) }
 		}
 		if ui.tags("weak") {
 			n := len(history_selection(hw).selected)
@@ -984,7 +985,7 @@ history_footer :: proc(app: ^App, em: f32) {
 			if n > 1 { count = fmt.tprintf(i18n.tr("%s, %d selected"), count, n) }
 			ui.next({width = ui.text_size(), height = ui.pct(1), text_pad = 0})
 			ui.label(fmt.tprintf("%s###count", count))
-			ui.spacer(ui.px(em * 1.2))
+			ui.space(ui.ITEM_GAP)
 			// (content: a message, a link uploaded or an error said there, to copy)
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0, flags = {.Selectable}})
 			ui.label(fmt.tprintf("%s###status", ui.text_shown(hw.status)))
@@ -1003,7 +1004,8 @@ history_grid :: proc(app: ^App, em: f32) {
 	hw := &app.history_window
 	step := clamp(app.settings.history_thumbnail, 0, 2)
 	cell := math.round(em * HISTORY_CELL_EM[step])
-	gap := math.round(em * 0.7)
+	// (rounded as ui.space rounds its step: the line's height and the columns count the same gap the row lays out)
+	gap := math.round(em * ui.SPACE_3)
 	line_h := cell + math.round(em * 3.4) + gap
 	// (the width of the last build: the cells per line follow the window)
 	width := f32(HISTORY_WINDOW_SIZE.x)
@@ -1021,12 +1023,12 @@ history_grid :: proc(app: ^App, em: f32) {
 			// (the id the virtual list measures a line by)
 			ui.next({width = ui.fill(), height = ui.px(line_h), axis = .X})
 			if ui.row(id = fmt.tprintf("###lrow_%d", r)) {
-				ui.spacer(ui.px(gap))
+				ui.space(ui.SPACE_3)
 				for c in 0 ..< columns {
 					i := r * columns + c
 					if i >= n { break }
 					history_cell(app, i, cell, em)
-					ui.spacer(ui.px(gap))
+					ui.space(ui.SPACE_3)
 				}
 			}
 		}
@@ -1061,7 +1063,7 @@ history_cell :: proc(app: ^App, i: int, cell, em: f32) {
 	ui.pop_tags()
 	sig := ui.signal(b)
 	if ui.parent(b) {
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		history_cell_picture(app, e, cell, em)
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), text_pad = em * 0.3, text_align = .Center})
 		ui.label(fmt.tprintf("%s###name", ui.text_shown(history_name(e))))
@@ -1290,7 +1292,7 @@ history_details :: proc(hw: ^History_Window, e: History_Entry, em: f32) {
 	if s := history_size_text(e); s != "" { append(&lines, s) }
 	if e.path != "" { append(&lines, e.missing ? fmt.tprintf(i18n.tr("%s (missing)"), e.path) : e.path) }
 	if e.url != "" { append(&lines, e.url) }
-	ui.spacer(ui.px(em * 0.4))
+	ui.space(ui.LINE_GAP)
 	for line, i in lines {
 		if i == 0 {
 			ui.next({width = ui.fill(), text_pad = em * 0.8})
@@ -1302,7 +1304,7 @@ history_details :: proc(hw: ^History_Window, e: History_Entry, em: f32) {
 			ui.paragraph(fmt.tprintf("%s###detail%d", ui.text_shown(line), i))
 		}
 	}
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 }
 
 @(private = "file")

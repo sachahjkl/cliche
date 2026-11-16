@@ -1632,7 +1632,7 @@ editor_tools_bar :: proc(ed: ^Editor, em: f32) {
 	// (as tall as its lines: the canvas takes what is left)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###tools_row") {
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.fill()})
 		if ui.toolbar("editor_tools", {overflow = .Wrap, align = .Center}) {
 			if ui.toolbar_group("tools", {title = i18n.tr("Tools")}) {
@@ -1646,7 +1646,7 @@ editor_tools_bar :: proc(ed: ^Editor, em: f32) {
 			}
 			editor_properties(ed, em, side)
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 }
 
@@ -1657,7 +1657,7 @@ editor_tools_bar :: proc(ed: ^Editor, em: f32) {
 editor_actions_bar :: proc(ed: ^Editor, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###actions_row") {
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.fill()})
 		if ui.toolbar("editor_actions", {overflow = .Wrap, align = .Center}) {
 			if ui.toolbar_group("zoom", {title = i18n.tr("Zoom")}) {
@@ -1676,7 +1676,7 @@ editor_actions_bar :: proc(ed: ^Editor, em: f32) {
 				if ui.toolbar_tool("done", {label = i18n.tr("Done"), shortcut = ui.command_shortcut(EDITOR_ACTIONS[.Done]), words = true, intent = .Primary, disabled = !editor_action_enabled(ed, .Done)}) { editor_action(ed, .Done) }
 			}
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 }
 
@@ -1767,7 +1767,7 @@ editor_properties :: proc(ed: ^Editor, em: f32, side: f32) {
 		if ui.toolbar_control("colours", {label = i18n.tr("Colours")}) {
 			for c, i in EDIT_COLORS {
 				if swatch(fmt.tprintf("swatch%d", i), c, i18n.tr(EDITOR_COLOR_NAMES[i]), style.color == c, math.round(side * 0.62)) { style.color = c }
-				ui.spacer(ui.px(math.round(em * 0.25)))
+				ui.space(ui.TOOL_GAP)
 			}
 			// (another colour: the colour picker, in a popover anchored on this disc; the disc shows the colour when it is
 			// none of the swatches)
@@ -1922,13 +1922,14 @@ editor_color_popover :: proc(ed: ^Editor) {
 	style, _ := edit_style_shown(m)
 	before := style
 	em := ui.font_size()
-	pad := math.round(em * 0.6)
+	// (rounded as ui.space rounds its step: the popover's width holds the picker and the two insets exactly)
+	pad := math.round(em * ui.SPACE_2)
 	w := ui.color_picker_width() + 2 * pad
 	if ui.popover(EDITOR_COLOR_POPOVER, ed.color_anchor[ed.color_target], w, .Below, align_right = false) {
-		ui.spacer(ui.px(pad))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.px(w), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###color_row") {
-			ui.spacer(ui.px(pad))
+			ui.space(ui.SPACE_2)
 			ui.next({width = ui.children_sum(), height = ui.children_sum(), axis = .Y})
 			if ui.column(id = "###color_column") {
 				if ed.color_target == .Fill {
@@ -1937,16 +1938,16 @@ editor_color_popover :: proc(ed: ^Editor) {
 					if ui.row(.Center, id = "###fill_swatches") {
 						_, filled := edit_fill(style)
 						if _, clicked := swatch_box("fill_none", 0, i18n.tr("No fill"), !filled, side, .Slash); clicked { style.fill_color = 0 }
-						ui.spacer(ui.px(math.round(em * 0.3)))
+						ui.space(ui.SPACE_1)
 						for c, i in EDIT_COLORS {
 							if swatch(fmt.tprintf("fill_swatch%d", i), c, i18n.tr(EDITOR_COLOR_NAMES[i]), filled && style.fill_color & 0xFFFFFF == c, side) {
 								style.fill_color = EDIT_OPAQUE | c
 								ui.color_pick_set(&ed.color_pick, rgb_srgba(c, 1), {format = .Hex})
 							}
-							ui.spacer(ui.px(math.round(em * 0.3)))
+							ui.space(ui.SPACE_1)
 						}
 					}
-					ui.spacer(ui.px(pad))
+					ui.space(ui.LINE_GAP)
 				}
 				if ui.color_picker("###picker", &ed.color_pick) {
 					c := ui.color_pick_rgba(&ed.color_pick)
@@ -1959,7 +1960,7 @@ editor_color_popover :: proc(ed: ^Editor) {
 				}
 			}
 		}
-		ui.spacer(ui.px(pad))
+		ui.space(ui.SPACE_2)
 	}
 	if r, ok := ui.popover_rect(EDITOR_COLOR_POPOVER); ok { ed.color_rect = {r.min, r.max} }
 	if style != before { edit_style_set(m, style) }
@@ -2120,7 +2121,7 @@ editor_size_view :: proc(v: ^ui.View, ed: ^Editor) {
 			if focus { ui.focus_next_field() }
 			changed = ui.number(fmt.tprintf("###%s", id), v, lo = 0, hi = EDIT_PICTURE_MAX, step = 1, unit = "px")
 		}
-		ui.spacer(ui.px(math.round(em * 0.4)))
+		ui.space(ui.LINE_GAP)
 		return
 	}
 	focus := d.focus_due
@@ -2134,10 +2135,10 @@ editor_size_view :: proc(v: ^ui.View, ed: ^Editor) {
 			if ui.row(.Center, id = "###margin_colors") {
 				transparent := d.color >> 24 == 0
 				if _, clicked := swatch_box("margin_none", 0, i18n.tr("Transparent"), transparent, side, .Slash); clicked { d.color = 0 }
-				ui.spacer(ui.px(math.round(em * 0.3)))
+				ui.space(ui.SPACE_1)
 				for c, i in EDIT_COLORS {
 					if swatch(fmt.tprintf("margin_swatch%d", i), c, i18n.tr(EDITOR_COLOR_NAMES[i]), !transparent && d.color & 0xFFFFFF == c, side) { d.color = EDIT_OPAQUE | c }
-					ui.spacer(ui.px(math.round(em * 0.3)))
+					ui.space(ui.SPACE_1)
 				}
 			}
 		} else {

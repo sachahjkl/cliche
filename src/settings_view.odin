@@ -241,11 +241,11 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	app := (^App)(user)
 	switch category {
 	case "save":
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###save_buttons") {
 			if foot_button("choose", i18n.tr("Choose a folder…"), em) { settings_action(app, .Choose_Folder) }
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.CONTROL_GAP)
 			if foot_button("open", i18n.tr("Open the folder"), em) { worker_send(&app.worker, Job_Open_Folder{folder = strings.clone(app.settings.folder)}) }
 		}
 	case "shortcut":
@@ -258,12 +258,12 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 @(private = "file")
 shortcuts_foot :: proc(app: ^App, em: f32) {
 	m := &app.history_window.settings_mode
-	ui.spacer(ui.px(em * 0.8))
+	ui.space(ui.SPACE_3)
 	switch shortcuts.backend(app.shortcuts) {
 	case .Portal:
 		foot_text(i18n.tr("The desktop keeps Cliche's shortcuts while Cliche runs. It may ask you to confirm them, and you may change the keys in its own settings."), em)
 		if shortcuts.can_configure(app.shortcuts) {
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.LINE_GAP)
 			if foot_button("system", i18n.tr("The system's shortcut settings…"), em) { settings_action(app, .System_Shortcuts) }
 		}
 	case .Windows:
@@ -272,7 +272,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 		foot_text(i18n.tr("This desktop gives programs no shortcuts of their own. Bind keys to these commands in its settings (Hyprland: bind = CTRL, Print, exec, cliche --region; sway: bindsym Ctrl+Print exec cliche --region):"), em)
 	}
 	shortcuts_workflows(app, em)
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 	if ui.tags("weak") {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.5), font_size = math.round(em * 0.78), text_pad = 0})
 		ui.label(fmt.tprintf("%s###cmd_head", i18n.tr("COMMANDS")))
@@ -285,7 +285,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 			// (content: the command to paste in the desktop's shortcuts, Copy beside it)
 			ui.next({width = ui.text_size(em * 0.8), height = ui.pct(1), font = ui.mono_font(), text_pad = 0, flags = {.Selectable}})
 			if ui.tags("weak") { ui.label(fmt.tprintf("%s###cmd", SHORTCUT_COMMANDS[a])) }
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.CONTROL_GAP)
 			done := m.copied == SHORTCUT_COMMANDS[a]
 			// (one width for both words: the row does not move when it says Copied)
 			ui.next({font_size = math.round(em * 0.86)})
@@ -301,7 +301,7 @@ shortcuts_foot :: proc(app: ^App, em: f32) {
 // that step in the Workflows, where the keys are recorded.
 @(private = "file")
 shortcuts_workflows :: proc(app: ^App, em: f32) {
-	ui.spacer(ui.px(em * 0.8))
+	ui.space(ui.SPACE_3)
 	if ui.tags("weak") {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.5), font_size = math.round(em * 0.78), text_pad = 0})
 		ui.label(fmt.tprintf("%s###wf_keys_head", i18n.tr("WORKFLOWS")))
@@ -322,7 +322,7 @@ shortcuts_workflows :: proc(app: ^App, em: f32) {
 			}
 			ui.next({width = ui.text_size(em * 0.8), height = ui.pct(1), text_pad = 0})
 			if ui.tags("weak") { ui.label(fmt.tprintf("%s###keys", said)) }
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.CONTROL_GAP)
 			ui.next({font_size = math.round(em * 0.86)})
 			if ui.button("change", i18n.tr("Change…"), lucide.PENCIL, {width = ui.px(em * 6.5)}).clicked { workflow_capture_show(app, wf.id) }
 		}
@@ -331,7 +331,7 @@ shortcuts_workflows :: proc(app: ^App, em: f32) {
 
 @(private = "file")
 upload_foot :: proc(app: ^App, em: f32) {
-	ui.spacer(ui.px(em * 0.8))
+	ui.space(ui.SPACE_3)
 	foot_text(i18n.tr("Add a host: put its ShareX uploader (.sxcu) in the uploaders' folder, or import it. The list above shows them."), em)
 	for p in app.uploaders.problems {
 		if ui.tags("bad") {
@@ -345,11 +345,11 @@ upload_foot :: proc(app: ^App, em: f32) {
 			ui.paragraph(fmt.tprintf("%s###import_problem", app.uploaders.import_problem))
 		}
 	}
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.LINE_GAP)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###upload_buttons") {
 		if foot_button("import", i18n.tr("Import a .sxcu file…"), em) { settings_action(app, .Import_Uploader) }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.CONTROL_GAP)
 		if foot_button("uploaders", i18n.tr("Open the uploaders' folder"), em) { settings_action(app, .Open_Uploaders) }
 	}
 }

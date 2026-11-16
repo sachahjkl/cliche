@@ -63,7 +63,7 @@ workflow_list_body :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
 	if ui.row(id = "###wf_list_head") {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		if ui.tags("weak") {
 			ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.78), text_pad = 0})
 			ui.label(fmt.tprintf("%s###wf_list_title", i18n.tr("WORKFLOWS")))
@@ -72,14 +72,14 @@ workflow_list_body :: proc(app: ^App, em: f32) {
 		if list_icon_button("rename", lucide.PENCIL, i18n.tr("Rename (or double-click its name)"), em, m.shown != 0) { workflow_rename_start(app, m.shown) }
 		if list_icon_button("duplicate", lucide.COPY, i18n.tr("Duplicate"), em, m.shown != 0) { workflow_duplicate(app, m.shown) }
 		if list_icon_button("delete", lucide.TRASH_2, i18n.tr("Delete…"), em, m.shown != 0) { workflow_delete_ask(app, m.shown) }
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.scroll_y("###wf_list_scroll") {
 		for &wf in app.workflows.set.list { workflow_list_item(app, &wf, em) }
 		unbound := workflows_unbound(&app.workflows)
 		if unbound != {} {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.LINE_GAP)
 			b := strings.builder_make(context.temp_allocator)
 			for t in Trigger {
 				if t not_in unbound { continue }
@@ -87,7 +87,7 @@ workflow_list_body :: proc(app: ^App, em: f32) {
 				strings.write_string(&b, i18n.tr(TRIGGER_WORDS[t]))
 			}
 			if ui.tags("weak") {
-				ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * 0.8})
+				ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * ui.SPACE_3})
 				ui.paragraph(fmt.tprintf("%s###wf_unbound", fmt.tprintf(i18n.tr("No workflow runs for: %s. Choose one in a workflow's triggers."), strings.to_string(b))))
 			}
 		}
@@ -137,7 +137,7 @@ workflow_list_item_body :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) 
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.4)), font_size = math.round(em * 0.8), text_pad = em * 0.6, flags = {.Selectable}})
 		ui.label(fmt.tprintf("%s###wf_triggers", workflow_triggers_text(wf)))
 	}
-	ui.spacer(ui.px(em * 0.3))
+	ui.space(ui.SPACE_1)
 }
 
 @(private = "file")
@@ -178,7 +178,7 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 	if wf == nil { return }
 	n: ^flowgraph.Node
 	if len(m.selection) == 1 { n = flowgraph.graph_node(&wf.graph, m.selection[0]) }
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 	if n == nil {
 		workflow_triggers_edit(app, wf, em)
 		return
@@ -186,28 +186,28 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 	def := &CATALOG.nodes[n.kind]
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
 	if ui.row(id = "###wf_node_head") {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		ui.icon(def.icon, em * 1.6)
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.ICON_GAP)
 		ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 1.1), text_pad = 0})
 		ui.label(fmt.tprintf("%s###wf_node_title", i18n.tr(def.title)))
 	}
 	if ui.tags("weak") {
-		ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * 0.8})
+		ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * ui.SPACE_3})
 		ui.paragraph(fmt.tprintf("%s###wf_node_group", node_what(n)))
 	}
 	if l, has := m.last[n.id]; has && l.message != "" {
 		if ui.tags(l.state == .Failed ? "bad" : "weak") {
-			ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * 0.8})
+			ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * ui.SPACE_3})
 			ui.paragraph(fmt.tprintf("%s###wf_node_last", fmt.tprintf(i18n.tr("Last run: %s"), l.message)))
 		}
 	}
 	if len(def.params) == 0 { return }
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.LINE_GAP)
 	res: ui.Node_Inspector_Result
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###wf_params_row") {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		res = ui.node_inspector("###wf_params", &m.inspector, &CATALOG, n, {
 			user = app,
@@ -217,7 +217,7 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 			},
 			default_text = fmt.tprintf(i18n.tr("The default: %s"), Node_Kind(n.kind) == .Shorten_Url ? BUILTIN_SHORTENER_NAME : app.settings.uploader),
 		})
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 	}
 	m.typing ||= res.typing
 	if res.changed >= 0 {
@@ -231,10 +231,10 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 		folder := n.params[res.pick_folder].text
 		app_pick_folder(app, folder != "" ? folder : app.settings.folder, wf.id, n.id)
 	}
-	ui.spacer(ui.px(em * 1))
+	ui.space(ui.ITEM_GAP)
 	ui.next({width = ui.children_sum(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###wf_reset_row") {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		ui.next({height = ui.px(math.round(em * 1.9))})
 		if ui.button("wf_reset", i18n.tr("Reset"), lucide.REFRESH_CW).clicked {
 			workflow_undo_push(app, wf)
@@ -245,7 +245,7 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 	}
 	// (the Capture step: its own keys above, then the captures of the shortcuts, the tray and the commands that run it)
 	if Node_Kind(n.kind) == .Capture {
-		ui.spacer(ui.px(em * 1))
+		ui.space(ui.SPACE_4)
 		workflow_triggers_edit(app, wf, em)
 	}
 }
@@ -270,14 +270,14 @@ node_what :: proc(n: ^flowgraph.Node) -> string {
 // The captures that run the workflow: a toggle each, with its keys; one taken here leaves the workflow that had it.
 @(private = "file")
 workflow_triggers_edit :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), font_size = math.round(em * 1.05), text_pad = em * 0.8})
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), font_size = math.round(em * 1.05), text_pad = em * ui.SPACE_3})
 	ui.label(fmt.tprintf("%s###wf_name_title", wf.name))
 	if ui.tags("weak") {
-		ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * 0.8})
+		ui.next({width = ui.fill(), font_size = math.round(em * 0.84), text_pad = em * ui.SPACE_3})
 		ui.paragraph(fmt.tprintf("%s###wf_triggers_note", i18n.tr("The captures that run this workflow. Each capture runs one workflow: one chosen here leaves the workflow that had it.")))
 	}
 	for t in Trigger {
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.LINE_GAP)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = fmt.tprintf("###wf_trigger_%d", int(t))) { workflow_trigger(app, wf, t, em) }
 	}
@@ -288,7 +288,7 @@ workflow_triggers_edit :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, em: f32) {
 workflow_trigger :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, t: Trigger, em: f32) {
 	was := t in workflow_triggers(wf)
 	on := was
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), text_pad = em * 0.8})
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), text_pad = em * ui.SPACE_3})
 	ui.toggle("###on", i18n.tr(TRIGGER_TEXT[t]), &on)
 	if on != was {
 		workflows_bind(&app.workflows, wf.id, t, on)

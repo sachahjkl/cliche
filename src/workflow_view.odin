@@ -328,12 +328,12 @@ workflow_bar :: proc(app: ^App, em: f32) {
 	m := &app.history_window.workflow_mode
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.6)), axis = .X, cross = .Center})
 	if ui.row(id = "###workflow_bar") {
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		if workflow_icon_button("back", lucide.ARROW_LEFT, i18n.tr("Back to the history (Escape)"), em) { workflow_mode_leave(app) }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.CONTROL_GAP)
 		ui.next({width = ui.text_size(), height = ui.pct(1), font_size = math.round(em * 1.05), text_pad = 0})
 		ui.label(fmt.tprintf("%s###workflow_title", i18n.tr("Workflows")))
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		// (the toolkit's tool bar: what does not fit folds into its "…" menu, never past the window's edge; the palette
 		// pinned at its end)
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2))})
@@ -351,7 +351,7 @@ workflow_bar :: proc(app: ^App, em: f32) {
 				if ui.toolbar_tool("palette", {command = ui.palette_command()}) { history_palette_show(app) }
 			}
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 }
 
@@ -361,7 +361,7 @@ workflow_footer :: proc(app: ^App, em: f32) {
 	ui.hline(ui.fill())
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(id = "###workflow_footer") {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		text := m.status
 		if app.workflows_problem != "" { text = app.workflows_problem }
 		tag := app.workflows_problem != "" ? "bad" : "weak"

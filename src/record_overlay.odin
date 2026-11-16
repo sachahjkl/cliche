@@ -177,9 +177,9 @@ record_overlay_build :: proc(h: ^host.Host, size: host.Vec2) {
 	ui.next({fixed_x = at.x, fixed_y = at.y, width = ui.px(bar.x), height = ui.px(bar.y), axis = .X, cross = .Center, radius = math.round(em * 0.6)})
 	box := ui.build_box({.Draw_Background, .Draw_Border}, "###bar")
 	if ui.parent(box) {
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		if ready { record_bar_ready(app, em, side) } else { record_bar_running(app, em, side) }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 	ro.bar = {int(at.x / s), int(at.y / s), int(math.ceil(bar.x / s)), int(math.ceil(bar.y / s))}
 }
@@ -198,9 +198,9 @@ record_bar_ready :: proc(app: ^App, em, side: f32) {
 			b := ui.build_box({.Clickable, .Focusable, .Draw_Background, .Draw_Border, .Draw_Hot_Effects}, "###record")
 			sig = ui.signal(b)
 			if ui.parent(b) {
-				ui.spacer(ui.px(math.round(em * 0.75)))
+				ui.space(ui.SPACE_3)
 				ui.dot("###record_dot", math.round(em * 0.7))   // (the button's words' colour)
-				ui.spacer(ui.px(math.round(em * 0.45)))
+				ui.space(ui.ICON_GAP)
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
 				ui.label(fmt.tprintf("%s###record_label", i18n.tr("record button", "Record")))
 			}
@@ -210,7 +210,7 @@ record_bar_ready :: proc(app: ^App, em, side: f32) {
 	if ui.hovered_for(sig) {
 		if ui.tooltip() { ui.tooltip_text(keys != "" ? fmt.tprintf(i18n.tr("Start recording (%s)"), keys) : i18n.tr("Start recording")) }
 	}
-	ui.spacer(ui.px(math.round(em * 0.6)))
+	ui.space(ui.CONTROL_GAP)
 	@(static, rodata) labels := [2]string{"MP4", "GIF"}
 	tips := [2]string{i18n.tr("A video (H.264)"), i18n.tr("An animated GIF")}
 	at := int(format)
@@ -233,7 +233,7 @@ record_bar_running :: proc(app: ^App, em, side: f32) {
 	case Record_Discarding: text, can = i18n.tr("Deleting…"), false
 	}
 	ui.dot("###live_dot", math.round(em * 0.75), .Danger)
-	ui.spacer(ui.px(math.round(em * 0.5)))
+	ui.space(ui.ICON_GAP)
 	ui.next({width = ui.px(math.round(em * 5.5)), height = ui.pct(1), text_pad = 0, font = ui.mono_font()})
 	ui.label(fmt.tprintf("%s###clock", text))
 	ui.spacer(ui.fill())
