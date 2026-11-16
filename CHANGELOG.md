@@ -3,6 +3,15 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.14.0] - 2026-11-16 10:59
+
+### Added
+- **The licences of what Cliche holds**: THIRD-PARTY-NOTICES, beside the program in each release archive, gives the licence of every library, font and icon set in Cliche, for Linux and Windows.
+
+### Changed
+- **Settings typed with their unit**: the longest recording takes "90 s" or "2 min", the frame rates read in frames a second (/s), the largest GIF width in px; a choice of up to 6 values is a row of buttons, and the glow is shown in percent.
+- **The shade around the selection and the quality of JPEG and WebP files are kept as a share**: `region.dim` and `save.quality` are now numbers from 0 to 1 in the preferences file, shown from 0 to 100 % in the settings. A value saved by an older version (such as 80) is no longer read: the setting goes back to its default (45 % and 90 %); set it again if you had changed it.
+
 ## [0.13.0] - 2026-11-15 21:05
 
 ### Added
@@ -253,6 +262,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.14.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.14.0
 [0.13.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.13.0
 [0.12.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.12.0
 [0.11.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.11.0
