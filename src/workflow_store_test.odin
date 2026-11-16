@@ -31,6 +31,12 @@ the_file_gives_back_the_workflows :: proc(t: ^testing.T) {
 	delete(text.text)
 	text.text = strings.clone("say \"hi\"\n\\ ok")
 	param(mark, "color").color = {1, 2, 3, 4}
+	for &n in wf.graph.nodes {
+		if Node_Kind(n.kind) != .Capture { continue }
+		keys := param(&n, "shortcut")
+		delete(keys.text)
+		keys.text = strings.clone("Ctrl+Alt+E")
+	}
 	old := wf.name
 	wf.name = strings.concatenate({old, " é"})
 	delete(old)
@@ -39,8 +45,8 @@ the_file_gives_back_the_workflows :: proc(t: ^testing.T) {
 	defer delete(file)
 	// (cliche's own keys: the users' files keep reading)
 	testing.expect(t, strings.contains(file, `"workflows": [`))
-	testing.expect(t, strings.contains(file, `"triggers": ["region", "screen", "window", "all-screens", "last-region"]`))
-	// (the Capture node's own shortcut, kept as its words: "Edit then share" has one)
+	testing.expect(t, strings.contains(file, `"triggers": ["region", "screen", "window", "edit", "all-screens", "last-region"]`))
+	// (the Capture node's own shortcut, kept as its words)
 	testing.expect(t, strings.contains(file, `"shortcut": "Ctrl+Alt+E"`))
 	back, why := workflows_parse(file)
 	defer workflows_free(&back)
@@ -110,14 +116,14 @@ a_broken_or_missing_file_gives_the_defaults :: proc(t: ^testing.T) {
 
 	missing, problem := workflows_load_from(path)
 	testing.expect_value(t, problem, "")
-	testing.expect_value(t, len(missing.set.list), 5)
+	testing.expect_value(t, len(missing.set.list), 4)
 	workflows_free(&missing)
 
 	_ = os.write_entire_file(path, "[1, 2")
 	broken, why_broken := workflows_load_from(path)
 	defer delete(why_broken)
 	testing.expect(t, why_broken != "")
-	testing.expect_value(t, len(broken.set.list), 5)
+	testing.expect_value(t, len(broken.set.list), 4)
 	testing.expect(t, os.exists(aside))   // (kept aside, not lost)
 	testing.expect(t, !os.exists(path))
 	workflows_free(&broken)

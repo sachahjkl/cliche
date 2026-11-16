@@ -64,8 +64,8 @@ does each node's work.
 - **The model** (`src/workflow.odin`): `Workflows`, a `flowgraph.Graph_Set` whose entries are the workflows and whose
   labels are the names of the triggers that run each. flowgraph's edits keep a graph valid (no cycle, kinds that agree,
   one link into a port that takes one, one Capture node: its `max_count` and `min_count`). The default workflows are
-  what cliche did before: Screenshot (copy and save), Edit then share (Annotate, then copy and save), Read a QR code and
-  Read the text (copy the text, notify).
+  Screenshot (Annotate, then copy and save on Done: a Cancel keeps nothing; every picture capture runs it), Read a QR
+  code and Read the text (copy the text, notify), and Upload.
 - **The catalog** (`src/workflow_nodes.odin`): `CATALOG`, a `flowgraph.Catalog` in `Node_Kind`'s order: each kind's
   title, icon, group, ports and parameters (Int, Float with its range and unit, Bool, Color, Choice, Text, Folder, List:
   the uploaders), where its work runs, whether it acts outside the picture (off in a preview), and `node_summary`, a

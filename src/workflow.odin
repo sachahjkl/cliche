@@ -233,11 +233,7 @@ label_set :: proc(wf: ^flowgraph.Graph_Entry, name: string, on: bool) {
 }
 
 ////////////////////////////////
-// The default workflows: what cliche did before workflows, so nothing is lost. Also what a missing or broken file
-// gives.
-
-// The keys of "Edit then share" (a region, then the editor) in the default workflows.
-EDIT_SHORTCUT_DEFAULT :: "Ctrl+Alt+E"
+// The default workflows: what a new install, a missing or broken file, and "The default workflows" give.
 
 workflows_default :: proc() -> (ws: Workflows) {
 	add :: proc(g: ^flowgraph.Graph, kind: Node_Kind, pos: [2]f32) -> u64 {
@@ -249,35 +245,11 @@ workflows_default :: proc() -> (ws: Workflows) {
 	}
 
 	{
+		// (the editor first: the picture is copied and saved only when it is Done; Cancel keeps nothing. Annotate's
+		// first output, the picture, is made by Done alone)
 		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("Screenshot"))}
 		g := &wf.graph
 		capture := add(g, .Capture, {0, 70})
-		copy_image := add(g, .Copy_Image, {230, 0})
-		save := add(g, .Save_File, {230, 140})
-		history := add(g, .Add_To_History, {460, 70})
-		notify := add(g, .Notify, {460, 210})
-		link(g, capture, copy_image)
-		link(g, capture, save)
-		link(g, save, history)
-		link(g, save, notify)
-		id := workflows_add(&ws, wf)
-		workflows_bind(&ws, id, .Region, true)
-		workflows_bind(&ws, id, .Screen, true)
-		workflows_bind(&ws, id, .Window, true)
-		workflows_bind(&ws, id, .All_Screens, true)
-		workflows_bind(&ws, id, .Last_Region, true)
-	}
-	{
-		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("Edit then share"))}
-		g := &wf.graph
-		capture := add(g, .Capture, {0, 70})
-		// (its own keys: "Capture a region and edit" has a shortcut from the start)
-		if n := flowgraph.graph_node(g, capture); n != nil {
-			if keys := flowgraph.param(&CATALOG, n, "shortcut"); keys != nil {
-				delete(keys.text)
-				keys.text = strings.clone(EDIT_SHORTCUT_DEFAULT)
-			}
-		}
 		annotate := add(g, .Annotate, {230, 70})
 		copy_image := add(g, .Copy_Image, {460, 0})
 		save := add(g, .Save_File, {460, 140})
@@ -289,7 +261,7 @@ workflows_default :: proc() -> (ws: Workflows) {
 		link(g, save, history)
 		link(g, save, notify)
 		id := workflows_add(&ws, wf)
-		workflows_bind(&ws, id, .Edit, true)
+		for t in ([]Trigger{.Region, .Screen, .Window, .Edit, .All_Screens, .Last_Region}) { workflows_bind(&ws, id, t, true) }
 	}
 	reads := [2]struct { name: string, read: Node_Kind, trigger: Trigger }{
 		{i18n.later("Read a QR code"), .Read_Qr, .Qr},

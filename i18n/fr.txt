@@ -1548,9 +1548,6 @@ fr La dernière zone
 en A colour
 fr Une couleur
 
-en Edit then share
-fr Modifier puis partager
-
 en the text cannot go to the clipboard
 fr le texte ne peut pas aller dans le presse-papiers
 

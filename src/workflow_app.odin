@@ -123,8 +123,8 @@ workflows_want_editor :: proc(app: ^App) -> bool {
 	for t in ([]Trigger{.Region, .Screen, .Window}) {
 		if wf := workflows_for(&app.workflows, t); wf != nil && workflow_has(wf, .Annotate) { return true }
 	}
-	// (not for a workflow's own keys: "Edit then share" has some by default, and an editor at rest for everyone is a
-	// renderer and a window held from the start; its editor opens at its first use, as `cliche --edit`'s does)
+	// (not for a workflow's own keys alone: an editor at rest for everyone is a renderer and a window held from the
+	// start; such a workflow's editor opens at its first use)
 	return false
 }
 
