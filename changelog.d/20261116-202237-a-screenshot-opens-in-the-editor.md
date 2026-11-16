@@ -1,3 +1,3 @@
 type: Changed
 
-**A screenshot opens in the editor first.** The default "Screenshot" workflow now opens each capture in the editor, and copies and saves it only when you press Done; Cancel keeps nothing. Every screenshot shortcut runs it, so "Edit then share" and its Ctrl+Alt+E are gone from the default workflows. Workflows you already have stay as they are.
+**A region opens in the editor first.** By default, the region's shortcut (Ctrl+Print) now runs "Edit then share": the region opens in the editor, and is copied and saved only when you press Done; Cancel keeps nothing. The screen, the window and all the screens are still copied and saved at once. Ctrl+Alt+E, which did the same as the region's shortcut now, is gone from the default workflows. Workflows you already have stay as they are.

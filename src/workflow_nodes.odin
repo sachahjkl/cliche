@@ -54,6 +54,10 @@ CAPTURE_PORT_PICTURE :: 0
 CAPTURE_PORT_FILE    :: 1
 CAPTURE_PORT_TEXT    :: 2
 
+// Annotate's "done" output, and an effect's "when" input (each effect's second input, after what it acts on).
+ANNOTATE_PORT_DONE :: 1
+EFFECT_PORT_WHEN   :: 1
+
 @(private = "file") BLACK :: [4]u8{0, 0, 0, 255}
 @(private = "file") WHITE :: [4]u8{255, 255, 255, 255}
 

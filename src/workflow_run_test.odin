@@ -196,16 +196,18 @@ capture_shortcut_set :: proc(wf: ^flowgraph.Graph_Entry, keys: string) {
 	}
 }
 
-// The default screenshot goes through the editor: its copy and its save wait for Done, so a Cancel keeps nothing.
+// A region goes through the editor by default: its copy and its save wait for Done, so a Cancel keeps nothing. The
+// other captures are copied and saved at once.
 @(test)
-the_default_screenshot_is_kept_only_when_edited :: proc(t: ^testing.T) {
+a_default_region_is_kept_only_when_edited :: proc(t: ^testing.T) {
 	ws := workflows_default()
 	defer workflows_free(&ws)
-	for trig in ([]Trigger{.Region, .Screen, .Window, .Edit, .All_Screens, .Last_Region}) {
-		wf := workflows_for(&ws, trig)
-		testing.expect(t, wf != nil && wf == workflows_for(&ws, .Region), "every screenshot runs one workflow")
-	}
 	wf := workflows_for(&ws, .Region)
+	testing.expect(t, wf != nil && wf == workflows_for(&ws, .Edit), "a region and --edit run one workflow")
+	for trig in ([]Trigger{.Screen, .Window, .All_Screens, .Last_Region}) {
+		other := workflows_for(&ws, trig)
+		testing.expect(t, other != nil && other != wf && !workflow_has(other, .Annotate), "the other captures skip the editor")
+	}
 	if wf == nil { return }
 	annotate := -1
 	for n, i in wf.graph.nodes { if Node_Kind(n.kind) == .Annotate { annotate = i } }
@@ -249,9 +251,9 @@ a_workflow_has_a_shortcut_of_its_own :: proc(t: ^testing.T) {
 	testing.expect(t, workflows_target(&ws, {trigger = .Qr, workflow = edit.id}) == edit)
 	testing.expect(t, workflows_target(&ws, {trigger = .Edit}) == edit)
 	testing.expect(t, workflows_target(&ws, {workflow = 999}) == nil)
-	// the last region and all the screens run the screenshot's workflow by default
-	testing.expect(t, workflows_for(&ws, .Last_Region) == workflows_for(&ws, .Region))
-	testing.expect(t, workflows_for(&ws, .All_Screens) == workflows_for(&ws, .Region))
+	// the last region and all the screens run the screen's workflow by default
+	testing.expect(t, workflows_for(&ws, .Last_Region) == workflows_for(&ws, .Screen))
+	testing.expect(t, workflows_for(&ws, .All_Screens) == workflows_for(&ws, .Screen))
 }
 
 @(test)

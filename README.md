@@ -12,8 +12,8 @@ A workflow is what happens after a capture, drawn as a graph that you edit: step
 The picture can be resized, cropped, rotated, padded, given a border, rounded corners, a shadow or a coloured background,
 a watermark, a change of colour (grayscale, brightness, saturation, hue, sepia...), a blur or a mosaic; a Condition sends
 it one way or another (by its size, its source). At the end of each branch it is copied, saved, uploaded (its address
-copied), read as a QR code or as text, or kept in the history. By default a screenshot opens in the editor, then is
-copied and saved when you press Done (Cancel keeps nothing),
+copied), read as a QR code or as text, or kept in the history. By default a region opens in the editor, then is copied
+and saved when you press Done (Cancel keeps nothing); the screen, the window and all the screens are copied and saved,
 `cliche --qr` copies the text of a QR code, and `cliche --ocr` the text of a region. Each capture's shortcut runs one
 workflow: choose which in the main window's Workflows (Ctrl+Shift+W).
 

@@ -43,8 +43,9 @@ USAGE :: `cliche: screenshots
   cliche --status             what is installed, and whether cliche runs (exit 0 installed, 2 to repair,
                               1 not installed)
 
-Each capture runs its workflow: by default a screenshot opens in the editor, then is copied
-and saved on Done; a QR code's or a region's text is copied.
+Each capture runs its workflow: by default a region opens in the editor, then is copied and
+saved on Done; the screen and a window are copied and saved; a QR code's or a region's text
+is copied.
   cliche --quit               end the running cliche
   cliche version
   --pref name=value           a preference for this run only

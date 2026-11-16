@@ -245,23 +245,41 @@ workflows_default :: proc() -> (ws: Workflows) {
 	}
 
 	{
-		// (the editor first: the picture is copied and saved only when it is Done; Cancel keeps nothing. Annotate's
-		// first output, the picture, is made by Done alone)
 		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("Screenshot"))}
+		g := &wf.graph
+		capture := add(g, .Capture, {0, 70})
+		copy_image := add(g, .Copy_Image, {230, 0})
+		save := add(g, .Save_File, {230, 140})
+		history := add(g, .Add_To_History, {460, 70})
+		notify := add(g, .Notify, {460, 210})
+		link(g, capture, copy_image)
+		link(g, capture, save)
+		link(g, save, history)
+		link(g, save, notify)
+		id := workflows_add(&ws, wf)
+		for t in ([]Trigger{.Screen, .Window, .All_Screens, .Last_Region}) { workflows_bind(&ws, id, t, true) }
+	}
+	{
+		// (a region goes through the editor: the picture is copied and saved on Done alone, Cancel keeps nothing;
+		// the editor's "done" is also their "when", which says so on the graph)
+		wf := flowgraph.Graph_Entry{name = strings.clone(i18n.tr("Edit then share"))}
 		g := &wf.graph
 		capture := add(g, .Capture, {0, 70})
 		annotate := add(g, .Annotate, {230, 70})
 		copy_image := add(g, .Copy_Image, {460, 0})
-		save := add(g, .Save_File, {460, 140})
-		history := add(g, .Add_To_History, {690, 70})
-		notify := add(g, .Notify, {690, 210})
+		save := add(g, .Save_File, {460, 210})
+		history := add(g, .Add_To_History, {690, 140})
+		notify := add(g, .Notify, {690, 300})
 		link(g, capture, annotate)
 		link(g, annotate, copy_image)
 		link(g, annotate, save)
+		_, _ = flowgraph.link(g, &CATALOG, {annotate, ANNOTATE_PORT_DONE, copy_image, EFFECT_PORT_WHEN})
+		_, _ = flowgraph.link(g, &CATALOG, {annotate, ANNOTATE_PORT_DONE, save, EFFECT_PORT_WHEN})
 		link(g, save, history)
 		link(g, save, notify)
 		id := workflows_add(&ws, wf)
-		for t in ([]Trigger{.Region, .Screen, .Window, .Edit, .All_Screens, .Last_Region}) { workflows_bind(&ws, id, t, true) }
+		workflows_bind(&ws, id, .Region, true)
+		workflows_bind(&ws, id, .Edit, true)
 	}
 	reads := [2]struct { name: string, read: Node_Kind, trigger: Trigger }{
 		{i18n.later("Read a QR code"), .Read_Qr, .Qr},
