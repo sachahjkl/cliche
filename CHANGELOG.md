@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.15.1] - 2026-11-16 13:05
+
+### Fixed
+- **The Windows download is back.** Versions 0.14.0 and 0.15.0 were published without their Windows build; this version has it, with the region that follows the pointer to every monitor.
+
 ## [0.15.0] - 2026-11-16 11:57
 
 ### Fixed
@@ -267,6 +272,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.15.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.15.1
 [0.15.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.15.0
 [0.14.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.14.0
 [0.13.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.13.0
