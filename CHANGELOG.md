@@ -3,6 +3,15 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.17.0] - 2026-11-16 18:02
+
+### Added
+- **A region across every monitor.** The region's selection now covers every monitor at once, each one shown frozen. A rectangle can start on one monitor and end on another, and the picture holds both parts. Enter with nothing chosen still takes the monitor under the pointer. A recording's region stays on one monitor. On GNOME (Wayland), which cannot place a window on a given monitor, the selection stays on one monitor.
+- **Your licence as a card.** The Licence page of the settings shows a registered licence as a card: an engraved iridescent foil, your name raised in silver, a seal in relief; it tilts towards the pointer and turns over to show its back.
+
+### Changed
+- **The palette renames a workflow, and Shift+Enter goes to a command's button**: in the Workflows mode, "Rename the workflow" in the palette asks the new name in the palette itself. Shift+Enter on a command shows its button and lights it once: the history's toolbar (the date, Preview, the save folder, Workflows, Settings, the grid or the list), the settings' buttons (the save folder, the uploaders, the system's shortcuts), the Workflows mode's Back, New workflow and Rename, the editor's Cancel and Done, and a menu's lines. A command chosen in the palette now shows its effect in the same frame.
+
 ## [0.16.0] - 2026-11-16 13:59
 
 ### Changed
@@ -277,6 +286,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.17.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.17.0
 [0.16.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.16.0
 [0.15.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.15.1
 [0.15.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.15.0

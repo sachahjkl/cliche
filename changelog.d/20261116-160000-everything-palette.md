@@ -1,3 +1,0 @@
-type: Changed
-
-**The palette renames a workflow, and Shift+Enter goes to a command's button**: in the Workflows mode, "Rename the workflow" in the palette asks the new name in the palette itself. Shift+Enter on a command shows its button and lights it once: the history's toolbar (the date, Preview, the save folder, Workflows, Settings, the grid or the list), the settings' buttons (the save folder, the uploaders, the system's shortcuts), the Workflows mode's Back, New workflow and Rename, the editor's Cancel and Done, and a menu's lines. A command chosen in the palette now shows its effect in the same frame.
