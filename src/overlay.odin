@@ -74,12 +74,17 @@ overlay_show :: proc(app: ^App, picker := false) -> bool {
 	o := &app.overlay
 	if !app.has_desktop { return false }
 	out := overlay_pointer_output(app)
-	// (a layer surface stays on the output it was made for: another output, another surface; the renderer's own window
-	// stays, on its output)
-	if o.opened && o.layer && o.out != out && app.shared.main != &o.host {
-		app_wake_remove(app, o.host.win)
-		app_host_close(app, &o.host)
-		o.opened, o.visible = false, false
+	// (the pointer is on another output: the overlay moves there where the system lets a window move (Windows, X11);
+	// a Wayland layer surface stays on the output it was made for, so another surface is made, unless it is the
+	// renderer's own window, which stays: started from the tray, the overlay is the first window)
+	if o.opened && o.layer && o.out != out {
+		if platform.overlay_move(o.host.win, {int(out.x), int(out.y), int(out.w), int(out.h)}) {
+			o.out = out
+		} else if app.shared.main != &o.host {
+			app_wake_remove(app, o.host.win)
+			app_host_close(app, &o.host)
+			o.opened, o.visible = false, false
+		}
 	}
 	if !o.opened {
 		area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}

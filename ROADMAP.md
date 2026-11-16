@@ -8,6 +8,10 @@
 
 ## Next
 
+- **The region on every monitor, on Wayland, from the tray.** Started from the tray, the overlay is the first window and
+  stays on the output of the first capture. Another output needs the toolkit's renderer to outlive its first window.
+  Intent: [src/md/features/region-overlay.md](src/md/features/region-overlay.md).
+
 ## Later
 
 - **Scrolling capture.** One tall picture of a page that scrolls, stitched from its screens. The design is in
