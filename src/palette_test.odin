@@ -40,7 +40,7 @@ the_palette_has_its_sources_in_every_mode :: proc(t: ^testing.T) {
 	app := new(App)
 	defer free(app)
 	app.prefs = config.prefs_make()
-	prefs_register(&app.prefs)
+	prefs_register(&app.prefs, context.temp_allocator)
 	app.settings = prefs_read(&app.prefs)
 	hw := &app.history_window
 	defer {

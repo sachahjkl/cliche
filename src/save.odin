@@ -5,6 +5,7 @@ package cliche
 // the editor's Save as (Job_Save_As) writes the path chosen in the system's dialog, in the format chosen there
 // (save_encode, every format of Save_Format).
 
+import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -51,18 +52,20 @@ save_file :: proc(file: []u8, folder_pref, name: string) -> (path: string, err: 
 	return "", .Not_Saved
 }
 
-// The file of `shot` in `format` (`quality`, 1 to 100: JPEG and lossy WebP). file: owned; problem "" when made, else
+// The file of `shot` in `format` (`quality`, 0 to 1: JPEG and lossy WebP). file: owned; problem "" when made, else
 // why not (translated). On the worker: it is a pass over every pixel.
-save_encode :: proc(shot: Shot, format: Save_Format, quality: int) -> (file: []u8, problem: string) {
+save_encode :: proc(shot: Shot, format: Save_Format, quality: f32) -> (file: []u8, problem: string) {
 	if shot.rgba == nil { return nil, i18n.tr("no picture came in") }
 	img := pic.Image{pixels = shot.rgba, width = shot.size.x, height = shot.size.y}
+	// (the encoders take a percent)
+	percent := clamp(int(math.round(quality * 100)), 1, 100)
 	switch format {
 	case .Png_Small:     file = png.encode(shot.rgba, shot.size.x, shot.size.y, .Small)
 	case .Png_Fast:      file = png.encode(shot.rgba, shot.size.x, shot.size.y, .Fast)
-	case .Jpeg:          file = pic.jpeg_encode(img, clamp(quality, 1, 100))
+	case .Jpeg:          file = pic.jpeg_encode(img, percent)
 	case .Webp, .Webp_Lossless:
 		if !pic.webp_available() { return nil, i18n.tr("this build has no WebP encoder") }
-		file = pic.webp_encode(img, clamp(quality, 1, 100), format == .Webp_Lossless)
+		file = pic.webp_encode(img, percent, format == .Webp_Lossless)
 	}
 	if file == nil { return nil, i18n.tr(FLOW_ERROR_TEXT[.Empty]) }
 	return file, ""

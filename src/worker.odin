@@ -25,8 +25,8 @@ Job_Grab      :: struct { source: Source, delay_ms: int, cursor: bool, rect: Rec
 Job_Crop      :: struct { frame: capture.Frame, rect: Rect }   // `frame` stays the interface's: it is only read
 Job_Save      :: struct { editor: u64, shot: Shot, folder, pattern: string }   // an editor's Ctrl+S (Editor.id); owned by the job
 Job_Copy_Encode :: struct { editor: u64, shot: Shot }         // an editor's Ctrl+C (Editor.id): its PNG for the clipboard, made here (owned)
-// An editor's Save as (Editor.id): the picture to `path` in `format` (quality: JPEG and WebP); owned by the job.
-Job_Save_As   :: struct { editor: u64, shot: Shot, path: string, format: Save_Format, quality: int }
+// An editor's Save as (Editor.id): the picture to `path` in `format` (quality, 0 to 1: JPEG and WebP); owned by the job.
+Job_Save_As   :: struct { editor: u64, shot: Shot, path: string, format: Save_Format, quality: f32 }
 // An editor's Upload (Editor.id): the picture to the host named `uploader` ("": the built-in one), the file's name from
 // `pattern`; owned by the job.
 Job_Upload    :: struct { editor: u64, shot: Shot, uploader, pattern: string }

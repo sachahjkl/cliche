@@ -33,13 +33,13 @@ PREF_DEFS := [?]config.Def{
 	{name = "capture.ocr_languages", title = i18n.later("Languages of the text read"), description = i18n.later("The languages of the text read in a region (cliche --ocr), as the engine names them, \"+\" between them (Tesseract: eng+fra). Empty: your languages."), kind = .String, default = {s = ""}, tags = {"ocr", "text", "language", "tesseract", "recognition"}},
 
 	// Recording
-	{name = "record.fps", title = i18n.later("Video frame rate"), description = i18n.later("The most frames a second of a video. Fewer come when the screen changes less."), kind = .Int, default = {i = 30}, min = 1, max = 60, bounded = true, unit = "fps", tags = {"video", "mp4", "frame rate", "smooth"}},
-	{name = "record.gif_fps", title = i18n.later("GIF frame rate"), description = i18n.later("The most frames a second of a GIF. Fewer make smaller files."), kind = .Int, default = {i = 12}, min = 1, max = 30, bounded = true, unit = "fps", tags = {"gif", "animation", "frame rate"}},
-	{name = "record.gif_width", title = i18n.later("Largest GIF width"), description = i18n.later("The largest width of a GIF: a wider recording is scaled down. 0: its own size."), kind = .Int, default = {i = 960}, min = 0, max = 3840, bounded = true, unit = "px", tags = {"gif", "size", "scale", "resolution"}},
+	{name = "record.fps", title = i18n.later("Video frame rate"), description = i18n.later("The most frames a second of a video. Fewer come when the screen changes less."), kind = .Int, default = {i = 30}, min = 1, max = 60, bounded = true, value_kind = .Rate, tags = {"video", "mp4", "frame rate", "smooth"}},
+	{name = "record.gif_fps", title = i18n.later("GIF frame rate"), description = i18n.later("The most frames a second of a GIF. Fewer make smaller files."), kind = .Int, default = {i = 12}, min = 1, max = 30, bounded = true, value_kind = .Rate, tags = {"gif", "animation", "frame rate"}},
+	{name = "record.gif_width", title = i18n.later("Largest GIF width"), description = i18n.later("The largest width of a GIF: a wider recording is scaled down. 0: its own size."), kind = .Int, default = {i = 960}, min = 0, max = 3840, bounded = true, value_kind = .Length, tags = {"gif", "size", "scale", "resolution"}},
 	{name = "record.cursor", title = i18n.later("Show the pointer"), description = i18n.later("Show the pointer in recordings, where the desktop can draw it in."), kind = .Bool, default = {b = true}, tags = {"mouse", "pointer", "cursor"}},
 	{name = "record.notify", title = i18n.later("Notify"), description = i18n.later("Show a notification when a recording starts and when its file is written."), kind = .Bool, default = {b = true}, tags = {"toast", "message"}},
 	{name = "record.reveal", title = i18n.later("Show the file in its folder"), description = i18n.later("Show a recording's file in its folder, in the file manager, once it is written."), kind = .Bool, default = {b = false}, tags = {"open", "folder", "explorer", "files"}},
-	{name = "record.max_length", title = i18n.later("Longest recording"), description = i18n.later("Stop a recording after this many seconds. 0: only when you stop it."), kind = .Int, default = {i = 0}, min = 0, max = 3600, bounded = true, unit = "s", tags = {"limit", "duration", "timer"}},
+	{name = "record.max_length", title = i18n.later("Longest recording"), description = i18n.later("Stop a recording after this many seconds. 0: only when you stop it."), kind = .Int, default = {i = 0}, min = 0, max = 3600, bounded = true, value_kind = .Duration, unit = .Second, tags = {"limit", "duration", "timer"}},
 
 	// History
 	{name = "history.size", title = i18n.later("Captures kept"), description = i18n.later("How many captures the history keeps: the oldest go first. The files stay where they are."), kind = .Int, default = {i = 1000}, min = 10, max = 100000, bounded = true, tags = {"history", "recent", "limit"}},
@@ -54,28 +54,28 @@ PREF_DEFS := [?]config.Def{
 	{name = "region.confirm_on_release", title = i18n.later("Take the rectangle on release"), description = i18n.later("Take the rectangle as soon as the button is released. Off: drag its corners and edges to resize it and its inside to move it, or use the arrow keys (Shift: resize), then press Enter or double-click inside it."), kind = .Bool, default = {b = true}, tags = {"fast", "enter", "adjust", "handles", "resize", "move"}},
 	{name = "region.frame_windows", title = i18n.later("Frame the window under the pointer"), description = i18n.later("Frame the window under the pointer: a click takes it. Off: a click does nothing, only a drag chooses."), kind = .Bool, default = {b = true}, tags = {"window", "hover", "click", "snap"}},
 	{name = "region.magnifier", title = i18n.later("Magnifier"), description = i18n.later("Show a magnifier near the pointer, with the pointer's position and the selection's size."), kind = .Bool, default = {b = true}, tags = {"zoom", "loupe", "pixel"}},
-	{name = "region.dim", title = i18n.later("Shade around the selection"), description = i18n.later("How dark the screen is outside what is chosen."), kind = .Int, default = {i = 45}, min = 0, max = 90, bounded = true, unit = "%", tags = {"shade", "darken", "overlay", "opacity"}},
+	{name = "region.dim", title = i18n.later("Shade around the selection"), description = i18n.later("How dark the screen is outside what is chosen."), kind = .Float, default = {f = 0.45}, min = 0, max = 0.9, bounded = true, value_kind = .Fraction, tags = {"shade", "darken", "overlay", "opacity"}},
 
 	// Upload
 	{name = "upload.uploader", title = i18n.later("Default host"), description = i18n.later("Where a workflow's Upload step sends pictures when it names no host, and where the history uploads again: the built-in host (anonymous, files kept 72 hours), or one of the ShareX uploaders (.sxcu files) in the uploaders' folder."), kind = .String, default = {s = BUILTIN_UPLOADER_NAME}, tags = {"host", "sxcu", "sharex", "server", "share", "link", "url", "imgur"}},
 
 	// Save
 	{name = "save.folder", title = i18n.later("Default folder"), description = i18n.later("The folder of a workflow's Save step that names none, of the editor's Save, and of recordings. Empty: Pictures/Screenshots when it exists, else Pictures/cliche."), kind = .String, default = {s = ""}, tags = {"directory", "path", "where"}},
-	{name = "save.quality", title = i18n.later("Quality of JPEG and WebP files"), description = i18n.later("The quality of a JPEG or WebP file the editor saves as (Save as…). Less makes smaller files that lose detail. A workflow's Save file step has its own."), kind = .Int, default = {i = 90}, min = 1, max = 100, bounded = true, unit = "%", tags = {"jpeg", "jpg", "webp", "compression", "size", "lossy"}},
+	{name = "save.quality", title = i18n.later("Quality of JPEG and WebP files"), description = i18n.later("The quality of a JPEG or WebP file the editor saves as (Save as…). Less makes smaller files that lose detail. A workflow's Save file step has its own."), kind = .Float, default = {f = 0.9}, min = 0.01, max = 1, bounded = true, value_kind = .Fraction, tags = {"jpeg", "jpg", "webp", "compression", "size", "lossy"}},
 	{name = "save.as_format", title = "Save as format", description = "The format the editor's Save as… chose last: png, jpeg or webp.", kind = .String, default = {s = "png"}, hidden = true},
 	{name = "save.name", title = i18n.later("Default file name"), description = i18n.later("The name of a saved file when its Save step names none: %Y year, %m month, %d day, %H hour, %M minute, %S second, %f milliseconds, %s the source (region, screen, window), %% a %. A name already taken gets \" (2)\"."), kind = .String, default = {s = DEFAULT_NAME_PATTERN}, tags = {"file name", "pattern", "format"}},
 
 	// Shortcuts: in the order of the tray's menu (Shortcut_Action's)
-	{name = "shortcut.screen", title = i18n.later("Capture the screen"), description = i18n.later("Capture the whole screen under the pointer."), kind = .String, default = {s = "Print"}, tags = {"hotkey", "keybinding", "keys", "monitor", "full screen", "print screen"}},
-	{name = "shortcut.region", title = i18n.later("Capture a region"), description = i18n.later("Capture a region: drag a rectangle, click a window framed, or take a screen, on the frozen screen."), kind = .String, default = {s = "Ctrl+Print"}, tags = {"hotkey", "keybinding", "keys", "selection", "print screen"}},
-	{name = "shortcut.record", title = i18n.later("Record a video"), description = i18n.later("Choose a region to record as a video, then press Record. The same keys start the recording, then stop it."), kind = .String, default = {s = "Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "video", "mp4", "screencast"}},
-	{name = "shortcut.record_gif", title = i18n.later("Record a GIF"), description = i18n.later("Choose a region to record as a GIF, then press Record. The same keys start the recording, then stop it."), kind = .String, default = {s = "Ctrl+Shift+Print"}, tags = {"hotkey", "keybinding", "keys", "gif", "animation", "screencast"}},
-	{name = "shortcut.window", title = i18n.later("Capture the window in front"), description = i18n.later("Capture the window in front."), kind = .String, default = {s = "Alt+Print"}, tags = {"hotkey", "keybinding", "keys", "active window", "print screen"}},
-	{name = "shortcut.ocr", title = i18n.later("Read the text"), description = i18n.later("Read the text in a region: it goes to the clipboard."), kind = .String, default = {s = "Ctrl+Alt+T"}, tags = {"hotkey", "keybinding", "keys", "ocr", "text"}},
-	{name = "shortcut.qr", title = i18n.later("Read a QR code"), description = i18n.later("Read a QR code in a region: its text goes to the clipboard."), kind = .String, default = {s = "Ctrl+Alt+Q"}, tags = {"hotkey", "keybinding", "keys", "barcode", "scan"}},
-	{name = "shortcut.all_screens", title = i18n.later("Capture all the screens"), description = i18n.later("Capture every screen in one picture."), kind = .String, default = {s = ""}, tags = {"hotkey", "keybinding", "keys", "monitors", "desktop", "full screen"}},
-	{name = "shortcut.last_region", title = i18n.later("Capture the last region again"), description = i18n.later("Capture the rectangle chosen last again, with no overlay. With none chosen yet: choose one."), kind = .String, default = {s = "Ctrl+Alt+R"}, tags = {"hotkey", "keybinding", "keys", "repeat", "same", "again"}},
-	{name = "shortcut.color", title = i18n.later("Pick a colour"), description = i18n.later("Pick a colour on the screen: a click copies it as #rrggbb, Shift and a click as rgb(r, g, b)."), kind = .String, default = {s = "Ctrl+Alt+C"}, tags = {"hotkey", "keybinding", "keys", "colour", "color", "eyedropper", "picker", "hex"}},
+	{name = "shortcut.screen", title = i18n.later("Capture the screen"), description = i18n.later("Capture the whole screen under the pointer."), kind = .String, default = {s = "Print"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "monitor", "full screen", "print screen"}},
+	{name = "shortcut.region", title = i18n.later("Capture a region"), description = i18n.later("Capture a region: drag a rectangle, click a window framed, or take a screen, on the frozen screen."), kind = .String, default = {s = "Ctrl+Print"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "selection", "print screen"}},
+	{name = "shortcut.record", title = i18n.later("Record a video"), description = i18n.later("Choose a region to record as a video, then press Record. The same keys start the recording, then stop it."), kind = .String, default = {s = "Shift+Print"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "video", "mp4", "screencast"}},
+	{name = "shortcut.record_gif", title = i18n.later("Record a GIF"), description = i18n.later("Choose a region to record as a GIF, then press Record. The same keys start the recording, then stop it."), kind = .String, default = {s = "Ctrl+Shift+Print"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "gif", "animation", "screencast"}},
+	{name = "shortcut.window", title = i18n.later("Capture the window in front"), description = i18n.later("Capture the window in front."), kind = .String, default = {s = "Alt+Print"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "active window", "print screen"}},
+	{name = "shortcut.ocr", title = i18n.later("Read the text"), description = i18n.later("Read the text in a region: it goes to the clipboard."), kind = .String, default = {s = "Ctrl+Alt+T"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "ocr", "text"}},
+	{name = "shortcut.qr", title = i18n.later("Read a QR code"), description = i18n.later("Read a QR code in a region: its text goes to the clipboard."), kind = .String, default = {s = "Ctrl+Alt+Q"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "barcode", "scan"}},
+	{name = "shortcut.all_screens", title = i18n.later("Capture all the screens"), description = i18n.later("Capture every screen in one picture."), kind = .String, default = {s = ""}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "monitors", "desktop", "full screen"}},
+	{name = "shortcut.last_region", title = i18n.later("Capture the last region again"), description = i18n.later("Capture the rectangle chosen last again, with no overlay. With none chosen yet: choose one."), kind = .String, default = {s = "Ctrl+Alt+R"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "repeat", "same", "again"}},
+	{name = "shortcut.color", title = i18n.later("Pick a colour"), description = i18n.later("Pick a colour on the screen: a click copies it as #rrggbb, Shift and a click as rgb(r, g, b)."), kind = .String, default = {s = "Ctrl+Alt+C"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "colour", "color", "eyedropper", "picker", "hex"}},
 }
 
 // What a click on the tray icon does (general.tray_click).
@@ -105,7 +105,7 @@ Settings :: struct {
 	uploader:           string,   // the default host of an Upload step
 	folder:             string,   // the default folder of a Save step ("": save_folder_default)
 	name_pattern:       string,   // the default name of a Save step
-	quality:            int,      // of a JPEG or WebP the editor saves as (save.quality), 1 to 100
+	quality:            f32,      // of a JPEG or WebP the editor saves as (save.quality), 0.01 to 1
 	save_as_format:     Save_Format,   // the format of the editor's last Save as (save.as_format)
 	shortcuts:          [Shortcut_Action]string,   // as platform.hotkey_parse reads them; "": none
 }
@@ -134,10 +134,12 @@ STANDARD_SETS :: prefs_page.STANDARD_ALL
 
 // The toolkit's standard preferences, then cliche's own. Its identity alone differs from the toolkit's defaults: its
 // theme and its name (its windows draw their own title bar, as every program of the toolkit: window.system_title off).
-prefs_register :: proc(p: ^config.Prefs) {
+// `allocator` holds the labels of the standard choices, which the registry keeps and never frees: a test gives the
+// temporary allocator.
+prefs_register :: proc(p: ^config.Prefs, allocator := context.allocator) {
 	d := prefs_page.STANDARD_DEFAULTS
 	d.theme, d.app_name = "cliche", APP_TITLE
-	prefs_page.standard_register(p, STANDARD_SETS, d)
+	prefs_page.standard_register(p, STANDARD_SETS, d, allocator)
 	config.register(p, PREF_DEFS[:])
 	prefs_page.changelog_register(p)   // (the version last started: What's new after an update)
 }
@@ -160,13 +162,13 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.confirm_on_release = config.bool_of(p, "region.confirm_on_release")
 	s.frame_windows = config.bool_of(p, "region.frame_windows")
 	s.magnifier = config.bool_of(p, "region.magnifier")
-	s.dim = f32(config.int_of(p, "region.dim")) / 100
+	s.dim = f32(config.float_of(p, "region.dim"))
 	s.record_notify = config.bool_of(p, "record.notify")
 	s.record_reveal = config.bool_of(p, "record.reveal")
 	s.uploader = strings.clone(config.string_of(p, "upload.uploader"), allocator)
 	s.folder = strings.clone(strings.trim_space(config.string_of(p, "save.folder")), allocator)
 	s.name_pattern = strings.clone(config.string_of(p, "save.name"), allocator)
-	s.quality = clamp(int(config.int_of(p, "save.quality")), 1, 100)
+	s.quality = clamp(f32(config.float_of(p, "save.quality")), 0.01, 1)
 	s.save_as_format = save_as_format_named(config.string_of(p, "save.as_format"))
 	for pref, a in SHORTCUT_PREFS { s.shortcuts[a] = strings.clone(strings.trim_space(config.string_of(p, pref)), allocator) }
 	return

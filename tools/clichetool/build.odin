@@ -48,6 +48,8 @@ run_check :: proc(args: []string) -> cli.Exit {
 	for e in errors { fmt.eprintfln("changelog: %s", e) }
 	if len(errors) > 0 { return .Failed }
 	fmt.printfln("changelog: %d fragments, well formed", n)
+	// (the notices name every crate the executable links: a new crate in the toolkit's native libraries changes them)
+	if why := toolbox.third_party_notices(p, toolbox.NOTICES_FILE, true); why != "" { fmt.eprintfln("check: %s", why); return .Failed }
 	// (the French catalogue has every text of the code, translated: `clichetool i18n fr` writes it)
 	if e := toolbox.i18n_catalogue({"src"}, "i18n/fr.txt", "fr", check = true); e != "" { fmt.eprintln(e); return .Failed }
 	if run_test(nil) != .Done { return .Failed }

@@ -30,6 +30,7 @@ LINUX_DEFINES := [?]string{"-define:FONT_BACKEND=native"}
 DIST_FILES := [?][2]string{
 	{"README.md", "README.md"}, {"LICENSE", "LICENSE"}, {"CHANGELOG.md", "CHANGELOG.md"},
 	{"ext/gui_toolkit/src/lucide/LICENSE.txt", "LUCIDE-LICENSE.txt"},
+	{toolbox.NOTICES_FILE, toolbox.NOTICES_FILE},
 }
 
 project :: proc() -> toolbox.Project {
