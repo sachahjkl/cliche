@@ -45,7 +45,7 @@ app_record_step :: proc(app: ^App, e: Record_Event) -> bool {
 // the region on the live screen and waits for Record.
 app_record_chosen :: proc(app: ^App, r: Rect) {
 	app_step(app, Flow_Cancelled{})
-	app.record_output = app.overlay.out   // (the region's overlay covered the output the rectangle is on)
+	app.record_output = overlay_output_at(app, {r.x, r.y})   // (a recording's rectangle stays on one output)
 	app_desktop_drop(app)
 	if !app_record_step(app, Record_Chosen{}) { return }
 	app.record_region = r

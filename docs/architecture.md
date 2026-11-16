@@ -44,8 +44,10 @@ for the pointer (`capture.set_cursor`; Wayland and Windows draw it, the portal a
 ## A region
 
 On the trigger the worker reads the desktop (`capture.desktop`, every output in one picture) and the windows with their
-rects. The interface then shows one fullscreen window (`src/overlay.odin`) that draws that frozen picture, dimmed outside
-the selection. This works the same on every compositor: no layer surface, no transparency. The geometry of the selection
+rects. The interface then shows one overlay window over each output (`src/overlay.odin`), each drawing its part of that
+frozen picture, dimmed outside the selection. The windows share one selection in desktop coordinates, so a rectangle
+can cross outputs (`src/md/features/region-overlay.md`). With no layer shell (GNOME on Wayland) it is one fullscreen
+window, and the selection stays on its output. No transparency anywhere. The geometry of the selection
 (drag, nudge, resize, the grips that move and resize it with the mouse, a double click, the framed window) is pure
 (`src/geometry.odin`).
 

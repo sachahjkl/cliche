@@ -1,29 +1,30 @@
 package cliche
 
-// The overlay of a region: one fullscreen window that shows the desktop as it was at the trigger (the frozen picture the
-// worker read), dimmed outside what is chosen. It works the same on every compositor: no layer surface, no transparency,
-// nothing over the other programs' windows but a picture of them.
+// The overlay of a region: one window over each output, each showing its part of the desktop as it was at the trigger
+// (the frozen picture the worker read), dimmed outside what is chosen. The windows are views: the selection, the
+// pointer and the decision are the overlay's, once, in desktop coordinates, so a rectangle can cross outputs
+// (src/md/features/region-overlay.md). No transparency, nothing over the other programs' windows but a picture of them.
 //
-// Wayland does not let a client pick the output of its window: the compositor puts the fullscreen window where it
-// chooses, and says which output that is (platform.window_output_name, from wl_surface.enter); until it has, and where
-// it cannot, output_for_window guesses from the window's size (and the pointer, where the system says it). The window
-// shows that output's part of the picture; a selection stays on it.
+// Where the system cannot place a window on an output (no layer shell: GNOME on Wayland), the overlay is one fullscreen
+// window the compositor places, and says which output that is (platform.window_output_name, from wl_surface.enter);
+// until it has, and where it cannot, output_for_window guesses from the window's size (and the pointer, where the
+// system says it). A selection then stays on that output.
 //
 // What the user does:
-//   drag                 a rectangle; it stays, the mouse and the keys adjust it (region.confirm_on_release: taken at
-//                        the release)
+//   drag                 a rectangle, across outputs; it stays, the mouse and the keys adjust it
+//                        (region.confirm_on_release: taken at the release)
 //   drag a grip          a corner or an edge of the rectangle chosen resizes it, its inside moves it (the pointer's
 //                        shape says which); a press elsewhere draws a new one
 //   click                the window framed under the pointer (region.frame_windows, when the system says where windows
 //                        are)
 //   double click inside  the rectangle chosen
-//   Enter, Space         the rectangle chosen, else the whole output
+//   Enter, Space         the rectangle chosen, else the output under the pointer
 //   arrows / Shift       move the rectangle a pixel (ten with Ctrl) / grow or shrink it from its bottom-right corner
 //   Escape, right click  the rectangle dropped, or, with none, the region given up
-// The colour picker (`picker`) is the same window, undimmed, with no rectangle: a click takes the colour under the
+// The colour picker (`picker`) is the same windows, undimmed, with no rectangle: a click takes the colour under the
 // pointer (Shift: as rgb()), Enter the one under the pointer, the arrows move that point a pixel (ten with Ctrl),
 // Escape gives it up.
-// The decision is acted on after the frame (overlay_after_frame): the window is not hidden from inside its own frame.
+// The decision is acted on after the frames (overlay_after_frame): no window is hidden from inside its own frame.
 
 import "core:fmt"
 import "core:log"
@@ -44,17 +45,21 @@ HANDLE_PX         :: 7     // the side of a grip's square on the rectangle chose
 
 Overlay_Decision :: enum u8 { None, Confirm, Cancel, Pick }
 
+// One window of the overlay, over one output. On the heap: a Host stays where it is while it is open.
+Overlay_Window :: struct {
+	host:    host.Host,
+	out:     Rect,   // the output it covers, logical
+	visible: bool,
+}
+
 Overlay :: struct {
-	// two places for its window: on another output, a Wayland layer surface cannot move, so a new one opens in the other
-	// place before the old one closes (the renderer passes to it when the old one was the first window: the toolkit's
-	// first-window.md). A Host stays where it is while it is open
-	hosts:    [2]host.Host,
-	host:     ^host.Host,       // the one in use (nil before the first opening)
-	opened:   bool,
+	windows:  [dynamic]^Overlay_Window,
+	// each window over the output it was made for (platform.open_overlay: no window animation, the keyboard at once);
+	// false: one fullscreen window the compositor places (a desktop with no layer shell), whose output is guessed
+	placed:   bool,
 	visible:  bool,
-	tex:      render.Texture,   // the frozen desktop (RGBA), uploaded at each show
+	tex:      render.Texture,   // the frozen desktop (RGBA), uploaded at each show; every window draws from it
 	tex_size: [2]int,
-	out:      Rect,             // the output the window covers, logical
 	sel:      Selection,
 	pointer:  Point,            // logical, on the desktop
 	has_pointer: bool,
@@ -67,38 +72,14 @@ Overlay :: struct {
 	pick_rgb: bool,             // its words as rgb() (Shift)
 	hover_grip: Grip,           // the grip of the rectangle under the pointer (its shape)
 	clicks:   Click_Track,      // the presses, for a double click
-	// a layer surface over one output (platform.open_overlay: no window animation, the keyboard at once), on `out`;
-	// false: a fullscreen window the compositor places (a desktop with no layer shell), whose output is guessed
-	layer:    bool,
 }
 
-// Opens (the first time) and shows the overlay over the desktop the worker read: a region's, or the colour picker
+// Opens (where needed) and shows the overlay over the desktop the worker read: a region's, or the colour picker
 // (`picker`). False: no window could open.
 overlay_show :: proc(app: ^App, picker := false) -> bool {
 	o := &app.overlay
 	if !app.has_desktop { return false }
-	out := overlay_pointer_output(app)
-	// (the pointer is on another output: the overlay moves there where the system lets a window move (Windows, X11);
-	// a Wayland layer surface stays on the output it was made for: a new one opens there, then the old one closes)
-	if o.opened && o.layer && o.out != out {
-		if platform.overlay_move(o.host.win, {int(out.x), int(out.y), int(out.w), int(out.h)}) {
-			o.out = out
-		} else {
-			old := o.host
-			o.host = old == &o.hosts[0] ? &o.hosts[1] : &o.hosts[0]
-			if overlay_open(app, out) {
-				app_wake_remove(app, old.win)
-				app_host_close(app, old)
-				o.visible = false
-			} else {
-				o.host, o.layer = old, true   // (no new window: the overlay stays on its output)
-			}
-		}
-	}
-	if !o.opened {
-		if o.host == nil { o.host = &o.hosts[0] }
-		if !overlay_open(app, out) { return false }
-	}
+	if !overlay_windows_match(app) { return false }
 	f := app.desktop.frame
 	r := &app.shared.r
 	if o.tex != 0 && o.tex_size != {int(f.width), int(f.height)} {
@@ -117,47 +98,116 @@ overlay_show :: proc(app: ^App, picker := false) -> bool {
 	o.picker = picker
 	o.hover_grip = .None
 	o.clicks = {}
-	if !o.layer { o.out = overlay_output(app) }
-	selection_reset(&o.sel, o.out)
+	if !o.placed { o.windows[0].out = overlay_output(app, o.windows[0]) }
+	at := overlay_pointer_output(app)
+	selection_reset(&o.sel, overlay_bounds_at(app, {at.x, at.y}))
 	token := app_take_token(app)
 	defer delete(token)
-	if !o.layer { platform.set_fullscreen(o.host.win, true) }
-	if !o.visible {
-		host.host_show(o.host)
-		o.visible = true
+	// (the pointer's window last: where the system gives the keyboard to the last shown, it is there)
+	for last in ([2]bool{false, true}) {
+		for w in o.windows {
+			if (w.out == at) != last { continue }
+			if !o.placed { platform.set_fullscreen(w.host.win, true) }
+			if !w.visible {
+				host.host_show(&w.host)
+				w.visible = true
+			}
+			w.host.settle = max(w.host.settle, 3)
+		}
 	}
-	if !o.layer { platform.raise_window_token(o.host.win, token) }   // (a layer surface has the keyboard from its showing)
-	o.host.settle = max(o.host.settle, 3)
+	if !o.placed { platform.raise_window_token(o.windows[0].host.win, token) }   // (a placed window has the keyboard from its showing)
+	o.visible = true
 	return true
 }
 
-// Opens the overlay's window in its place `o.host`, over `out` (a layer surface; else a window the compositor places).
-// False: no window could open, and the place is left closed.
+// The windows matched to the outputs the worker read: a window whose output is still there stays; an output with none
+// gets a spare window moved there where the system lets it, else a new one; the windows left over close, after the new
+// ones opened (one of them may hold the renderer). False: no window at all.
 @(private = "file")
-overlay_open :: proc(app: ^App, out: Rect) -> bool {
+overlay_windows_match :: proc(app: ^App) -> bool {
 	o := &app.overlay
-	area := [4]int{int(out.x), int(out.y), int(out.w), int(out.h)}
-	layer := host.Open_Options{title = APP_TITLE + " region", size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area, overlay_keyboard = .Exclusive}
-	o.layer = out.w > 0 && host.host_open(o.host, &app.shared, layer, overlay_build, app)
-	if !o.layer && !host.host_open(o.host, &app.shared, {title = APP_TITLE + " region", size = {1280, 720}}, overlay_build, app) {
-		log.error("the region's window cannot open")
-		return false
+	outs := app.desktop.outputs
+	if len(outs) == 0 { return false }
+	if len(o.windows) > 0 && !o.placed { return true }   // (one fullscreen window: on the compositor's output)
+	wanted := make([dynamic]Rect, 0, len(outs), context.temp_allocator)
+	for out in outs {
+		has := false
+		for w in o.windows { if w.out == out.rect { has = true } }
+		for x in wanted { if x == out.rect { has = true } }   // (two outputs that mirror each other: one window)
+		if !has { append(&wanted, out.rect) }
 	}
-	if o.layer { o.out = out }
-	o.opened = true
-	app_standard_follow(app, o.host)
-	views_window(app, o.host)
-	o.host.input = overlay_input
-	o.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).overlay.decision = .Cancel }
-	o.host.after_input = 2
-	app_wake_add(app, o.host.win)
+	spare := make([dynamic]^Overlay_Window, 0, len(o.windows), context.temp_allocator)
+	for w in o.windows {
+		on := false
+		for out in outs { if out.rect == w.out { on = true } }
+		if !on { append(&spare, w) }
+	}
+	for out in wanted {
+		if len(spare) > 0 && platform.overlay_move(spare[len(spare) - 1].host.win, overlay_area(out)) {
+			pop(&spare).out = out
+			continue
+		}
+		w := new(Overlay_Window)
+		if !overlay_open(app, w, out) {
+			free(w)
+			continue
+		}
+		append(&o.windows, w)
+		if !o.placed { break }   // (one fullscreen window covers what the compositor chooses)
+	}
+	for w in spare { overlay_window_close(app, w) }
+	return len(o.windows) > 0
+}
+
+@(private = "file")
+overlay_area :: proc(r: Rect) -> [4]int { return {int(r.x), int(r.y), int(r.w), int(r.h)} }
+
+// Opens `w`'s window over `out`: placed on it (an overlay window); else, as the overlay's only window, a fullscreen
+// window the compositor places. False: no window could open.
+@(private = "file")
+overlay_open :: proc(app: ^App, w: ^Overlay_Window, out: Rect) -> bool {
+	o := &app.overlay
+	area := overlay_area(out)
+	title := APP_TITLE + " region"
+	opts := host.Open_Options{title = title, size = {max(area[2], 1), max(area[3], 1)}, overlay = true, overlay_area = area, overlay_keyboard = .Exclusive}
+	placed := host.host_open(&w.host, &app.shared, opts, overlay_build, app)
+	if !placed {
+		// (a fullscreen window cannot join placed ones: the compositor could put it on any output)
+		if len(o.windows) > 0 || !host.host_open(&w.host, &app.shared, {title = title, size = {1280, 720}}, overlay_build, app) {
+			log.error("the region's window cannot open")
+			return false
+		}
+	}
+	o.placed = placed
+	w.out = out
+	app_standard_follow(app, &w.host)
+	views_window(app, &w.host)
+	w.host.input = overlay_input
+	w.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).overlay.decision = .Cancel }
+	w.host.after_input = 2
+	app_wake_add(app, w.host.win)
 	return true
+}
+
+// The one way a window of the overlay goes: closed, out of the list, freed.
+@(private = "file")
+overlay_window_close :: proc(app: ^App, w: ^Overlay_Window) {
+	o := &app.overlay
+	app_wake_remove(app, w.host.win)
+	app_host_close(app, &w.host)
+	for x, i in o.windows {
+		if x == w { ordered_remove(&o.windows, i); break }
+	}
+	free(w)
 }
 
 overlay_hide :: proc(app: ^App) {
 	o := &app.overlay
 	if !o.visible { return }
-	host.host_hide(o.host)
+	for w in o.windows {
+		if w.visible { host.host_hide(&w.host) }
+		w.visible = false
+	}
 	o.visible = false
 	o.decision = .None
 }
@@ -169,18 +219,27 @@ overlay_destroy :: proc(app: ^App) {
 	o.tex = 0
 }
 
-// Before the frame: the output the window covers now (its size is known once it is fullscreen).
+// After the shutdown closed the windows' hosts (app_windows_close: the renderer's own last): the windows freed.
+overlay_free :: proc(app: ^App) {
+	o := &app.overlay
+	for w in o.windows { free(w) }
+	delete(o.windows)
+	o.windows = nil
+}
+
+// Before the frames: the output the fullscreen window covers now (its size is known once it is fullscreen).
 overlay_prepare :: proc(app: ^App) {
 	o := &app.overlay
-	if o.layer { return }   // (a layer surface is on the output it was made for)
-	out := overlay_output(app)
-	if out != o.out {
-		o.out = out
+	if o.placed || len(o.windows) == 0 { return }   // (a placed window is on the output it was made for)
+	w := o.windows[0]
+	out := overlay_output(app, w)
+	if out != w.out {
+		w.out = out
 		if !o.sel.has_rect { selection_reset(&o.sel, out) } else { o.sel.bounds = out; selection_set(&o.sel, o.sel.rect) }
 	}
 }
 
-// After the frame: what the user decided, acted on.
+// After the frames: what the user decided, acted on.
 overlay_after_frame :: proc(app: ^App) {
 	o := &app.overlay
 	switch o.decision {
@@ -197,7 +256,23 @@ overlay_after_frame :: proc(app: ^App) {
 	}
 }
 
-// The output the pointer is on, as the capture session said; else the first. What a layer surface is made over.
+// Where a selection stays (region-overlay.md): the fullscreen window's output; a recording's, the output that holds
+// `p`; else the box around every output.
+@(private = "file")
+overlay_bounds_at :: proc(app: ^App, p: Point) -> Rect {
+	o := &app.overlay
+	if !o.placed && len(o.windows) > 0 { return o.windows[0].out }
+	if app.capture_record { return overlay_output_at(app, p) }
+	return outputs_bounds(app.desktop.outputs)
+}
+
+// The output that holds `p` (logical, on the desktop); else the pointer's at the trigger.
+overlay_output_at :: proc(app: ^App, p: Point) -> Rect {
+	if i := output_at(app.desktop.outputs, p); i >= 0 { return app.desktop.outputs[i].rect }
+	return overlay_pointer_output(app)
+}
+
+// The output the pointer is on, as the capture session said; else the first.
 @(private = "file")
 overlay_pointer_output :: proc(app: ^App) -> Rect {
 	outs := app.desktop.outputs
@@ -208,18 +283,17 @@ overlay_pointer_output :: proc(app: ^App) -> Rect {
 	return outs[0].rect
 }
 
-// The output the window covers: from its size (logical) and the pointer, as output_for_window decides.
+// The output a fullscreen window covers: from its size (logical) and the pointer, as output_for_window decides.
 @(private = "file")
-overlay_output :: proc(app: ^App) -> Rect {
-	o := &app.overlay
+overlay_output :: proc(app: ^App, w: ^Overlay_Window) -> Rect {
 	outs := app.desktop.outputs
 	if len(outs) == 0 { return {app.desktop.frame.origin.x, app.desktop.frame.origin.y, 0, 0} }
 	// (the compositor's word first: two monitors of the same size cannot be told apart by the window's)
-	if name := platform.window_output_name(o.host.win); name != "" {
+	if name := platform.window_output_name(w.host.win); name != "" {
 		for out in outs { if out.name == name { return out.rect } }
 	}
-	scale := overlay_scale(o)
-	size := [2]i32{i32(math.round(f32(o.host.win.size.x) / scale)), i32(math.round(f32(o.host.win.size.y) / scale))}
+	scale := overlay_scale(w)
+	size := [2]i32{i32(math.round(f32(w.host.win.size.x) / scale)), i32(math.round(f32(w.host.win.size.y) / scale))}
 	hint: Maybe(Point)
 	if p, ok := pointer_on_desktop(); ok { hint = p }
 	i := output_for_window(outs, size, nil, hint)
@@ -227,29 +301,32 @@ overlay_output :: proc(app: ^App) -> Rect {
 }
 
 @(private = "file")
-overlay_scale :: proc(o: ^Overlay) -> f32 {
-	s := o.host != nil && o.host.win != nil ? o.host.win.dpi_scale : 1
+overlay_scale :: proc(w: ^Overlay_Window) -> f32 {
+	s := w.host.win != nil ? w.host.win.dpi_scale : 1
 	return s > 0 ? s : 1
 }
 
-// A point of the window (its pixels) on the desktop (logical).
+// A point of the window (its pixels) on the desktop (logical). A point outside the window (a drag gone to another
+// output: the system keeps sending it here) lands on that output.
 @(private = "file")
-overlay_point :: proc(o: ^Overlay, p: [2]f32) -> Point {
-	s := overlay_scale(o)
-	return {o.out.x + i32(math.floor(p.x / s)), o.out.y + i32(math.floor(p.y / s))}
+overlay_point :: proc(w: ^Overlay_Window, p: [2]f32) -> Point {
+	s := overlay_scale(w)
+	return {w.out.x + i32(math.floor(p.x / s)), w.out.y + i32(math.floor(p.y / s))}
 }
 
 @(private = "file")
 overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
 	app := (^App)(h.user)
 	o := &app.overlay
+	w := container_of(h, Overlay_Window, "host")
+	frames := app.desktop.have_rects && app.settings.frame_windows
 	for e in events {
 		#partial switch e.kind {
 		case .Mouse_Move:
-			o.pointer, o.has_pointer = overlay_point(o, e.pos), true
+			o.pointer, o.has_pointer = overlay_point(w, e.pos), true
 			selection_move(&o.sel, o.pointer)
 		case .Mouse_Press:
-			p := overlay_point(o, e.pos)
+			p := overlay_point(w, e.pos)
 			o.pointer, o.has_pointer = p, true
 			if e.button == .Right { overlay_escape(o); continue }
 			if e.button != .Left { continue }
@@ -264,19 +341,20 @@ overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Eve
 				continue
 			}
 			if selection_take(&o.sel, p) != .None { continue }   // (a grip of what is chosen: moved or resized)
+			o.sel.bounds = overlay_bounds_at(app, p)   // (a recording's: the output of the press)
 			selection_press(&o.sel, p)
 		case .Mouse_Release:
 			if e.button != .Left || o.picker { continue }
-			p := overlay_point(o, e.pos)
+			p := overlay_point(w, e.pos)
 			switch selection_release(&o.sel, p) {
 			case .Click:
-				if r, ok := frame_pick(app.desktop.windows, p, o.out, app.desktop.have_rects && app.settings.frame_windows); ok { overlay_confirm(o, r) }
+				if r, ok := frame_pick(app.desktop.windows, p, o.sel.bounds, frames); ok { overlay_confirm(o, r) }
 			case .Rect:
 				if app.settings.confirm_on_release { overlay_confirm(o, o.sel.rect) }
 			case .Adjusted, .Held, .None:   // (adjusted: it stays chosen, Enter or a double click takes it)
 			}
 		case .Key_Press:
-			if o.picker { overlay_picker_key(app, e) } else { overlay_key(o, e) }
+			if o.picker { overlay_picker_key(app, e) } else { overlay_key(app, e) }
 		}
 	}
 	// (the window framed under the pointer, while no rectangle is chosen or dragged; else the grip under it)
@@ -286,20 +364,30 @@ overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Eve
 		if o.sel.has_rect {
 			o.hover_grip = selection_grip_at(&o.sel, o.pointer)
 		} else {
-			o.hover, o.has_hover = frame_pick(app.desktop.windows, o.pointer, o.out, app.desktop.have_rects && app.settings.frame_windows)
+			o.hover, o.has_hover = frame_pick(app.desktop.windows, o.pointer, overlay_bounds_at(app, o.pointer), frames)
 		}
+	}
+	// (what this window changed shows on the others too: the selection, the magnifier gone to another output)
+	if len(events) > 0 {
+		for x in o.windows { if x != w && x.visible { x.host.settle = max(x.host.settle, 2) } }
 	}
 	return nil   // (the overlay's interface is its picture: nothing goes to widgets)
 }
 
 @(private = "file")
-overlay_key :: proc(o: ^Overlay, e: platform.Event) {
+overlay_key :: proc(app: ^App, e: platform.Event) {
+	o := &app.overlay
 	step: i32 = .Ctrl in e.mods ? NUDGE_FAST : 1
 	d: Point
 	#partial switch e.key {
 	case .Escape: overlay_escape(o); return
 	case .Return, .Space:
-		overlay_confirm(o, o.sel.has_rect ? o.sel.rect : o.out)
+		if o.sel.has_rect {
+			overlay_confirm(o, o.sel.rect)
+		} else {
+			at := o.has_pointer ? overlay_output_at(app, o.pointer) : overlay_pointer_output(app)
+			overlay_confirm(o, rect_clamp(at, o.sel.bounds))
+		}
 		return
 	case .Left:  d = {-step, 0}
 	case .Right: d = {step, 0}
@@ -329,7 +417,8 @@ overlay_picker_key :: proc(app: ^App, e: platform.Event) {
 	case: return
 	}
 	if !o.has_pointer { return }
-	o.pointer = point_clamp(o.pointer + d, {o.out.x, o.out.y, o.out.w - 1, o.out.h - 1})
+	b := o.sel.bounds
+	o.pointer = point_clamp(o.pointer + d, {b.x, b.y, b.w - 1, b.h - 1})
 }
 
 // The colour of the pixel at `p` taken (Pick), from the frozen picture: no capture, one pixel read.
@@ -362,7 +451,7 @@ overlay_cursor :: proc(o: ^Overlay) -> platform.Cursor {
 @(private = "file")
 overlay_escape :: proc(o: ^Overlay) {
 	if o.sel.has_rect || o.sel.dragging {
-		selection_reset(&o.sel, o.out)
+		selection_reset(&o.sel, o.sel.bounds)
 		return
 	}
 	o.decision = .Cancel
@@ -375,12 +464,12 @@ overlay_confirm :: proc(o: ^Overlay, r: Rect) {
 	o.decision = .Confirm
 }
 
-// What one frame draws, from the overlay's state (frame memory).
+// What one frame of one window draws, from the overlay's state (frame memory).
 @(private = "file")
 Overlay_Draw :: struct {
 	tex:        render.Texture,
 	frame:      Frame_Place,
-	out:        Rect,
+	out:        Rect,      // the output this window covers
 	win_scale:  f32,
 	dim:        f32,       // how dark the picture is outside what is chosen (region.dim)
 	lit:        Rect,      // what is chosen or framed (empty: none)
@@ -403,14 +492,17 @@ Frame_Place :: struct { origin: [2]i32, scale: f32 }
 overlay_build :: proc(h: ^host.Host, size: ui.Vec2) {
 	app := (^App)(h.user)
 	o := &app.overlay
+	w := container_of(h, Overlay_Window, "host")
+	// (the magnifier on the window the pointer is over only: the others show what is chosen)
+	here := o.has_pointer && rect_contains(w.out, o.pointer)
 	d := ui.frame_new(Overlay_Draw)
-	d^ = {tex = o.tex, frame = {app.desktop.frame.origin, app.desktop.frame.scale}, out = o.out, win_scale = overlay_scale(o), dim = app.settings.dim,
-		pointer = o.pointer, magnifier = app.settings.magnifier && o.has_pointer, font = app.shared.font, font_size = ui.font_size()}
+	d^ = {tex = o.tex, frame = {app.desktop.frame.origin, app.desktop.frame.scale}, out = w.out, win_scale = overlay_scale(w), dim = app.settings.dim,
+		pointer = o.pointer, magnifier = app.settings.magnifier && here, font = app.shared.font, font_size = ui.font_size()}
 	// (no widget takes the pointer here: the shape is asked of the state, which the host gives the window after the build)
 	h.state.cursor_request = overlay_cursor(o)
 	if o.picker {
 		// (the colours as they are: no shade; the magnifier always, it is the picker's tool)
-		d.dim, d.magnifier = 0, o.has_pointer
+		d.dim, d.magnifier = 0, here
 		if o.has_pointer {
 			if c, ok := frame_pixel(app.desktop.frame, o.pointer); ok {
 				d.swatch, d.has_swatch = c, true
@@ -459,17 +551,26 @@ overlay_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	if !d.has_lit {
 		draw.rect(dc, win, dim)
 	} else {
+		// (what is chosen, cut to this window: a rectangle across outputs has its part here, or none)
 		l := to_window(d, d.lit)
+		l.min, l.max = clamp_into(l.min, win), clamp_into(l.max, win)
 		// (four bands around what is chosen: it stays as bright as the screen was)
 		draw.rect(dc, {win.min, {win.max.x, l.min.y}}, dim)
 		draw.rect(dc, {{win.min.x, l.max.y}, win.max}, dim)
 		draw.rect(dc, {{win.min.x, l.min.y}, {l.min.x, l.max.y}}, dim)
 		draw.rect(dc, {{l.max.x, l.min.y}, {win.max.x, l.max.y}}, dim)
+		full := to_window(d, d.lit)
 		px := max(math.round(OUTLINE_PX * d.win_scale), 1)
-		draw.rect(dc, l, {1, 1, 1, 0.9}, 0, px)
-		if d.handles { overlay_handles(d, dc, l) }
+		draw.rect(dc, full, {1, 1, 1, 0.9}, 0, px)
+		if d.handles { overlay_handles(d, dc, full) }
 	}
 	if d.magnifier { overlay_magnifier(d, dc, win) }
+}
+
+// `p` kept inside `r`.
+@(private = "file")
+clamp_into :: proc(p: [2]f32, r: draw.Rect) -> [2]f32 {
+	return {clamp(p.x, r.min.x, r.max.x), clamp(p.y, r.min.y, r.max.y)}
 }
 
 // The grips of what is chosen: a square at each corner and at the middle of each edge.

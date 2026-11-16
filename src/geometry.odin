@@ -32,7 +32,7 @@ Grip :: enum u8 { None, Move, N, S, E, W, NE, NW, SE, SW }
 
 // The rectangle being chosen. `rect` is normalized (w, h >= 0) and always inside `bounds`.
 Selection :: struct {
-	bounds:   Rect,    // the desktop area the selection stays in: the output the overlay covers
+	bounds:   Rect,    // the desktop area the selection stays in: every output, or one (region-overlay.md)
 	rect:     Rect,
 	anchor:   Point,   // where the drag started
 	dragging: bool,
@@ -228,6 +228,18 @@ frame_pick :: proc(wins: []capture.Window, p: Point, bounds: Rect, have_rects: b
 	if w == nil { return }
 	r = rect_clamp(w.rect, bounds)
 	return r, !rect_empty(r)
+}
+
+// The box around every output: where a selection across outputs stays. Empty when there is no output.
+outputs_bounds :: proc(outs: []capture.Output) -> Rect {
+	if len(outs) == 0 { return {} }
+	r := outs[0].rect
+	x0, y0, x1, y1 := r.x, r.y, r.x + r.w, r.y + r.h
+	for o in outs[1:] {
+		x0, y0 = min(x0, o.rect.x), min(y0, o.rect.y)
+		x1, y1 = max(x1, o.rect.x + o.rect.w), max(y1, o.rect.y + o.rect.h)
+	}
+	return {x0, y0, x1 - x0, y1 - y0}
 }
 
 // The output whose rect holds `p`, -1 when none does.

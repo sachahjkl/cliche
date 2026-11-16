@@ -16,7 +16,7 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Region capture on a frozen screen | `overlay.odin:12-19`, trigger `.Region` `workflow.odin:20` | none | – | – |
 | Click a window or a control in region mode | window only: `frame_pick` `overlay.odin:223` (setting `region.frame_windows`) | partial: no child controls (Windows only in ShareX) | P3 | M; Windows only, `grab.odin` |
 | Region: move and resize the rectangle with handles after drawing | keys only (arrows, Shift+arrows) `overlay.odin:241-256` | partial: no mouse handles, a click inside confirms | P1 | S; reuse `Edit_Handle` logic of `editor_model.odin:134` in `geometry.odin` `Selection` |
-| Region spans several monitors | one output per overlay `overlay.odin:7-10` | missing | P2 | L; one layer surface per output, one shared `Selection` in desktop coordinates |
+| Region spans several monitors | one overlay window per output, one shared `Selection` in desktop coordinates (`src/md/features/region-overlay.md`); one output where no layer shell | done | – | – |
 | Magnifier, crosshair, size/position info in region mode | magnifier `overlay.odin:354`, label `overlay.odin:306` | partial: no full-screen crosshair lines | P3 | S; draw two lines in `overlay_draw` |
 | Annotate inside the region overlay before confirm | trigger `.Edit` opens the editor after the region (`workflow.odin:33`) | partial: two steps instead of one | P3 | – ; the editor is enough if it opens fast |
 | Last region | no | missing | P1 | S; keep the last `o.chosen` in `App`; new trigger `.Last_Region` in `workflow.odin:20` |

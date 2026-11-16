@@ -27,8 +27,8 @@ documentation (`README.md` at the root) and not the map of the code (`docs/archi
   grid and the list; what acts on several entries, what on the cursor's
 - [features/palette.md](features/palette.md): the command palettes, the toolkit's, fed by cliche's sources (`@` the
   captures, `#` the workflows, the add palette as a chooser)
-- [features/region-overlay.md](features/region-overlay.md): the region's overlay, one output at a time; how it
-  follows the pointer to another output; on Wayland, the new one opened before the old one closes
+- [features/region-overlay.md](features/region-overlay.md): the region's overlay, one window per output and one
+  selection over the whole desktop; a drag across outputs; new windows opened before the old ones close
 - [features/tool-bars.md](features/tool-bars.md): every row of tools is the toolkit's bar; which wraps, which folds
   into its "…" menu, and why the history's choices are controls
 - [features/title-bar.md](features/title-bar.md): cliche's own title bar on its normal windows, the system's as a

@@ -159,6 +159,25 @@ frame_pick_takes_the_front_window_clamped :: proc(t: ^testing.T) {
 	testing.expect(t, !ok)
 }
 
+// A drag that starts on one output and ends on another: the rectangle spans both, inside the box around them.
+@(test)
+a_drag_crosses_outputs :: proc(t: ^testing.T) {
+	outs := []capture.Output{
+		{id = 1, rect = {0, 0, 2560, 1440}},
+		{id = 2, rect = {2560, 200, 1920, 1080}},
+		{id = 3, rect = {-1080, -400, 1080, 1920}},
+	}
+	box := outputs_bounds(outs)
+	testing.expect_value(t, box, Rect{-1080, -400, 5560, 1920})
+	testing.expect_value(t, outputs_bounds(nil), Rect{})
+	s: Selection
+	selection_reset(&s, box)
+	selection_press(&s, {-500, 100})
+	selection_move(&s, {3000, 900})
+	testing.expect_value(t, selection_release(&s, {9000, 900}), Release.Rect)
+	testing.expect_value(t, s.rect, Rect{-500, 100, 4980, 800})
+}
+
 @(test)
 output_for_window_uses_size_then_pointer :: proc(t: ^testing.T) {
 	outs := []capture.Output{
