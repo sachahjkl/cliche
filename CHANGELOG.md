@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.19.0] - 2026-11-17 12:51
+
+### Changed
+- **Gaps and margins follow one scale**: the history's cells, preview and details, the workflow's hint, the recording bar and the editor's text field use the same steps of space as the rest of the windows.
+
 ## [0.18.0] - 2026-11-17 11:23
 
 ### Fixed
@@ -299,6 +304,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.19.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.19.0
 [0.18.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.18.0
 [0.17.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.17.0
