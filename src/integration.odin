@@ -6,8 +6,10 @@ package cliche
 // protocol there. The worker applies them (they write files, and on Windows the registry). The install (setup_options)
 // puts a copy in a folder of its own with the same launcher.
 
+import "base:runtime"
 import "core:fmt"
 import "core:os"
+import "core:sync"
 import desktop "gt:desktop"
 import setup "gt:setup"
 
@@ -41,19 +43,25 @@ ENTRY_ACTIONS := [?]desktop.Desktop_Action{
 	{id = "settings", name = "Settings", arguments = "--settings"},
 }
 
+@(private = "file")
+identity_once: sync.Once
+@(private = "file")
+identity: desktop.Identity
+
+// (made once, for the life of the process: identity_of allocates its names, and the interface thread and the worker both
+// ask for it)
 cliche_identity :: proc() -> desktop.Identity {
-	return desktop.Identity{
-		name = APP_TITLE, key = "Cliche", slug = APP_NAME,
-		description = "Fast screenshots and screen recordings, shared at once.",
-		vendor = "Froment Software",
-		entry_marker = "X-Cliche-Integration", registry_mark = "ClicheIntegration", vendor_key = "FromentSoftware",
-		manifest_name = "cliche_install.txt",
-		generic_name = "Screenshot Tool", categories = "Utility;Graphics;", keywords = "screenshot;screen;capture;record;gif;qr;",
-		env_prefix = "CLICHE_DESKTOP_",
-		entry_extra = ENTRY_EXTRA[:],
-		actions = ENTRY_ACTIONS[:],
-		uninstall_arguments = "--setup",   // (Settings > Apps: the install's dialog, its Uninstall)
-	}
+	sync.once_do(&identity_once, proc() {
+		identity = desktop.identity_of("Froment Software", APP_TITLE, APP_NAME, runtime.heap_allocator())
+		identity.description = "Fast screenshots and screen recordings, shared at once."
+		identity.generic_name = "Screenshot Tool"
+		identity.categories = "Utility;Graphics;"
+		identity.keywords = "screenshot;screen;capture;record;gif;qr;"
+		identity.entry_extra = ENTRY_EXTRA[:]
+		identity.actions = ENTRY_ACTIONS[:]
+		identity.uninstall_arguments = "--setup"   // (Settings > Apps: the install's dialog, its Uninstall)
+	})
+	return identity
 }
 
 // What the install knows of cliche (prefs_page.Install: its offer, its dialog, the settings' Installation page, cliche

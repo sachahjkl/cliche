@@ -16,6 +16,7 @@ import capture "gt:capture"
 import "gt:platform"
 import "gt:ui"
 import i18n "gt:i18n"
+import timefmt "gt:timefmt"
 
 // `cliche --record`, `--record-gif`, their shortcuts: a region to choose; again, the recording starts; again, it stops.
 app_record_trigger :: proc(app: ^App, format: Record_Format) {
@@ -121,7 +122,7 @@ app_record_messages :: proc(app: ^App) {
 			record_overlay_redraw(app)
 		case Record_Tick:
 			app_record_step(app, Record_Progress{v.elapsed_ms})
-			if app.tray != nil { platform.tray_set_tooltip(app.tray, fmt.tprintf(i18n.tr("Cliche: recording, %s"), record_clock_text(v.elapsed_ms))) }
+			if app.tray != nil { platform.tray_set_tooltip(app.tray, fmt.tprintf(i18n.tr("Cliche: recording, %s"), timefmt.stopwatch(f64(v.elapsed_ms), {padded = true}))) }
 			record_overlay_redraw(app)
 		case Record_Ended:
 			_, discarding := app.record.(Record_Discarding)

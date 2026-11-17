@@ -2,7 +2,8 @@
 
 cliche takes a screenshot or a screen recording, then runs it through a workflow that the person draws as a graph. This
 folder records why the code has its shape: the purpose, the decisions, the refused alternatives. It is not the user's
-documentation (`README.md` at the root) and not the map of the code (`docs/architecture.md`).
+documentation (`README.md` at the root) and not the map of the code (`docs/architecture.md`). The preferences are
+[docs/configuration.md](../../docs/configuration.md).
 
 ## Overview
 

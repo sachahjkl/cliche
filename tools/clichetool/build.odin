@@ -1,6 +1,6 @@
 package clichetool
 
-// build, test, check, shots: the program and its tests, the same steps on a laptop and in the CI.
+// build, test, check: the toolkit's (toolbox.build_commands), over cliche's options; shots: the windows offscreen.
 
 import "core:fmt"
 import "core:os"
@@ -8,55 +8,13 @@ import tk_changelog "gt:changelog"
 import cli "gt:cli"
 import toolbox "gt:toolbox"
 
-run_build :: proc(args: []string) -> cli.Exit {
-	p := project()
-	release := len(args) > 0 && args[0] == "release"
-	if !toolbox.build_native(p) { return .Failed }
-	_ = os.make_directory("build")
-	// (while iterating: no optimisation, the fastest build; release: what ships)
-	mode := release ? []string{"-o:speed"} : []string{"-debug", "-o:none"}
-	extra := make([dynamic]string, context.temp_allocator)
-	append(&extra, fmt.tprintf("-out:%s", PROGRAM))
-	append(&extra, ..mode)
-	// (Windows: no console of its own: it lives in the notification area)
-	when ODIN_OS == .Windows {
-		if release { append(&extra, "-subsystem:windows") }
-	}
-	if !toolbox.run(toolbox.odin_command(p, "build", "", extra[:]), {echo = true}) { return .Failed }
-	fmt.printfln("built %s", PROGRAM)
-	return .Done
-}
+// The French catalogue has every text of the code, translated: `clichetool i18n fr` writes it, check compares it.
+I18N := toolbox.I18n_Catalogues{dirs = {"src"}, folder = "i18n"}
 
-run_test :: proc(args: []string) -> cli.Exit {
+// (notices: the notices name every crate the executable links: a new crate in the toolkit's native libraries changes them)
+build_options :: proc() -> toolbox.Build_Options {
 	p := project()
-	if !toolbox.build_native(p) { return .Failed }
-	_ = os.make_directory("build")
-	out := fmt.tprintf("-out:build/test_src%s", ODIN_OS == .Windows ? ".exe" : "")
-	return toolbox.ended(toolbox.run(toolbox.odin_command(p, "test", "", {out}), {echo = true}))
-}
-
-run_check :: proc(args: []string) -> cli.Exit {
-	p := project()
-	if !toolbox.run(toolbox.odin_command(p, "check"), {echo = true}) { return .Failed }
-	when ODIN_OS != .Windows {
-		if !toolbox.check_windows(p) { return .Failed }   // (the Linux code is checked on Linux)
-		if !toolbox.check_darwin(p) { return .Failed }
-	}
-	if !toolbox.run(toolbox.odin_command(p, "check", "tools/clichetool"), {echo = true}) { return .Failed }
-	if !toolbox.check_scopes("src") { return .Failed }
-	errors, n := tk_changelog.check(tk_changelog.project_options(&p))
-	for e in errors { fmt.eprintfln("changelog: %s", e) }
-	if len(errors) > 0 { return .Failed }
-	fmt.printfln("changelog: %d fragments, well formed", n)
-	// (the notices name every crate the executable links: a new crate in the toolkit's native libraries changes them)
-	if why := toolbox.third_party_notices(p, toolbox.NOTICES_FILE, true); why != "" { fmt.eprintfln("check: %s", why); return .Failed }
-	// (the French catalogue has every text of the code, translated: `clichetool i18n fr` writes it)
-	if e := toolbox.i18n_catalogue({"src"}, "i18n/fr.txt", "fr", check = true); e != "" { fmt.eprintln(e); return .Failed }
-	if run_test(nil) != .Done { return .Failed }
-	if e := run_build({"release"}); e != .Done { return e }
-	// (Windows: the release build starts, with its icon, through its launcher: a broken manifest once made Windows refuse
-	// every program, and nothing but starting it shows that)
-	return toolbox.ended(toolbox.check_launcher(project()))
+	return {project = p, changelog_command = tk_changelog.command(p), catalogues = I18N, notices = true}
 }
 
 // The settings' pages, the editor, the history and the workflows, drawn offscreen by a build of the program with

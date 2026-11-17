@@ -86,7 +86,6 @@ TRAY_CLICK_NAMES := [Tray_Click]string{.Region = "region", .Screen = "screen", .
 // The values the program reads, copied out of the registry (prefs_read).
 Settings :: struct {
 	menu, autostart:    bool,
-	update_auto:        bool,   // update.auto: the installed copy updates itself (updates.odin)
 	system_title:       bool,   // window.system_title: the system's title bar on cliche's windows, else cliche's own
 	tray_click:         Tray_Click,
 	appearance:         prefs_page.Appearance,   // appearance.theme, mode, finish, font_size (theme owned)
@@ -147,7 +146,6 @@ prefs_register :: proc(p: ^config.Prefs, allocator := context.allocator) {
 prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Settings) {
 	s.menu = config.bool_of(p, "general.menu")
 	s.autostart = config.bool_of(p, "general.autostart")
-	s.update_auto = config.bool_of(p, prefs_page.UPDATE_AUTO_PREF)
 	s.system_title = config.bool_of(p, prefs_page.SYSTEM_TITLE_PREF)
 	click := config.string_of(p, "general.tray_click")
 	for name, c in TRAY_CLICK_NAMES { if name == click { s.tray_click = c } }

@@ -29,6 +29,7 @@ import gif "gt:gif"
 import h264 "gt:h264"
 import mux "gt:mux"
 import i18n "gt:i18n"
+import timefmt "gt:timefmt"
 
 Record_Format :: enum u8 { Mp4, Gif }
 
@@ -267,33 +268,10 @@ record_name :: proc(pattern: string, t: Stamp, source: Source, format: Record_Fo
 	return strings.concatenate({name, RECORD_FORMAT_EXTENSIONS[format]}, allocator)
 }
 
-// "00:07", "12:34", "1:02:03": the clock of a recording under way (the overlay, the tray's tooltip).
-record_clock_text :: proc(ms: i64, allocator := context.temp_allocator) -> string {
-	s := max(ms, 0) / 1000
-	if s >= 3600 { return fmt.aprintf("%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60, allocator = allocator) }
-	return fmt.aprintf("%02d:%02d", s / 60, s % 60, allocator = allocator)
-}
-
-// "0:07", "12:34", "1:02:03".
-record_elapsed_text :: proc(ms: i64, allocator := context.temp_allocator) -> string {
-	s := max(ms, 0) / 1000
-	if s >= 3600 { return fmt.aprintf("%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60, allocator = allocator) }
-	return fmt.aprintf("%d:%02d", s / 60, s % 60, allocator = allocator)
-}
-
-// "340 KB", "12.5 MB".
-size_text :: proc(bytes: i64, allocator := context.temp_allocator) -> string {
-	switch {
-	case bytes < 1000 * 1000:        return fmt.aprintf(i18n.tr("%d KB"), (bytes + 999) / 1000, allocator = allocator)
-	// (the language's decimal mark: "12,5 Mo" in French)
-	case bytes < 1000 * 1000 * 1000: return fmt.aprintf(i18n.tr("%s MB"), i18n.decimal(f64(bytes) / 1e6, 1), allocator = allocator)
-	}
-	return fmt.aprintf(i18n.tr("%s GB"), i18n.decimal(f64(bytes) / 1e9, 2), allocator = allocator)
-}
-
-// The notification's body at the end of a recording: where it is, its size and its length.
+// The notification's body at the end of a recording: where it is, its size and its length. (A size in powers of 1000,
+// "kB": the history's sizes and this one are counted the same.)
 record_notice_body :: proc(path: string, bytes, length_ms: i64, allocator := context.temp_allocator) -> string {
-	return fmt.aprintf("%s\n%s, %s", path, size_text(bytes), record_elapsed_text(length_ms), allocator = allocator)
+	return fmt.aprintf("%s\n%s, %s", path, timefmt.size(bytes, {decimal = true}), timefmt.stopwatch(f64(length_ms)), allocator = allocator)
 }
 
 ////////////////////////////////

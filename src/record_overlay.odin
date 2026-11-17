@@ -23,6 +23,7 @@ import prefs_page "gt:prefs_page"
 import "gt:render"
 import "gt:ui"
 import i18n "gt:i18n"
+import timefmt "gt:timefmt"
 
 RECORD_FRAME_PX :: 2   // the frame's width, logical pixels
 
@@ -228,7 +229,8 @@ record_bar_running :: proc(app: ^App, em, side: f32) {
 	text := i18n.tr("Starting…")
 	can := true
 	#partial switch v in app.record {
-	case Record_Recording:  text = record_clock_text(v.elapsed_ms)
+	// (padded: the clock keeps its width while it runs)
+	case Record_Recording:  text = timefmt.stopwatch(f64(v.elapsed_ms), {padded = true})
 	case Record_Stopping:   text, can = i18n.tr("Saving…"), false
 	case Record_Discarding: text, can = i18n.tr("Deleting…"), false
 	}

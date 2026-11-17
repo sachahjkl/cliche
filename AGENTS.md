@@ -4,7 +4,8 @@ A screenshot and screen-recording tool for Linux (Wayland first) and Windows, in
 (collection `gt`). In the spirit of ShareX: capture, then a workflow the user edits as a graph (transforms, branches,
 conditions, the editor as a step, clipboard, file, upload, QR, OCR).
 
-Read first: [README.md](README.md), [src/md/README.md](src/md/README.md), [docs/architecture.md](docs/architecture.md).
+Read first: [README.md](README.md), [src/md/README.md](src/md/README.md), [docs/architecture.md](docs/architecture.md),
+[docs/configuration.md](docs/configuration.md).
 
 ## Build and test
 
@@ -30,7 +31,8 @@ Every step is a command of `tools/clichetool` (`help` lists them):
   (`src/workflow_app.odin`). The node catalog (`src/workflow_nodes.odin`) describes each kind's ports and parameters:
   the inspector and the node's summary need no code per kind.
 - Platform code goes in files with a system suffix (`*_linux.odin`, `*_windows.odin`, `*_other.odin`).
-- A preference is a `config.Def` in `src/settings.odin`, with its control on a page of the settings.
+- A preference is a `config.Def` in `src/settings.odin` with its line in `docs/configuration.md` (a test checks it), and
+  its control on a page of the settings.
 - Tests never touch the person's desktop or clipboard: a test of a window runs offscreen.
 - Automation is a command of `tools/clichetool`, never a shell, batch, PowerShell, Python or Node script.
 - Comments and commit messages are in English. Comments say why.

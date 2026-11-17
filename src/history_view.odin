@@ -31,7 +31,6 @@ import "gt:platform"
 import prefs_page "gt:prefs_page"
 import crash_bar "gt:crash_bar"
 import "gt:render"
-import setup "gt:setup"
 import timefmt "gt:timefmt"
 import "gt:ui"
 import i18n "gt:i18n"
@@ -372,13 +371,12 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	hw.opened = true
 	licence_attach(app)   // (the settings' Licence page answers in this window)
 	// (the setup's "By" line, in its modal and on the settings' Installation page: a texture of this window's renderer,
-	// made before the offer opens the modal)
-	if app.install.vendor_mark == nil {
-		if mark, ok := setup.logo_make(&app.shared.r, #load("../assets/froment-software-64.png"), {16, 16}); ok { app.install.vendor_mark = mark }
-	}
+	// made before the offer opens the modal; install_end frees it)
+	_ = prefs_page.install_vendor_mark(&app.install, &app.shared.r, #load("../assets/froment-software-64.png"))
 	// (the install read on a task, once the main window is there to show its dialog: offered on Windows; never to a
-	// window of the screenshots)
-	if !headless && !app.install.known { prefs_page.install_offer(&app.install, &hw.host.state, offer = ODIN_OS == .Windows) }
+	// window of the screenshots. The worker's reading at the start (updates_installed) may have said `known` already: the
+	// offer still runs, once, as this window opens once)
+	if !headless { prefs_page.install_offer(&app.install, &hw.host.state, offer = ODIN_OS == .Windows) }
 	// (after an update, once, in this window: a message that stays opens the settings at What's new)
 	if !headless && app.changelog.english == "" {
 		app.changelog.english = CHANGELOG
@@ -396,7 +394,6 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	// (the window's close hides it)
 	hw.host.close_asked = proc(h: ^host.Host) { (^App)(h.user).history_window.hide_due = true }
 	hw.host.params = history_params
-	hw.host.after_input = 3
 	hw.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	hw.host.state.icon_font = hw.icons
 	hw.sort, hw.descending = .Date, true
@@ -511,7 +508,6 @@ history_after_frame :: proc(app: ^App) {
 history_window_free :: proc(app: ^App) {
 	hw := &app.history_window
 	history_textures_drop(app)
-	setup.logo_destroy(&app.shared.r, &app.install.vendor_mark)
 	delete(hw.thumbs)
 	ui.palette_destroy(&hw.palette)   // (its usage memory written)
 	// (the screenshots open the window again after this: its sources are added to the next palette)
@@ -1688,12 +1684,12 @@ history_time_text :: proc(hw: ^History_Window, time_ms: i64) -> string {
 	return fmt.tprintf("%s %s", timefmt.date(ms, hw.offset_minutes), clock)
 }
 
-// "1920 × 1080, 245 KB"; a recording's bytes and length; nothing for a text.
+// "1920 × 1080, 245 kB"; a recording's bytes and length; nothing for a text.
 history_size_text :: proc(e: History_Entry) -> string {
 	parts := make([dynamic]string, context.temp_allocator)
 	if e.size.x > 0 && e.size.y > 0 { append(&parts, fmt.tprintf("%d × %d", e.size.x, e.size.y)) }
-	if e.bytes > 0 { append(&parts, size_text(e.bytes)) }
-	if e.length_ms > 0 { append(&parts, record_elapsed_text(e.length_ms)) }
+	if e.bytes > 0 { append(&parts, timefmt.size(e.bytes, {decimal = true})) }
+	if e.length_ms > 0 { append(&parts, timefmt.stopwatch(f64(e.length_ms))) }
 	return strings.join(parts[:], ", ", context.temp_allocator)
 }
 

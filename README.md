@@ -85,6 +85,13 @@ step selected, or the captures that run the workflow. "Run on the last capture" 
 of the history with nothing copied, saved or sent: each step shows what it made. The workflows are kept in
 `workflows.json` in cliche's configuration folder.
 
+## Documentation
+
+- [Configuration](docs/configuration.md): every preference.
+- [Architecture](docs/architecture.md): the resident process, its threads, the capture flow, the workflows and the editor.
+- [ShareX parity](docs/sharex.md): what each ShareX feature does here, and the gaps.
+- [Intent](src/md/README.md): why the code has its shape, the decisions and the refused alternatives.
+
 ## Build
 
     ./build.sh            (Linux, in `nix develop`)

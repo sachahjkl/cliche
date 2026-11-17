@@ -185,12 +185,8 @@ record_names_take_the_format :: proc(t: ^testing.T) {
 
 @(test)
 record_texts :: proc(t: ^testing.T) {
-	testing.expect_value(t, record_elapsed_text(7_400), "0:07")
-	testing.expect_value(t, record_elapsed_text(754_000), "12:34")
-	testing.expect_value(t, record_elapsed_text(3_723_000), "1:02:03")
-	testing.expect_value(t, record_clock_text(83_400), "01:23")
-	testing.expect_value(t, record_clock_text(3_723_000), "1:02:03")
-	testing.expect_value(t, size_text(340_000), "340 KB")
-	testing.expect_value(t, size_text(12_500_000), "12.5 MB")
-	testing.expect_value(t, record_notice_body("/p/a.mp4", 2_000_000, 65_000), "/p/a.mp4\n2.0 MB, 1:05")
+	// (the size and its unit are joined by a no-break space, U+00A0)
+	testing.expect_value(t, record_notice_body("/p/a.mp4", 2_000_000, 65_000), "/p/a.mp4\n2.0 MB, 1:05")
+	testing.expect_value(t, record_notice_body("/p/a.gif", 340_000, 7_400), "/p/a.gif\n340 kB, 0:07")
+	testing.expect_value(t, record_notice_body("/p/b.mp4", 12_600_000, 3_723_000), "/p/b.mp4\n13 MB, 1:02:03")
 }

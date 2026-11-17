@@ -453,7 +453,6 @@ editor_open :: proc(app: ^App, headless: bool) -> ^Editor {
 	ed.host.input = editor_input
 	ed.host.close_asked = editor_host_close
 	ed.host.params = editor_params
-	ed.host.after_input = 3
 	ed.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	ed.host.state.icon_font = ed.icons
 	// (once per window: the face is looked for, and kept by the fonts' state)

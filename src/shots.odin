@@ -99,7 +99,8 @@ shots_record :: proc(app: ^App, folder: string) -> bool {
 shots_settings :: proc(app: ^App, folder: string) -> bool {
 	if !history_window_open(app, headless = true) { return false }
 	hw := &app.history_window
-	defer { history_window_free(app); app_host_close(app, &hw.host) }
+	// (install_end: the vendor's mark is a texture of the window's renderer, freed before it goes, as in app_run)
+	defer { prefs_page.install_end(&app.install); history_window_free(app); app_host_close(app, &hw.host) }
 	settings_enter(app)
 	page := &hw.settings_mode.page
 	failed := false
@@ -158,7 +159,7 @@ shots_editor :: proc(app: ^App, folder: string) -> bool {
 shots_history :: proc(app: ^App, folder: string) -> bool {
 	if !history_window_open(app, headless = true) { return false }
 	hw := &app.history_window
-	defer { history_window_free(app); app_host_close(app, &hw.host) }
+	defer { prefs_page.install_end(&app.install); history_window_free(app); app_host_close(app, &hw.host) }
 	now := time.to_unix_nanoseconds(time.now()) / 1_000_000
 	Made :: struct { kind: History_Kind, name, url, text: string, size: [2]int, bytes, length_ms: i64 }
 	made := [?]Made{
@@ -190,7 +191,7 @@ shots_workflows :: proc(app: ^App, folder: string) -> bool {
 	if !history_window_open(app, headless = true) { return false }
 	hw := &app.history_window
 	app.workflows = workflows_default()
-	defer { history_window_free(app); app_host_close(app, &hw.host); workflows_free(&app.workflows) }
+	defer { prefs_page.install_end(&app.install); history_window_free(app); app_host_close(app, &hw.host); workflows_free(&app.workflows) }
 	workflow_mode_enter(app)
 	m := &hw.workflow_mode
 	wf := workflows_find(&app.workflows, m.shown)
@@ -210,7 +211,7 @@ shots_motion :: proc(app: ^App, folder: string) -> bool {
 	if !history_window_open(app, headless = true) { return false }
 	hw := &app.history_window
 	app.workflows = workflows_default()
-	defer { history_window_free(app); app_host_close(app, &hw.host); workflows_free(&app.workflows) }
+	defer { prefs_page.install_end(&app.install); history_window_free(app); app_host_close(app, &hw.host); workflows_free(&app.workflows) }
 	workflow_mode_enter(app)
 	for _ in 0 ..< 10 { hw.host.settle = 1; host.host_frame(&hw.host); time.sleep(16 * time.Millisecond) }
 	frames :: proc(app: ^App, folder, step: string, n: int) -> bool {

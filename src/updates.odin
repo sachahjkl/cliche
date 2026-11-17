@@ -7,69 +7,55 @@ package cliche
 // cliche is in place, this one gives way to it as soon as nothing is shown or under way: the new one starts in the
 // notification area. A copy from the Nix store is left to Nix.
 
-import "core:fmt"
 import "core:log"
 import "core:strings"
+import host "gt:host"
 import process "gt:process"
 import prefs_page "gt:prefs_page"
 import setup "gt:setup"
 import update "gt:update"
 import cliche_update "update"
 
-// The folder of the latest release's files: its manifests (update-<platform>.json and .sig) and its programs. The default
-// of update.base_url, which a mirror or a test changes.
-UPDATE_FOLDER :: "https://github.com/sachahjkl/cliche/releases/latest/download/"
-
-// What the updates hold in the App.
+// What the updates hold in the App: the toolkit's (its Updater, update.auto applied, each change said once), and the
+// restart.
 Updates :: struct {
-	updater:   ^update.Updater,
-	serial:    int,    // the updater's state last said
-	installed: bool,   // this cliche is the installed copy (the worker's answer to Job_Setup_Facts): it updates itself
-	restart:   bool,   // cliche starts again once this one has ended (app_run)
-	settings:  bool,   // ... on its settings (Restart now was pressed there)
+	using toolkit: prefs_page.Updates,
+	restart:       bool,   // cliche starts again once this one has ended (app_run)
+	settings:      bool,   // ... on its settings (Restart now was pressed there)
 }
 
-// At the start, once the preferences are read and the worker runs: whether this is the installed copy comes from the
-// worker (updates_facts).
+// At the start, once the preferences are read and the worker runs. Whether this is the installed copy comes from the
+// worker (updates_installed): cliche lives in the notification area, and no window, so no State for install_offer's
+// task, is there until the person opens one.
 updates_start :: proc(app: ^App) {
-	folder, _ := prefs_page.update_source(&app.prefs)
-	app.updates.updater = update.updater_start({
-		product = cliche_update.PRODUCT, folder = folder != "" ? folder : UPDATE_FOLDER, current = APP_VERSION,
-		exe = process.executable_path(), user_agent = fmt.tprintf("cliche/%s", APP_VERSION),
-		// (the updater's thread: the loop wakes, and updates_follow reads the state)
+	prefs_page.updates_start(&app.updates.toolkit, {
+		product = cliche_update.PRODUCT, repository = "sachahjkl/cliche", version = APP_VERSION,
+		prefs = &app.prefs, install = &app.install,
+		// (state nil: the manifest is the worker's, Job_Setup_Updated, for the same reason)
+		// (the updater's thread wakes every window: the loop waits on the shown ones, or on the anchor)
 		news = app_wake, user = app,
 	})
 	worker_send(&app.worker, Job_Setup_Facts{})
-	updates_auto(app)
 }
 
-// The worker said whether this is the installed copy.
-updates_facts :: proc(app: ^App, r: Result_Setup_Facts) {
-	app.updates.installed = r.installed
-	updates_auto(app)
-}
-
-// update.auto, read again when the preferences change.
-updates_auto :: proc(app: ^App) {
-	if app.updates.updater == nil { return }
-	auto := app.settings.update_auto && app.updates.installed
-	update.set_auto(app.updates.updater, auto ? .Install : .Off)
+// The worker said whether this is the installed copy: the install knows it, and update.auto follows it (updates_follow).
+// install_offer, once the main window opens, reads it again and finds the same.
+updates_installed :: proc(app: ^App, r: Result_Setup_Facts) {
+	if app.install.known { return }
+	app.install.known, app.install.running_it = true, r.installed
 }
 
 // At the end, before the windows go: no news after it.
 updates_stop :: proc(app: ^App) {
-	update.updater_stop(app.updates.updater)
-	app.updates.updater = nil
+	prefs_page.updates_stop(&app.updates.toolkit)
 }
 
 // At each turn of the loop: what changed is said, and an update in place takes over once nothing is shown or under way.
 updates_follow :: proc(app: ^App) {
-	u := &app.updates
-	if u.updater == nil { return }
-	st := update.status(u.updater)
-	if st.serial != u.serial {
-		u.serial = st.serial
-		if app.history_window.visible { app.history_window.host.settle = max(app.history_window.host.settle, 3) }   // (the settings show the state)
+	changed, st := prefs_page.updates_follow(&app.updates.toolkit)
+	if app.updates.updater == nil { return }
+	if changed {
+		if app.history_window.visible { host.host_settle(&app.history_window.host) }   // (the settings show the state)
 		// (the history's footer shows the phase with its badge: a toast says only what the badge cannot, once)
 		if words, bad := update.notice(st); words != "" { app_announce(app, bad ? .Bad : .Good, words) }
 		// (the installed copy: its manifest and Settings > Apps say the new version)

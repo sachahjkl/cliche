@@ -553,7 +553,7 @@ uploader_import :: proc(path: string, allocator := context.allocator) -> (name: 
 	if why != "" { return "", strings.clone(why, allocator) }
 	folder := uploaders_folder()
 	if os.make_directory_all(folder) != nil && !folder_exists(folder) { return "", strings.clone(i18n.tr("the uploaders' folder cannot be made"), allocator) }
-	stem := file_name_safe(u.name)
+	stem := fsx.safe_file_name(u.name, "uploader")
 	for n in 1 ..= NAME_TRIES {
 		file := n == 1 ? strings.concatenate({stem, UPLOADER_EXTENSION}, context.temp_allocator) : fmt.tprintf("%s (%d)%s", stem, n, UPLOADER_EXTENSION)
 		target := path_join(folder, file)
@@ -562,18 +562,4 @@ uploader_import :: proc(path: string, allocator := context.allocator) -> (name: 
 		return strings.clone(u.name, allocator), ""
 	}
 	return "", strings.clone(i18n.tr("the uploaders' folder has too many files of that name"), allocator)
-}
-
-// A name as a file's: the characters that a system refuses in a file name become "_".
-@(private = "file")
-file_name_safe :: proc(name: string) -> string {
-	b := strings.builder_make(context.temp_allocator)
-	for c in transmute([]u8)name {
-		switch c {
-		case '/', '\\', ':', '*', '?', '"', '<', '>', '|', 0 ..< 32: strings.write_byte(&b, '_')
-		case:                                                      strings.write_byte(&b, c)
-		}
-	}
-	out := strings.trim(strings.to_string(b), " .")
-	return out != "" ? out : "uploader"
 }

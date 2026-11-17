@@ -71,12 +71,10 @@ command_parse :: proc(text: string) -> (c: Command, ok: bool) {
 }
 
 // Whether a cliche runs and answers (--status: setup.Setup_Options.running): a ping does nothing there.
-cliche_running :: proc() -> bool { return command_send({verb = .Ping}) }
+cliche_running :: proc() -> bool { return instance.running({name = INSTANCE_NAME}) }
 
 // Asks the running cliche to end as its Quit does (--quit: setup.Setup_Options.quit). True when it took the request.
-cliche_quit :: proc() -> bool {
-	return instance.send({name = INSTANCE_NAME, wait_ms = 2000}, transmute([]u8)string(instance.MESSAGE_QUIT)) == .Forwarded
-}
+cliche_quit :: proc() -> bool { return instance.quit({name = INSTANCE_NAME}) }
 
 // Hands `c` to the running cliche. False when none runs.
 command_send :: proc(c: Command) -> bool {

@@ -59,16 +59,15 @@ main :: proc() {
 	p := project()
 	// (update: the release has the program alone and its manifest, signed by $UPDATE_SIGNING_KEY: what installed copies
 	// update themselves from)
-	r := release.commands({project = p, dist = "build/dist", files = DIST_FILES[:], check = proc() -> cli.Exit { return run_check(nil) }, update = cliche_update.PRODUCT})
+	r := release.commands({project = p, dist = "build/dist", files = DIST_FILES[:], check = proc() -> cli.Exit { return toolbox.ended(toolbox.program_check(build_options())) }, update = cliche_update.PRODUCT})
 	l := toolbox.licence_commands(LICENCE_TOOL)
+	b := toolbox.build_commands(build_options())
 	toolbox.tool_main("clichetool", {
-		{name = "build", usage = "[release]: the toolkit's text library when its sources changed, then build/cliche", run = run_build},
-		{name = "test", usage = ": the tests of the program", run = run_test},
-		{name = "check", usage = ": odin check of the program for this system and for Windows, and of this tool (-vet), the ui scopes, the changelog's fragments, the French catalogue, the tests, then a release build", run = run_check},
+		b[0], b[1], b[2],
 		{name = "shots", usage = "[folder [window...]]: (window: settings, editor, history, workflows, record, or motion: the Workflows mode frame by frame) the windows drawn offscreen, as PNG files (default build/shots)", run = run_shots},
 		toolbox.logo_command(logo()),
 		tk_changelog.command(p),
-		toolbox.i18n_command({dirs = {"src"}, folder = "i18n"}),
+		toolbox.i18n_command(I18N),
 		site_command(),
 		toolbox.notices_command(p),
 		toolbox.Command{name = "update", usage = "keygen <file> | pubkey | manifest <program> <version> - <out> | verify <manifest> -: cliche's update key and manifests", run = proc(args: []string) -> cli.Exit { return toolbox.update_command(cliche_update.PRODUCT, args) }},
@@ -80,26 +79,6 @@ main :: proc() {
 ////////////////////////////////
 // The site, made when it is deployed (.github/workflows/pages.yml) so that it cannot be behind a release.
 // {{version}} in the home page is the last version: its download links name the files of that release.
-
-SITE_META :: tk_site.Meta{
-	url         = "https://cliche.froment.software/",
-	name        = "Cliche",
-	repository  = "https://github.com/sachahjkl/cliche",
-	tagline     = "Fast screenshots and screen recordings, shared at once",
-	changes     = "CHANGELOG.md",
-	card        = "img/editor.png",
-	logo        = "img/logo.png",
-	logo_file   = "site/img/logo.png",
-	theme       = "#0e0f14",
-	accent      = "#ef8a5a",
-	author      = "Sacha Froment",
-	author_url  = "https://froment.software",
-	publisher   = "Froment Software",
-	ld_type     = "SoftwareApplication",
-	root_domain = false,   // (github.io answers for /robots.txt and /favicon.ico, not the site)
-	publisher_logo = "img/froment-software-64.png",
-	licence     = "MIT",
-}
 
 @(rodata)
 SITE_LD := [?][2]string{
@@ -117,7 +96,7 @@ SITE_DOWNLOADS := [?]tk_site.Download{
 
 @(private = "file")
 site_meta :: proc() -> tk_site.Meta {
-	m := SITE_META
+	m := tk_site.meta_default("Cliche", "https://cliche.froment.software/", "https://github.com/sachahjkl/cliche", "Fast screenshots and screen recordings, shared at once", "#0e0f14", "#ef8a5a", card = "img/editor.png")
 	m.ld_fields = SITE_LD[:]
 	m.shop = SHOP
 	return m
@@ -145,29 +124,13 @@ SHOP :: tk_site.Shop{
 	register       = "Open Cliche's settings (Ctrl+,), the <b>General</b> page, <b>Licence</b>: paste the key, or choose the file.",
 	extension      = ".clichelicence",
 	repository     = "https://github.com/sachahjkl/cliche",
-	seller         = SELLER,
+	seller         = tk_site.SELLER_FROMENT,
 	code_licence   = "MIT License",
 	platform       = "Linux, x64 (Wayland), and Windows 10 or 11, x64.",
 	network        = "Cliche connects to the network only when you ask it to: the <em>Upload</em> action sends the picture to the host you chose, by default Litterbox, catbox.moe's host of temporary files, which deletes it after 72 hours. That host receives the picture under its own terms.",
 	stylesheet     = "../style.css",
 	home           = "../",
 	updated        = "2026-11-13",
-}
-
-// The seller, as Wren's imprint names it: the same block in every program of Froment Software.
-SELLER :: tk_site.Seller{
-	name       = "Froment Software",
-	owner      = "Sacha Froment",
-	status     = "sole proprietor (<em>entrepreneur individuel</em>)",
-	address    = "7 Lieu-dit les Renardi&egrave;res, 72220 Marign&eacute;-Laill&eacute;, France",
-	email      = "contact@froment.software",
-	url        = "https://froment.software",
-	siren      = "131 941 718",
-	siret      = "131 941 718 00010",
-	ape        = "6201Z, computer programming",
-	registry   = "the French national register of companies (RNE)",
-	registered = "23 October 2026",
-	vat        = "not applicable, article 293 B of the French General Tax Code (<em>franchise en base de TVA</em>)",
 }
 
 // The site's command: the toolkit's, the shop's pages among the others (Meta.shop).

@@ -26,10 +26,8 @@ import "core:strings"
 import "core:sync"
 import capture "gt:capture"
 import config "gt:config"
-import crash "gt:crash"
 import host "gt:host"
 import i18n "gt:i18n"
-import tk_log "gt:log"
 import instance "gt:instance"
 import shortcuts "gt:shortcuts"
 import "gt:platform"
@@ -134,21 +132,16 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app.record = Record_Idle{}
 	app_keymap_start(app)
 
-	// (this process is the one that runs: its log and its crash reports, before any thread starts, so that each has them)
-	// (the file keeps the technical name; its folder is the vendor's)
-	logger := tk_log.install({program = APP_NAME, dir = tk_log.default_dir(APP_FOLDER, context.temp_allocator), echo = ODIN_DEBUG})
-	context.logger = logger
+	// (this process is the one that runs: its log and its crash reports, before any thread starts, so that each has them;
+	// the settings a report gives are read first)
+	crash_settings_keep(&app.crash_settings, &app.prefs)
+	program := host.program_start({name = APP_NAME, folder = APP_FOLDER, version = APP_VERSION, quiet = !ODIN_DEBUG, settings = {crash_settings_text, &app.crash_settings}})
+	context.logger = program.logger
 	// (here: the language is a setting, read above, and its unreadable lines go to the log, installed above; every text
 	// shown, the tray's menu and the default workflows' names included, is made below)
 	prefs_page.language_start(&app.prefs, PROGRAM_CATALOGUES)
-	crash_settings_keep(&app.crash_settings, &app.prefs)
-	_ = crash.install({program = APP_NAME, report_dir = crash.default_report_dir(APP_FOLDER, context.temp_allocator), version = APP_VERSION, log_tail = {tk_log.tail, logger.data}, settings = {crash_settings_text, &app.crash_settings}})
-	crash.begin_session()
 	// (said in a bar at the top of the main window when it shows: cliche starts in the notification area)
-	if crashed, has_crashed := crash.last_report(context.temp_allocator); has_crashed {
-		log.warnf("the last session did not end cleanly: %s", crashed)
-		crash_bar.init(&app.crash_bar, crashed)
-	}
+	crash_bar.init(&app.crash_bar, program.last_crash)
 
 	platform.set_app_id(APP_NAME)
 	platform.notify_set_app({name = APP_TITLE})
@@ -156,9 +149,8 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	if app.anchor == nil {
 		log.error("no window can be opened here")
 		app_free(app)
-		crash.end_session()
 		context.logger = {}
-		tk_log.close(logger)
+		host.program_end(&program)
 		return false
 	}
 	app_wake_add(app, app.anchor)
@@ -217,9 +209,8 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	// (the instance is let go, the tray icon gone: the new cliche, an update or Restart now, takes their place)
 	updates_launch(app)
 	app_free(app)
-	crash.end_session()
 	context.logger = {}
-	tk_log.close(logger)
+	host.program_end(&program)
 	return true
 }
 
@@ -525,7 +516,7 @@ app_results :: proc(app: ^App) {
 			if v.problem != "" { log.error(v.problem) }
 			delete(v.problem)
 		case Result_Setup_Facts:
-			updates_facts(app, v)
+			updates_installed(app, v)
 		case Result_Countdown:
 			app_countdown(app, v)
 		case Result_Desktop:
@@ -877,7 +868,6 @@ app_prefs_changed :: proc(app: ^App) {
 	app_shortcuts_follow_prefs(app)
 	app_integrate(app, force = false)
 	app_title_follow(app)
-	updates_auto(app)
 	history_prefs_changed(app)
 }
 

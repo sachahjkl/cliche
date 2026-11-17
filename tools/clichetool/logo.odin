@@ -4,7 +4,7 @@ package clichetool
 // the four corners of a selection (what a region is), warm, around a lens (what takes the picture), dark with a ring
 // and a highlight. Small sizes drop the ring and the highlight, which would blur (detail_for).
 // assets/logo.png (1024 px), the sizes the program and the site embed, cliche.ico and .project/image.png: the toolkit's
-// toolbox.write_logo writes them from logo_render.
+// toolbox.write_logo writes them from logo_draw, drawn large and shrunk.
 
 import paint "gt:paint"
 import toolbox "gt:toolbox"
@@ -18,8 +18,6 @@ LOGO_SIZES  := [?]int{16, 32, 64, 128, 256}
 LOGO_UNITS  :: 512.0
 // The width of an edge, in units.
 LOGO_EDGE   :: 10.0
-// Small sizes are drawn from a master this many times larger, in one step of the cubic filter at most this factor.
-LOGO_SHRINK_STEP :: 4
 
 // The colours: top and bottom of each gradient, and the edges.
 CORNER_TOP    :: 0xFF8A5B
@@ -65,9 +63,11 @@ corner_path :: proc(p: ^paint.Path, x, y, t, a: f32) {
 // 1: everything (32 px and up); 0: the corners and a plain lens (16 to 24).
 detail_for :: proc(size: int) -> int { return size <= 24 ? 0 : 1 }
 
-logo_draw :: proc(size: int, detail: int) -> paint.Canvas {
-	c := paint.canvas_make(size, size)
-	k := f32(size) / LOGO_UNITS
+// The picture `pixels` wide, with the details `size` keeps once shrunk.
+logo_draw :: proc(pixels, size: int, _: rawptr) -> paint.Canvas {
+	detail := detail_for(size)
+	c := paint.canvas_make(pixels, pixels)
+	k := f32(pixels) / LOGO_UNITS
 	c.transform = paint.scale(paint.IDENTITY, k, k)
 
 	// the four corners: one L each, round at its ends, turned a quarter for each; thicker when the picture is small
@@ -108,23 +108,9 @@ logo_draw :: proc(size: int, detail: int) -> paint.Canvas {
 	return c
 }
 
-// The picture at `size`: drawn large, then shrunk in steps the cubic filter keeps clean.
-logo_render :: proc(size: int) -> paint.Canvas {
-	n := size
-	for n < LOGO_MASTER { n *= LOGO_SHRINK_STEP }
-	c := logo_draw(n, detail_for(size))
-	for n > size {
-		next := max(n / LOGO_SHRINK_STEP, size)
-		small := paint.resize(c, next, next)
-		paint.canvas_destroy(&c)
-		c, n = small, next
-	}
-	return c
-}
-
 logo :: proc() -> toolbox.Logo {
 	return {
-		render = proc(size: int, _: rawptr) -> paint.Canvas { return logo_render(size) },
+		draw = logo_draw,
 		dir = LOGO_DIR, master = LOGO_MASTER, sizes = LOGO_SIZES[:], ico = LOGO_ICO, project_image = true,
 	}
 }

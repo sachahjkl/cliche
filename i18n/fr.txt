@@ -1046,15 +1046,6 @@ fr l'enregistrement a été arrêté avant de commencer
 en the recording could not be saved
 fr l'enregistrement n'a pas pu être sauvegardé
 
-en %d KB
-fr %d Ko
-
-en %s MB
-fr %s Mo
-
-en %s GB
-fr %s Go
-
 en Press %s again, or click Cliche's icon, to stop it.
 fr Appuyez de nouveau sur %s, ou cliquez sur l'icône de Cliche, pour l'arrêter.
 
