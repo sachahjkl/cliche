@@ -435,7 +435,7 @@ workflow_graph :: proc(app: ^App, em: f32) {
 	if len(wf.graph.nodes) == 1 && len(events) == 0 {
 		// (a workflow with its Capture alone: what to do next, under the graph)
 		if ui.tags("weak") {
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), text_pad = em * 0.6})
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), text_pad = em * ui.SPACE_2})
 			ui.label(fmt.tprintf("%s###workflow_hint", i18n.tr("Right click the graph, or drag from the Capture's picture, to add a step.")))
 		}
 	}

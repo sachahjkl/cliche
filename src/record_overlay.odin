@@ -173,8 +173,9 @@ record_overlay_build :: proc(h: ^host.Host, size: host.Vec2) {
 	}, d)
 
 	side := math.round(em * 2.2)
-	bar := [2]f32{math.round(em * (ready ? RECORD_BAR_READY_EM : RECORD_BAR_RUNNING_EM)), side + math.round(em * 0.8)}
-	at := record_bar_place(region, {size.x, size.y}, bar, width + math.round(em * 0.5))
+	// (the bar's inset above and below is the one at its ends: rounded as ui.space rounds it)
+	bar := [2]f32{math.round(em * (ready ? RECORD_BAR_READY_EM : RECORD_BAR_RUNNING_EM)), side + 2 * math.round(em * ui.SPACE_2)}
+	at := record_bar_place(region, {size.x, size.y}, bar, width + math.round(em * ui.SPACE_2))
 	ui.next({fixed_x = at.x, fixed_y = at.y, width = ui.px(bar.x), height = ui.px(bar.y), axis = .X, cross = .Center, radius = math.round(em * 0.6)})
 	box := ui.build_box({.Draw_Background, .Draw_Border}, "###bar")
 	if ui.parent(box) {

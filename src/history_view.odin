@@ -1074,10 +1074,10 @@ history_cell :: proc(app: ^App, i: int, cell, em: f32) {
 	if ui.parent(b) {
 		ui.space(ui.SPACE_1)
 		history_cell_picture(app, e, cell, em)
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), text_pad = em * 0.3, text_align = .Center})
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), text_pad = em * ui.SPACE_1, text_align = .Center})
 		ui.label(fmt.tprintf("%s###name", ui.text_shown(history_name(e))))
 		if ui.tags(e.missing ? "bad" : "weak") {
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.3)), text_pad = em * 0.3, text_align = .Center, font_size = math.round(em * 0.85)})
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.3)), text_pad = em * ui.SPACE_1, text_align = .Center, font_size = math.round(em * 0.85)})
 			ui.label(fmt.tprintf("%s###when", e.missing ? i18n.tr("File missing") : history_time_text(hw, e.time_ms)))
 		}
 	}
@@ -1095,7 +1095,7 @@ history_cell :: proc(app: ^App, i: int, cell, em: f32) {
 history_cell_picture :: proc(app: ^App, e: History_Entry, cell, em: f32) {
 	hw := &app.history_window
 	if e.kind == .Qr || e.kind == .Text {
-		ui.next({width = ui.px(cell), height = ui.px(cell), radius = em * 0.3, font_size = math.round(em * 0.85), text_pad = em * 0.5})
+		ui.next({width = ui.px(cell), height = ui.px(cell), radius = em * 0.3, font_size = math.round(em * 0.85), text_pad = em * ui.SPACE_2})
 		if ui.tags("weak") {
 			// (content: a press picks the cell and a double click opens it, as before; a drag selects the words)
 			ui.build_box({.Draw_Text, .Text_Wrap, .Clip, .Selectable}, fmt.tprintf("%s###text", ui.text_shown(history_first_words(e.text, 160))))
@@ -1275,7 +1275,7 @@ history_preview_view :: proc(v: ^ui.View, app: ^App) {
 			}
 		case e.kind == .Qr || e.kind == .Text:
 			if ui.scroll_y("###preview_text") {
-				ui.next({width = ui.fill(), text_pad = em * 0.8})
+				ui.next({width = ui.fill(), text_pad = em * ui.SPACE_3})
 				ui.paragraph(fmt.tprintf("%s###text", ui.text_shown(e.text)))
 			}
 		case:
@@ -1304,12 +1304,12 @@ history_details :: proc(hw: ^History_Window, e: History_Entry, em: f32) {
 	ui.space(ui.LINE_GAP)
 	for line, i in lines {
 		if i == 0 {
-			ui.next({width = ui.fill(), text_pad = em * 0.8})
+			ui.next({width = ui.fill(), text_pad = em * ui.SPACE_3})
 			ui.paragraph(fmt.tprintf("%s###detail%d", ui.text_shown(line), i))
 			continue
 		}
 		if ui.tags("weak") {
-			ui.next({width = ui.fill(), text_pad = em * 0.8, font_size = math.round(em * 0.86)})
+			ui.next({width = ui.fill(), text_pad = em * ui.SPACE_3, font_size = math.round(em * 0.86)})
 			ui.paragraph(fmt.tprintf("%s###detail%d", ui.text_shown(line), i))
 		}
 	}

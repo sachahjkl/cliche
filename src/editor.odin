@@ -1591,7 +1591,7 @@ editor_text_field :: proc(ed: ^Editor, em: f32) {
 	size := max(edit_text_px(&m.doc, sh) * m.view.zoom, em * 0.8)
 	face := sh.style.bold && ed.font_bold != 0 ? ed.font_bold : app.shared.font
 	at := edit_to_window(m.view, edit_text_origin(&m.doc, sh))
-	pad := math.round(em * 0.3)
+	pad := math.round(em * ui.SPACE_1)
 	// (as wide as its longest line, as tall as its lines: the field grows with what is typed; a pass over the text
 	// typed, not over the document)
 	text := ui.text_edit_string(&ed.field)
