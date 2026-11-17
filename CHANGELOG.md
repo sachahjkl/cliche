@@ -3,6 +3,14 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.20.0] - 2026-11-17 14:22
+
+### Added
+- **Scrolling capture**: one tall picture of a page that scrolls. Start it from the icon's menu, the command palette or `cliche --scrolling-capture`, then choose the page as a region. Cliche turns the mouse wheel over it and joins the screens until the page ends, then runs the region's workflow. On Windows it moves the pointer over the page and Escape cancels; on X11 keep the pointer over the page. Wayland lets no program turn another program's wheel, so there cliche says the capture is not available. The page's scroll bar does not stop the screens from joining: its width at the right edge is left out of the comparison (on Windows the system's width, elsewhere 20 pixels). The settings' Capture page sets the step, the most screens, the wait for the page to settle and that width.
+- **Share URL step**: a workflow sends an address to a ShareX URL sharing service (a `.sxcu` file of type `URLSharingService` in the uploaders' folder), for example after an upload. The run's notification says "Address shared", or why the service refused it.
+- **Ruler**: `cliche --ruler` (the icon's menu, the command palette, a shortcut you set) shows the frozen screen. A drag draws a line, and its length in pixels and its angle show beside it; Shift holds it to a multiple of 45°. Escape ends it, and nothing is captured.
+- **Auto capture**: a check item in the icon's menu (also `cliche --auto-capture` and the command palette) captures every 60 seconds until you stop it there. The settings' Capture page sets the interval and what it takes: the screen, the window in front, all the screens or the last region. Each capture runs the workflow of that capture.
+
 ## [0.19.0] - 2026-11-17 12:51
 
 ### Changed
@@ -304,6 +312,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.20.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.20.0
 [0.19.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.19.0
 [0.18.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.18.0
 [0.17.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.17.1
