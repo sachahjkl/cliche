@@ -139,7 +139,7 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 	app.prefs = prefs^
 	prefs^ = {}
 	app.settings = prefs_read(&app.prefs)
-	prefs_page.install_init(&app.install, &app.prefs, setup_options())
+	prefs_page.install_init(&app.install, &app.prefs, setup_options(), &app.announcer)
 	app.flow = Flow_Idle{}
 	app.record = Record_Idle{}
 	app_keymap_start(app)

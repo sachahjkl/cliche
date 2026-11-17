@@ -176,7 +176,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		pages = SETTINGS_PAGES[:], icon_font = app.history_window.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = prefs_file(),
 		version = APP_TITLE + " " + APP_VERSION,
-		changelog = &app.changelog, licence = app.licence.store != nil ? &app.licence : nil, install = &app.install, diagnostics = &app.history_window.host,
+		changelog = &app.changelog, licence = app.licence.store != nil ? &app.licence : nil, install = &app.install, diagnostics = prefs_page.diagnostics_of(&app.history_window.host),
 		// (the Updates page: the Updater's state and its buttons under update.auto, as in every program of the toolkit)
 		updater = app.updates.updater, restart = updates_page_restart,
 	}
