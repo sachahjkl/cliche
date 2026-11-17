@@ -16,6 +16,9 @@ fr Aucune capture d'écran
 en No colour
 fr Aucune couleur
 
+en No ruler
+fr Aucune règle
+
 en No QR code
 fr Aucun code QR
 
@@ -52,6 +55,9 @@ fr Capturer à nouveau la dernière zone
 en Pick a colour
 fr Prélever une couleur
 
+en Measure on the screen
+fr Mesurer à l'écran
+
 en Start recording
 fr Démarrer l'enregistrement
 
@@ -66,6 +72,9 @@ fr Annuler l'enregistrement
 
 en Capture a region and edit
 fr Capturer une zone et la modifier
+
+en Auto capture every %d s
+fr Capture automatique toutes les %d s
 
 en Upload the clipboard
 fr Mettre en ligne le presse-papiers
@@ -99,6 +108,18 @@ fr Hébergeurs ShareX
 
 en A ShareX uploader
 fr Un hébergeur ShareX
+
+en Auto capture stopped
+fr Capture automatique arrêtée
+
+en The auto capture cannot start
+fr La capture automatique ne peut pas démarrer
+
+en Auto capture: %s every %d s
+fr Capture automatique : %s toutes les %d s
+
+en The tray's menu stops it.
+fr Le menu de l'icône l'arrête.
 
 en Select and move
 fr Sélectionner et déplacer
@@ -1119,6 +1140,18 @@ fr Langues du texte lu
 en The languages of the text read in a region (cliche --ocr), as the engine names them, "+" between them (Tesseract: eng+fra). Empty: your languages.
 fr Les langues du texte lu dans une zone (cliche --ocr), telles que le moteur les nomme, séparées par « + » (Tesseract : eng+fra). Vide : vos langues.
 
+en Auto capture interval
+fr Intervalle de la capture automatique
+
+en The time between two captures of the auto capture. The tray's menu starts and stops it (cliche --auto-capture).
+fr Le temps entre deux captures de la capture automatique. Le menu de l'icône la démarre et l'arrête (cliche --auto-capture).
+
+en Auto capture takes
+fr La capture automatique prend
+
+en What each capture of the auto capture takes: the screen under the pointer, the window in front, all the screens, or the last region (chosen at the first capture when there is none yet). Each runs the workflow of that capture.
+fr Ce que prend chaque capture de la capture automatique : l'écran sous le pointeur, la fenêtre au premier plan, tous les écrans, ou la dernière zone (choisie à la première capture quand il n'y en a pas encore). Chacune exécute le scénario de cette capture.
+
 en Video frame rate
 fr Images par seconde (vidéo)
 
@@ -1248,6 +1281,9 @@ fr Capturer à nouveau le dernier rectangle choisi, sans superposition. S'il n'y
 en Pick a colour on the screen: a click copies it as #rrggbb, Shift and a click as rgb(r, g, b).
 fr Prélever une couleur à l'écran : un clic la copie sous la forme #rrggbb, Maj et un clic sous la forme rgb(r, g, b).
 
+en Measure on the frozen screen: a drag draws a line with its length in pixels and its angle (Shift: a multiple of 45°). Escape ends it; nothing is captured.
+fr Mesurer sur l'écran figé : un glisser trace une ligne avec sa longueur en pixels et son angle (Maj : un multiple de 45°). Échap y met fin ; rien n'est capturé.
+
 en General
 fr Général
 
@@ -1287,6 +1323,9 @@ fr Capturer l'écran sous le pointeur
 en Pick a colour on the screen
 fr Prélever une couleur à l'écran
 
+en Start or stop the auto capture
+fr Démarrer ou arrêter la capture automatique
+
 en Record
 fr Enregistrer
 
@@ -1316,6 +1355,18 @@ fr Ouvrir l'historique
 
 en Open the settings
 fr Ouvrir les réglages
+
+en The screen
+fr L'écran
+
+en The window in front
+fr La fenêtre au premier plan
+
+en All the screens
+fr Tous les écrans
+
+en The last region
+fr La dernière zone
 
 en Small
 fr Petite
@@ -1422,6 +1473,9 @@ fr l'hébergeur n'a pas de FileFormName : le champ de formulaire du fichier
 en the uploader's body is %s: Cliche sends a file as MultipartFormData or Binary
 fr le corps de l'hébergeur est %s : Cliche envoie un fichier en MultipartFormData ou en Binary
 
+en %s gave no URL in its answer
+fr %s n'a donné aucune URL dans sa réponse
+
 en %s answered: %s
 fr %s a répondu : %s
 
@@ -1430,9 +1484,6 @@ fr %s a répondu avec le statut %d
 
 en %s answered with the status %d: %s
 fr %s a répondu avec le statut %d : %s
-
-en %s gave no URL in its answer
-fr %s n'a donné aucune URL dans sa réponse
 
 en %s: cannot be read
 fr %s : ne peut pas être lu
@@ -1524,20 +1575,11 @@ fr Mettre en ligne des fichiers
 en A region
 fr Une zone
 
-en The screen
-fr L'écran
-
-en The window in front
-fr La fenêtre au premier plan
-
-en All the screens
-fr Tous les écrans
-
-en The last region
-fr La dernière zone
-
 en A colour
 fr Une couleur
+
+en A measure
+fr Une mesure
 
 en Edit then share
 fr Modifier puis partager
@@ -1623,6 +1665,9 @@ fr Par défaut : %s
 en Reset
 fr Réinitialiser
 
+en none: put a URL sharing service (.sxcu) in the uploaders' folder
+fr aucun : mettez un service de partage d'URL (.sxcu) dans le dossier des hébergeurs
+
 en Where the workflow starts: the picture of the capture; for an upload of the clipboard or of files, its picture, its file or its text, on the output of its kind. Its own shortcut captures what it says, then runs this workflow; the delay (counted down in a notification) and the pointer apply to every capture that runs it.
 fr Le début du scénario : l'image de la capture ; pour une mise en ligne du presse-papiers ou de fichiers, son image, son fichier ou son texte, sur la sortie de son genre. Son propre raccourci capture ce qu'il indique, puis exécute ce scénario ; le délai (décompté dans une notification) et le pointeur valent pour chaque capture qui l'exécute.
 
@@ -1634,6 +1679,9 @@ fr Pose sa question dans une notification. Oui, ou un clic dessus, déclenche «
 
 en Sends a picture as a PNG file, a file as it is, a text as a .txt file, to the host. "done" fires once it is online: link a Delete file's "when" to it. Off in a preview.
 fr Envoie une image en fichier PNG, un fichier tel quel, un texte en fichier .txt, à l'hébergeur. « terminé » se déclenche une fois en ligne : reliez-y le « quand » d'un « Supprimer le fichier ». Désactivé dans un aperçu.
+
+en Sends the address to a ShareX URL sharing service (a .sxcu file whose DestinationType is URLSharingService), then passes the same address on. Off in a preview.
+fr Envoie l'adresse à un service de partage d'URL ShareX (un fichier .sxcu dont le DestinationType est URLSharingService), puis transmet la même adresse. Désactivé dans un aperçu.
 
 en Sends the picture to "yes" or to "no".
 fr Envoie l'image vers « oui » ou vers « non ».
@@ -1986,6 +2034,15 @@ fr Raccourcir l'URL
 en Shortener
 fr Raccourcisseur
 
+en Share URL
+fr Partager l'URL
+
+en Service
+fr Service
+
+en The first sharing service
+fr Le premier service de partage
+
 en Copy text
 fr Copier le texte
 
@@ -2036,6 +2093,12 @@ fr Ajouter à l'historique
 
 en with %s
 fr avec %s
+
+en to %s
+fr vers %s
+
+en to the first sharing service
+fr vers le premier service de partage
 
 en squares of %d px
 fr carrés de %d px
@@ -2100,9 +2163,6 @@ fr %s dans le dossier par défaut
 en %s to %s
 fr %s dans %s
 
-en to %s
-fr vers %s
-
 en to the default host
 fr vers l'hébergeur par défaut
 
@@ -2120,6 +2180,9 @@ fr aucune adresse n'est arrivée
 
 en no URL shortener is set up
 fr aucun raccourcisseur d'URL n'est configuré
+
+en no URL sharing service is set up: put its .sxcu in the uploaders' folder
+fr aucun service de partage d'URL n'est configuré : mettez son fichier .sxcu dans le dossier des hébergeurs
 
 en nothing came in to open
 fr rien n'est arrivé à ouvrir
@@ -2177,6 +2240,12 @@ fr Texte copié
 
 en Text read
 fr Texte lu
+
+en Address shared
+fr Adresse partagée
+
+en Uploaded, not shared
+fr En ligne, non partagée
 
 en Screenshot saved and uploaded
 fr Capture d'écran enregistrée et mise en ligne

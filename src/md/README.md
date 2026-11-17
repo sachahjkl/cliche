@@ -22,6 +22,8 @@ documentation (`README.md` at the root) and not the map of the code (`docs/archi
 
 ## File Index
 
+- [features/auto-capture.md](features/auto-capture.md): a capture every N seconds; a thread that posts the capture's
+  command to the inbox, woken to stop
 - [features/editor-bars.md](features/editor-bars.md): the editor's two bars, tools above and actions under; why nothing
   folds away
 - [features/history-selection.md](features/history-selection.md): the history's selection, the toolkit's, one for the
@@ -30,6 +32,10 @@ documentation (`README.md` at the root) and not the map of the code (`docs/archi
   captures, `#` the workflows, the add palette as a chooser)
 - [features/region-overlay.md](features/region-overlay.md): the region's overlay, one window per output and one
   selection over the whole desktop; a drag across outputs; new windows opened before the old ones close
+- [features/ruler.md](features/ruler.md): the ruler, a source as the colour picker is; the overlay's third mode; what
+  the length and the angle measure
+- [features/share-url.md](features/share-url.md): the Share URL step, the Shorten URL request with nothing read back;
+  an uploader's uses
 - [features/tool-bars.md](features/tool-bars.md): every row of tools is the toolkit's bar; which wraps, which folds
   into its "…" menu, and why the history's choices are controls
 - [features/title-bar.md](features/title-bar.md): cliche's own title bar on its normal windows, the system's as a

@@ -218,6 +218,8 @@ a_node_says_what_it_does :: proc(t: ^testing.T) {
 	check(t, &g, .Ask, "\"Go on?\"")
 	check(t, &g, .Ask, "\"Upload it?\"", proc(n: ^flowgraph.Node) { param(n, "question").text = strings.clone("Upload it?") })
 	check(t, &g, .Shorten_Url, "with is.gd")
+	check(t, &g, .Share_Url, "to the first sharing service")
+	check(t, &g, .Share_Url, "to Mastodon", proc(n: ^flowgraph.Node) { param(n, "service").text = strings.clone("Mastodon") })
 	check(t, &g, .Make_Qr, "squares of 8 px")
 	check(t, &g, .Delete_File, "")
 	// (a value out of its range, as a hand-edited file may hold, is read clamped)

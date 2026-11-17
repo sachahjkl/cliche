@@ -8,10 +8,12 @@ package cliche
 //                     \______________/
 //                      (screen, window, all screens, last region: no selection)
 //   Idle -> Capturing -> Selecting (colour) -> (Picked) Idle
+//   Idle -> Capturing -> Selecting (ruler) -> (Cancelled) Idle
 //
 // The picture is handed to a run of the capture's workflow (workflow_app.odin), which goes on outside this flow: the next
 // capture may start at once. A trigger while a capture goes on is refused: one capture at a time. A colour picked is no
-// picture: the app copies its words, and the flow is Idle again.
+// picture: the app copies its words, and the flow is Idle again. The ruler takes nothing: it measures on the frozen
+// desktop until Escape, its only way out.
 
 import capture "gt:capture"
 import i18n "gt:i18n"
@@ -25,12 +27,13 @@ Source :: enum u8 {
 	All_Screens,   // every output in one picture, no interface
 	Last_Region,   // the rectangle chosen last, cut from the desktop now, no interface
 	Color,         // a pixel's colour, chosen on the frozen desktop: no picture
+	Ruler,         // lines measured on the frozen desktop: no picture, nothing taken
 }
 
-SOURCE_NAMES := [Source]string{.Region = "region", .Screen = "screen", .Window = "window", .All_Screens = "all-screens", .Last_Region = "last-region", .Color = "color"}
+SOURCE_NAMES := [Source]string{.Region = "region", .Screen = "screen", .Window = "window", .All_Screens = "all-screens", .Last_Region = "last-region", .Color = "color", .Ruler = "ruler"}
 
 // The sources whose picture is chosen on the frozen desktop (the overlay).
-SOURCES_SELECTED :: bit_set[Source]{.Region, .Color}
+SOURCES_SELECTED :: bit_set[Source]{.Region, .Color, .Ruler}
 
 // The source a capture of `s` takes: a last region with none chosen yet is a region chosen now.
 source_resolve :: proc(s: Source, has_last_region: bool) -> Source {
@@ -71,7 +74,7 @@ FLOW_ERROR_TEXT := [Flow_Error]string{
 
 Flow_Idle      :: struct {}
 Flow_Capturing :: struct { source: Source }   // the worker reads the screen (after the workflow's delay)
-Flow_Selecting :: struct { source: Source }   // the overlay shows the frozen desktop (Region, Color)
+Flow_Selecting :: struct { source: Source }   // the overlay shows the frozen desktop (Region, Color, Ruler)
 Flow_Encoding  :: struct { source: Source }   // the picture is cut (a region) and handed to its workflow
 Flow_Done      :: struct { source: Source }
 Flow_Failed    :: struct { source: Source, error: Flow_Error }
@@ -115,7 +118,7 @@ flow_step :: proc(f: Flow, e: Flow_Event) -> (next: Flow, ok: bool) {
 	case Flow_Selecting:
 		#partial switch v in e {
 		case Flow_Confirmed:
-			if s.source != .Region { break }   // (a colour is picked, not confirmed)
+			if s.source != .Region { break }   // (a colour is picked, not confirmed; the ruler takes nothing)
 			return Flow_Encoding{.Region}, true
 		case Flow_Picked:
 			if s.source != .Color { break }

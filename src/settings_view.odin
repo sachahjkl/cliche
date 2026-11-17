@@ -52,7 +52,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 
 // The actions of the palette and of the sheet of keys that the history's (History_Action) do not hold already.
 Settings_Action :: enum u8 {
-	Capture_Screen, Capture_Window, Capture_All_Screens, Capture_Last_Region, Capture_Edit, Pick_Color, Read_Qr, Read_Text, Record, Record_Gif,
+	Capture_Screen, Capture_Window, Capture_All_Screens, Capture_Last_Region, Capture_Edit, Pick_Color, Ruler, Auto_Capture, Read_Qr, Read_Text, Record, Record_Gif,
 	Choose_Folder, Open_Uploaders, Import_Uploader, Shortcuts_Page, System_Shortcuts, Check_Updates,
 }
 
@@ -63,6 +63,8 @@ SETTINGS_ACTIONS := [Settings_Action]ui.Command{
 	.Capture_Last_Region = {id = "capture_last_region", label = i18n.later("Capture the last region again"), group = i18n.later("Capture"), icon = lucide.IMAGE, tags = {"screenshot", "repeat", "same", "again"}},
 	.Capture_Edit     = {id = "capture_edit", label = i18n.later("Capture a region and edit"), group = i18n.later("Capture"), icon = lucide.PENCIL, tags = {"screenshot", "annotate", "editor", "draw"}},
 	.Pick_Color       = {id = "pick_color", label = i18n.later("Pick a colour on the screen"), group = i18n.later("Capture"), icon = lucide.PALETTE, tags = {"colour", "color", "eyedropper", "picker", "hex", "rgb"}},
+	.Ruler            = {id = "ruler", label = i18n.later("Measure on the screen"), group = i18n.later("Capture"), icon = lucide.RULER, tags = {"ruler", "length", "distance", "angle", "pixels", "measure"}},
+	.Auto_Capture     = {id = "auto_capture", label = i18n.later("Start or stop the auto capture"), group = i18n.later("Capture"), icon = lucide.TIMER, tags = {"auto", "timer", "interval", "every", "repeat", "periodic", "timelapse"}},
 	.Read_Qr          = {id = "read_qr", label = i18n.later("Read a QR code"), group = i18n.later("Capture"), icon = lucide.QR_CODE, tags = {"scan", "barcode"}},
 	.Read_Text        = {id = "read_text", label = i18n.later("Read the text"), group = i18n.later("Capture"), icon = lucide.CLIPBOARD, tags = {"ocr", "recognition", "copy"}},
 	.Record           = {id = "record", label = i18n.later("Record a video"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"mp4", "screencast", "video"}},
@@ -139,6 +141,8 @@ settings_action :: proc(app: ^App, a: Settings_Action) {
 	case .Capture_Last_Region: hw.hide_due = true; app_trigger(app, .Last_Region)
 	case .Capture_Edit:     hw.hide_due = true; app_trigger(app, .Edit)
 	case .Pick_Color:       hw.hide_due = true; app_color_pick(app)
+	case .Ruler:            hw.hide_due = true; app_ruler(app)
+	case .Auto_Capture:     app_auto_capture_toggle(app)
 	case .Read_Qr:          hw.hide_due = true; app_trigger(app, .Qr)
 	case .Read_Text:        hw.hide_due = true; app_trigger(app, .Ocr)
 	case .Record:           hw.hide_due = true; app_record_trigger(app, .Mp4)
@@ -187,6 +191,12 @@ settings_choices :: proc(user: rawptr, name: string) -> (labels, values: []strin
 	case "general.tray_click":
 		l := [?]string{i18n.later("Capture a region"), i18n.later("Capture the screen"), i18n.later("Capture the window"), i18n.later("Read a QR code"), i18n.later("Read the text"), i18n.later("Record a video"), i18n.later("Open the history"), i18n.later("Open the settings")}
 		@(static, rodata) v := [?]string{"region", "screen", "window", "qr", "ocr", "record", "history", "settings"}
+		@(static) shown: [len(l)]string
+		return labels_shown(shown[:], l[:]), v[:]
+	case "capture.auto_source":
+		// (in AUTO_CAPTURE_SOURCES, by SOURCE_NAMES' words: settings.odin reads them back)
+		l := [?]string{i18n.later("The screen"), i18n.later("The window in front"), i18n.later("All the screens"), i18n.later("The last region")}
+		@(static, rodata) v := [?]string{"screen", "window", "all-screens", "last-region"}
 		@(static) shown: [len(l)]string
 		return labels_shown(shown[:], l[:]), v[:]
 	case "upload.uploader":

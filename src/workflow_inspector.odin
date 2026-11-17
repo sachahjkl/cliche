@@ -209,11 +209,16 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		res = ui.node_inspector("###wf_params", &m.inspector, &CATALOG, n, {
 			user = app,
-			// (the Lists: the Upload node's host, the Shorten URL node's shortener)
+			// (the Lists: the Upload node's host, the Shorten URL node's shortener, the Share URL node's service)
 			lists = proc(user: rawptr, n: ^flowgraph.Node, param: flowgraph.Param_Def) -> []string {
-				return Node_Kind(n.kind) == .Shorten_Url ? (^App)(user).uploaders.shorteners : (^App)(user).uploaders.names
+				u := &(^App)(user).uploaders
+				#partial switch Node_Kind(n.kind) {
+				case .Shorten_Url: return u.shorteners
+				case .Share_Url:   return u.sharers
+				}
+				return u.names
 			},
-			default_text = fmt.tprintf(i18n.tr("The default: %s"), Node_Kind(n.kind) == .Shorten_Url ? BUILTIN_SHORTENER_NAME : app.settings.uploader),
+			default_text = fmt.tprintf(i18n.tr("The default: %s"), node_list_default(app, n)),
 		})
 		ui.space(ui.SPACE_3)
 	}
@@ -248,6 +253,18 @@ workflow_inspector_body :: proc(app: ^App, em: f32) {
 	}
 }
 
+// What an empty List parameter takes (uploader_find's choice).
+@(private = "file")
+node_list_default :: proc(app: ^App, n: ^flowgraph.Node) -> string {
+	#partial switch Node_Kind(n.kind) {
+	case .Shorten_Url: return BUILTIN_SHORTENER_NAME
+	case .Share_Url:
+		if len(app.uploaders.sharers) > 0 { return app.uploaders.sharers[0] }
+		return i18n.tr("none: put a URL sharing service (.sxcu) in the uploaders' folder")
+	}
+	return app.settings.uploader
+}
+
 // What a kind of node does, in a sentence.
 @(private = "file")
 node_what :: proc(n: ^flowgraph.Node) -> string {
@@ -257,6 +274,7 @@ node_what :: proc(n: ^flowgraph.Node) -> string {
 	case .Annotate:       return i18n.tr("Opens the picture in the editor. Done sends its picture on and fires \"done\"; Cancel stops this branch and fires \"cancelled\".")
 	case .Ask:            return i18n.tr("Asks its question in a notification. Yes, or a click on it, fires \"yes\"; No, or the notification closed, fires \"no\". Link an effect's \"when\" to one of them.")
 	case .Upload:         return i18n.tr("Sends a picture as a PNG file, a file as it is, a text as a .txt file, to the host. \"done\" fires once it is online: link a Delete file's \"when\" to it. Off in a preview.")
+	case .Share_Url:      return i18n.tr("Sends the address to a ShareX URL sharing service (a .sxcu file whose DestinationType is URLSharingService), then passes the same address on. Off in a preview.")
 	case .Condition:      return i18n.tr("Sends the picture to \"yes\" or to \"no\".")
 	case .Notify:         return i18n.tr("One notification at the end of the run: its title, and what comes in or a summary. Linked to \"when\", it waits for that action.")
 	case .Add_To_History: return i18n.tr("Keeps the file, the address or the text that comes in, in the history.")

@@ -26,6 +26,8 @@ USAGE :: `cliche: screenshots
   cliche --all-screens        capture every screen in one picture
   cliche --last-region        capture the last region chosen again, with no overlay
   cliche --color              pick a colour on the screen: a click copies #rrggbb (Shift: rgb())
+  cliche --ruler              measure on the screen: a drag gives a line's length and angle; Escape ends
+  cliche --auto-capture       start a capture every few seconds (capture.auto_interval); again: stop it
   cliche --qr                 read the QR code in a region
   cliche --ocr                read the text in a region
   cliche --record             record a region as an MP4 video; the same command again stops it

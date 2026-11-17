@@ -39,14 +39,15 @@ import "gt:ui"
 // cliche's own texts in each language it has (i18n/<language>.txt, written by `clichetool i18n <language>`).
 PROGRAM_CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
 
-// The tray menu's items. The first ten are Shortcut_Action's, in its order.
-Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit, Upload_Clipboard, Upload_File }
+// The tray menu's items. The first eleven are Shortcut_Action's, in its order.
+Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Ruler, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit, Upload_Clipboard, Upload_File, Auto_Capture }
 
 // The ids of the tray's recent entries: TRAY_RECENT_ID + their place in App.tray_recent (past Tray_Item's).
 TRAY_RECENT_ID :: 1000
 
-// A command another start handed over (token owned).
-Inbox_Item :: struct { verb: Verb, token: string }
+// A command another start handed over (token owned), or an auto capture's tick (`auto_generation`: its run's; 0 for
+// the others).
+Inbox_Item :: struct { verb: Verb, token: string, auto_generation: u64 }
 
 App :: struct {
 	prefs:      config.Prefs,
@@ -108,6 +109,8 @@ App :: struct {
 	tray_keys:  [Shortcut_Action]string,                   // the keys the tray's menu shows (owned): built again when they change
 	tray_edit_keys: string,                                // the keys of "Capture a region and edit": its workflow's own (owned)
 	tray_menu:  Tray_Menu,                                 // the menu shown
+	tray_auto:  Tray_Auto,                                 // its auto capture's item as shown
+	auto_capture: Auto_Capture,                            // auto_capture.odin: its current run and generation
 	tray_language: u32,                                    // i18n.version() of its texts: the system keeps what it was given
 	tray_recent: [TRAY_RECENT_MAX]u64,                     // the history's entries its Recent submenu shows (0: none), newest first
 	tray_recent_version: u64,                              // the history's version they were read at (+1: 0 is "never")
@@ -188,6 +191,9 @@ app_run :: proc(prefs: ^config.Prefs, owner: instance.Owner, first: Command) -> 
 		updates_follow(app)
 	}
 
+	// (not waited for: once the stop returns its thread posts nothing more and touches nothing of the app, so the inbox
+	// and the app may go while it ends by itself)
+	auto_capture_stop(&app.auto_capture)
 	instance.serve_stop(app.server)
 	updates_stop(app)   // (its news wakes the windows: before they go)
 	app_shortcuts_stop(app)
@@ -376,7 +382,7 @@ app_message :: proc(user: rawptr, message: []byte) {
 	c, ok := command_parse(string(message))
 	if !ok { return }
 	sync.mutex_lock(&app.inbox_lock)
-	append(&app.inbox, Inbox_Item{c.verb, strings.clone(c.token)})
+	append(&app.inbox, Inbox_Item{verb = c.verb, token = strings.clone(c.token)})
 	sync.mutex_unlock(&app.inbox_lock)
 	app_wake(app)
 }
@@ -388,7 +394,9 @@ app_inbox :: proc(app: ^App) {
 	clear(&app.inbox)
 	sync.mutex_unlock(&app.inbox_lock)
 	for item in items {
-		app_command(app, item.verb, item.token)
+		// (a tick queued just before its run was stopped or replaced: the stop has the last word)
+		stale := item.auto_generation != 0 && !auto_capture_current(&app.auto_capture, item.auto_generation)
+		if !stale { app_command(app, item.verb, item.token) }
 		delete(item.token)
 	}
 }
@@ -407,6 +415,8 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .All_Screens: app_trigger(app, .All_Screens)
 	case .Last_Region: app_trigger(app, .Last_Region)
 	case .Color:    app_color_pick(app)
+	case .Ruler:    app_ruler(app)
+	case .Auto_Capture: app_auto_capture_toggle(app)
 	case .Qr:       app_trigger(app, .Qr)
 	case .Ocr:      app_trigger(app, .Ocr)
 	case .Record:     app_record_trigger(app, .Mp4)
@@ -453,6 +463,11 @@ app_color_pick :: proc(app: ^App) -> bool {
 	return app_capture_start(app, .Color, {}, record = false)
 }
 
+// The ruler: the frozen desktop, where a drag measures a line (ruler.odin); Escape ends it (app_region_cancelled).
+app_ruler :: proc(app: ^App) -> bool {
+	return app_capture_start(app, .Ruler, {}, record = false)
+}
+
 // A capture of `source` starts: for the workflow of `target`, or for a recording's region (`record`). The workflow's
 // Capture node gives its delay and whether the pointer is in the picture.
 app_capture_start :: proc(app: ^App, asked: Source, target: Capture_Target, record: bool) -> bool {
@@ -463,9 +478,9 @@ app_capture_start :: proc(app: ^App, asked: Source, target: Capture_Target, reco
 	app.capture_target, app.capture_record = target, record
 	// (the renderer's device made while the desktop is read: the overlay's first show does not wait for the driver)
 	if source in SOURCES_SELECTED && app.shared.main == nil && render.device_preload_state() == .Not_Started { render.preload_device() }
-	// (a recording's region and a colour: no workflow's options; a colour is read without the pointer over it)
+	// (a recording's region, a colour and the ruler: no workflow's options; a colour is read without the pointer over it)
 	o: Capture_Options
-	if !record && source != .Color { o = capture_options(workflows_target(&app.workflows, target)) }
+	if !record && source != .Color && source != .Ruler { o = capture_options(workflows_target(&app.workflows, target)) }
 	worker_send(&app.worker, Job_Grab{source = source, delay_ms = o.delay_s * 1000, cursor = o.cursor, rect = app.last_region})
 	return true
 }
@@ -551,9 +566,9 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 	}
 	app.desktop, app.has_desktop = d, true
 	app_step(app, Flow_Captured{})
-	picker := false
-	if s, selecting := app.flow.(Flow_Selecting); selecting { picker = s.source == .Color }
-	if !overlay_show(app, picker) {
+	mode := Overlay_Mode.Region
+	if s, selecting := app.flow.(Flow_Selecting); selecting { mode = overlay_mode_of(s.source) }
+	if !overlay_show(app, mode) {
 		app_desktop_drop(app)
 		app_step(app, Flow_Capture_Failed{.Failed})
 		if app.capture_record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
@@ -678,6 +693,7 @@ app_outcome :: proc(app: ^App) {
 		title := i18n.tr("No screenshot")
 		switch {
 		case s.source == .Color: title = i18n.tr("No colour")
+		case s.source == .Ruler: title = i18n.tr("No ruler")
 		case app.capture_target.workflow != 0:
 		case app.capture_target.trigger == .Qr:  title = i18n.tr("No QR code")
 		case app.capture_target.trigger == .Ocr: title = i18n.tr("No text")
@@ -728,11 +744,13 @@ TRAY_SHORTCUT_TEXT := [Shortcut_Action]string{
 	.Screen = i18n.later("Capture the screen"), .Region = i18n.later("Capture a region"), .Record = i18n.later("Record a video"), .Record_Gif = i18n.later("Record a GIF"),
 	.Window = i18n.later("Capture the window in front"), .Ocr = i18n.later("Read the text"), .Qr = i18n.later("Read a QR code"),
 	.All_Screens = i18n.later("Capture all the screens"), .Last_Region = i18n.later("Capture the last region again"), .Color = i18n.later("Pick a colour"),
+	.Ruler = i18n.later("Measure on the screen"),
 }
 
 // The tray's menu for the recording's state, each command with the keys that run it (tray_keys).
 app_tray_menu :: proc(app: ^App) {
 	app.tray_language = i18n.version()
+	app.tray_auto = tray_auto_now(app)
 	if app.tray == nil { return }
 	switch {
 	case record_running(app.record): app.tray_menu = .Recording
@@ -756,6 +774,8 @@ app_tray_menu :: proc(app: ^App) {
 			append(&items, platform.Tray_Menu_Item{id = int(item), text = i18n.tr(TRAY_SHORTCUT_TEXT[a]), default = item == default_item, shortcut = app.tray_keys[a]})
 		}
 		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Edit), text = i18n.tr("Capture a region and edit"), shortcut = app.tray_edit_keys})
+		// (a check item: its mark says whether it runs; its words, the interval it takes)
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Auto_Capture), kind = .Check, checked = app.tray_auto.running, text = fmt.tprintf(i18n.tr("Auto capture every %d s"), app.tray_auto.seconds)})
 		append(&items, platform.Tray_Menu_Item{kind = .Separator})
 		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Upload_Clipboard), text = i18n.tr("Upload the clipboard")})
 		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Upload_File), text = i18n.tr("Upload files…")})
@@ -812,7 +832,13 @@ app_tray_follow :: proc(app: ^App) {
 	}
 	menu := Tray_Menu.Rest
 	if record_running(app.record) { menu = .Recording } else if record_ready(app.record) { menu = .Ready }
-	if changed || menu != app.tray_menu || app.tray_language != i18n.version() || tray_recent_due(app) { app_tray_menu(app) }
+	if changed || menu != app.tray_menu || app.tray_language != i18n.version() || tray_recent_due(app) || tray_auto_now(app) != app.tray_auto { app_tray_menu(app) }
+}
+
+// The auto capture's item as it must show now.
+@(private = "file")
+tray_auto_now :: proc(app: ^App) -> Tray_Auto {
+	return {running = auto_capture_running(&app.auto_capture), seconds = app.settings.auto_interval_s}
 }
 
 @(private = "file")
@@ -840,9 +866,10 @@ app_tray :: proc(app: ^App) {
 				continue
 			}
 			switch Tray_Item(e.item) {
-			case .Screen, .Region, .Record, .Record_Gif, .Window, .Ocr, .Qr, .All_Screens, .Last_Region, .Color:
+			case .Screen, .Region, .Record, .Record_Gif, .Window, .Ocr, .Qr, .All_Screens, .Last_Region, .Color, .Ruler:
 				app_shortcut_run(app, Shortcut_Action(e.item - int(Tray_Item.Screen)))
 			case .Edit:          app_trigger(app, .Edit)
+			case .Auto_Capture:  app_auto_capture_toggle(app)
 			case .Upload_Clipboard: workflow_from_clipboard(app)
 			case .Upload_File:   workflow_from_files(app)
 			case .Workflows:     workflows_show(app)
@@ -866,6 +893,7 @@ app_prefs_changed :: proc(app: ^App) {
 	app.settings = prefs_read(&app.prefs)
 	app.announcer.mode = prefs_page.announce_mode(&app.prefs)
 	app_shortcuts_follow_prefs(app)
+	app_auto_capture_follow_prefs(app)
 	app_integrate(app, force = false)
 	app_title_follow(app)
 	history_prefs_changed(app)
@@ -915,11 +943,12 @@ app_integrate :: proc(app: ^App, force: bool) {
 	worker_send(&app.worker, Job_Integrate{menu = want[0], autostart = want[1]})
 }
 
-// The uploaders found (the settings' list); one just imported becomes the one used.
+// The uploaders found (the settings' list); one just imported becomes the one used, when it is a host (a shortener or a
+// sharing service is chosen on its workflow node).
 @(private = "file")
 app_uploaders :: proc(app: ^App, r: Result_Uploaders) {
 	uploaders_result_free(&app.uploaders)
 	app.uploaders = r
-	if r.imported != "" && config.set_from_string(&app.prefs, "upload.uploader", r.imported, .User) == .None { app_prefs_changed(app) }
+	if r.imported != "" && slice.contains(r.names, r.imported) && config.set_from_string(&app.prefs, "upload.uploader", r.imported, .User) == .None { app_prefs_changed(app) }
 	if r.import_problem != "" { log.warn(r.import_problem) }
 }

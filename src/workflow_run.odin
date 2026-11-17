@@ -195,7 +195,7 @@ Run_Summary :: struct {
 // read), and a body with the address, the file, the text read, or what failed. Temp allocator.
 run_summary :: proc(run: ^Run) -> (s: Run_Summary) {
 	path, url, short, text, problem: string
-	copied_image, copied_text, read_qr, read_text, upload_failed, saved_failed, deleted: bool
+	copied_image, copied_text, read_qr, read_text, upload_failed, saved_failed, deleted, shared, share_failed: bool
 	notify_title, notify_body: string
 	for &rn, i in run.flow.nodes {
 		n := &run.flow.graph.nodes[i]
@@ -205,6 +205,7 @@ run_summary :: proc(run: ^Run) -> (s: Run_Summary) {
 			if problem == "" { problem = rn.message != "" ? rn.message : i18n.tr("a step failed") }
 			#partial switch kind {
 			case .Upload, .Shorten_Url: upload_failed = true
+			case .Share_Url:            share_failed = true
 			case .Save_File:            saved_failed = true
 			}
 			continue
@@ -214,6 +215,8 @@ run_summary :: proc(run: ^Run) -> (s: Run_Summary) {
 		case .Save_File:  if path == "" { path = output_text(&rn, 0) }; s.entries += 1
 		case .Upload:     if url == "" { url = output_text(&rn, 0) }; s.entries += 1
 		case .Shorten_Url: if short == "" { short = output_text(&rn, 0) }; s.entries += 1
+		// (the address shared is the one said, unless a shorter one was made from it)
+		case .Share_Url:  shared = true; if url == "" { url = output_text(&rn, 0) }; s.entries += 1
 		case .Copy_Image: copied_image = true; s.entries += 1
 		case .Copy_Text:  copied_text = true; s.entries += 1
 		case .Open, .Pin:  s.entries += 1
@@ -236,6 +239,8 @@ run_summary :: proc(run: ^Run) -> (s: Run_Summary) {
 	case read_qr:                  s.title = i18n.tr("QR code read")
 	case read_text && copied_text: s.title = i18n.tr("Text copied")
 	case read_text:                s.title = i18n.tr("Text read")
+	case shared:                   s.title = i18n.tr("Address shared")
+	case share_failed && url != "": s.title = i18n.tr("Uploaded, not shared")
 	case url != "" && !captured:   s.title = copied_text ? i18n.tr("Uploaded: the address is on the clipboard") : i18n.tr("Uploaded")
 	case url != "":                s.title = path != "" ? i18n.tr("Screenshot saved and uploaded") : i18n.tr("Screenshot uploaded")
 	case upload_failed && path != "": s.title = i18n.tr("Screenshot saved, not uploaded")
@@ -249,6 +254,7 @@ run_summary :: proc(run: ^Run) -> (s: Run_Summary) {
 	}
 	switch {
 	case s.failed && s.entries == 0: s.body = problem
+	case share_failed:               s.body = problem   // (the address is in the history; why it was not shared is news)
 	case url != "":                  s.body = url
 	case upload_failed:              s.body = problem
 	case text != "":                 s.body = notice_text(text)

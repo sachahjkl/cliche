@@ -75,9 +75,9 @@ Result_Workflows :: struct { workflows: Workflows, problem: string }
 // A picture of the history decoded for a preview run of `workflow` (owned; ok false: it cannot be read).
 Result_Picture :: struct { shot: Shot, workflow: u64, ok: bool }
 
-// The uploaders found (owned): the hosts, the URL shorteners, and what was wrong with the others; `imported`: the name of
-// one just imported.
-Result_Uploaders :: struct { names: []string, shorteners: []string, problems: []string, imported: string, import_problem: string }
+// The uploaders found (owned): the hosts, the URL shorteners, the URL sharing services, and what was wrong with the
+// others; `imported`: the name of one just imported.
+Result_Uploaders :: struct { names: []string, shorteners: []string, sharers: []string, problems: []string, imported: string, import_problem: string }
 
 Result_Written :: struct { ok: bool, path: string }   // (path owned)
 
@@ -199,7 +199,7 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		}
 		capture.set_cursor(w.session, v.cursor)
 		switch v.source {
-		case .Region, .Color: worker_post(w, grab_desktop(w.session))
+		case .Region, .Color, .Ruler: worker_post(w, grab_desktop(w.session))
 		case .Screen:         worker_post(w, grab_screen(w.session, w.pointer))
 		case .Window:         worker_post(w, grab_window(w.session))
 		case .All_Screens:    worker_post(w, grab_all(w.session))
@@ -406,7 +406,7 @@ windows_clone :: proc(wins: []capture.Window) -> []capture.Window {
 @(private = "file")
 uploaders_result :: proc(imported, import_problem: string) -> Result_Uploaders {
 	list, problems := uploaders_load(context.temp_allocator)
-	r := Result_Uploaders{names = uploaders_names(list, shorteners = false), shorteners = uploaders_names(list, shorteners = true), problems = make([]string, len(problems))}
+	r := Result_Uploaders{names = uploaders_names(list, .Upload), shorteners = uploaders_names(list, .Shorten), sharers = uploaders_names(list, .Share), problems = make([]string, len(problems))}
 	for p, i in problems { r.problems[i] = strings.clone(p) }
 	r.imported = strings.clone(imported)
 	r.import_problem = strings.clone(import_problem)
@@ -418,6 +418,8 @@ uploaders_result_free :: proc(r: ^Result_Uploaders) {
 	delete(r.names)
 	for n in r.shorteners { delete(n) }
 	delete(r.shorteners)
+	for n in r.sharers { delete(n) }
+	delete(r.sharers)
 	for p in r.problems { delete(p) }
 	delete(r.problems)
 	delete(r.imported)

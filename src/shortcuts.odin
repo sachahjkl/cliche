@@ -18,17 +18,17 @@ import prefs_page "gt:prefs_page"
 import shortcuts "gt:shortcuts"
 
 // In the order of the settings' page and of the tray's menu: the screen, the region, the two recordings, then the rest.
-Shortcut_Action :: enum u8 { Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color }
+Shortcut_Action :: enum u8 { Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Ruler }
 
 SHORTCUT_IDS := [Shortcut_Action]string{
 	.Screen = "screen", .Region = "region", .Record = "record", .Record_Gif = "record_gif", .Window = "window", .Ocr = "ocr", .Qr = "qr",
-	.All_Screens = "all_screens", .Last_Region = "last_region", .Color = "color",
+	.All_Screens = "all_screens", .Last_Region = "last_region", .Color = "color", .Ruler = "ruler",
 }
 
 SHORTCUT_PREFS := [Shortcut_Action]string{
 	.Screen = "shortcut.screen", .Region = "shortcut.region", .Record = "shortcut.record", .Record_Gif = "shortcut.record_gif",
 	.Window = "shortcut.window", .Ocr = "shortcut.ocr", .Qr = "shortcut.qr",
-	.All_Screens = "shortcut.all_screens", .Last_Region = "shortcut.last_region", .Color = "shortcut.color",
+	.All_Screens = "shortcut.all_screens", .Last_Region = "shortcut.last_region", .Color = "shortcut.color", .Ruler = "shortcut.ruler",
 }
 
 // The settings' page: each preference with its shortcut in the service.
@@ -43,6 +43,7 @@ SHORTCUT_PAGE_PREFS := [Shortcut_Action]prefs_page.Shortcut_Pref{
 	.All_Screens = {pref = "shortcut.all_screens", id = "all_screens"},
 	.Last_Region = {pref = "shortcut.last_region", id = "last_region"},
 	.Color       = {pref = "shortcut.color", id = "color"},
+	.Ruler       = {pref = "shortcut.ruler", id = "ruler"},
 }
 
 // What each one does, as the system's list of shortcuts shows it.
@@ -57,13 +58,14 @@ SHORTCUT_TEXT := [Shortcut_Action]string{
 	.All_Screens = i18n.later("Capture all the screens"),
 	.Last_Region = i18n.later("Capture the last region again"),
 	.Color       = i18n.later("Pick a colour on the screen"),
+	.Ruler       = i18n.later("Measure on the screen"),
 }
 
 // The command that does the same, for a compositor's own bindings.
 SHORTCUT_COMMANDS := [Shortcut_Action]string{
 	.Screen = "cliche --screen", .Region = "cliche --region", .Record = "cliche --record", .Record_Gif = "cliche --record-gif",
 	.Window = "cliche --window", .Ocr = "cliche --ocr", .Qr = "cliche --qr",
-	.All_Screens = "cliche --all-screens", .Last_Region = "cliche --last-region", .Color = "cliche --color",
+	.All_Screens = "cliche --all-screens", .Last_Region = "cliche --last-region", .Color = "cliche --color", .Ruler = "cliche --ruler",
 }
 
 // A workflow's keys as the service was given them last (owned).
@@ -143,6 +145,7 @@ app_shortcut_run :: proc(app: ^App, a: Shortcut_Action) {
 	case .All_Screens: app_trigger(app, .All_Screens)
 	case .Last_Region: app_trigger(app, .Last_Region)
 	case .Color:       app_color_pick(app)
+	case .Ruler:       app_ruler(app)
 	}
 }
 

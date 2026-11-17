@@ -31,6 +31,8 @@ PREF_DEFS := [?]config.Def{
 
 	// Capture
 	{name = "capture.ocr_languages", title = i18n.later("Languages of the text read"), description = i18n.later("The languages of the text read in a region (cliche --ocr), as the engine names them, \"+\" between them (Tesseract: eng+fra). Empty: your languages."), kind = .String, default = {s = ""}, tags = {"ocr", "text", "language", "tesseract", "recognition"}},
+	{name = "capture.auto_interval", title = i18n.later("Auto capture interval"), description = i18n.later("The time between two captures of the auto capture. The tray's menu starts and stops it (cliche --auto-capture)."), kind = .Int, default = {i = 60}, min = 1, max = 86400, bounded = true, value_kind = .Duration, unit = .Second, tags = {"auto", "timer", "interval", "every", "repeat", "periodic", "timelapse"}},
+	{name = "capture.auto_source", title = i18n.later("Auto capture takes"), description = i18n.later("What each capture of the auto capture takes: the screen under the pointer, the window in front, all the screens, or the last region (chosen at the first capture when there is none yet). Each runs the workflow of that capture."), kind = .String, default = {s = "screen"}, tags = {"auto", "timer", "screen", "window", "region", "monitors"}},
 
 	// Recording
 	{name = "record.fps", title = i18n.later("Video frame rate"), description = i18n.later("The most frames a second of a video. Fewer come when the screen changes less."), kind = .Int, default = {i = 30}, min = 1, max = 60, bounded = true, value_kind = .Rate, tags = {"video", "mp4", "frame rate", "smooth"}},
@@ -76,6 +78,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "shortcut.all_screens", title = i18n.later("Capture all the screens"), description = i18n.later("Capture every screen in one picture."), kind = .String, default = {s = ""}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "monitors", "desktop", "full screen"}},
 	{name = "shortcut.last_region", title = i18n.later("Capture the last region again"), description = i18n.later("Capture the rectangle chosen last again, with no overlay. With none chosen yet: choose one."), kind = .String, default = {s = "Ctrl+Alt+R"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "repeat", "same", "again"}},
 	{name = "shortcut.color", title = i18n.later("Pick a colour"), description = i18n.later("Pick a colour on the screen: a click copies it as #rrggbb, Shift and a click as rgb(r, g, b)."), kind = .String, default = {s = "Ctrl+Alt+C"}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "colour", "color", "eyedropper", "picker", "hex"}},
+	{name = "shortcut.ruler", title = i18n.later("Measure on the screen"), description = i18n.later("Measure on the frozen screen: a drag draws a line with its length in pixels and its angle (Shift: a multiple of 45°). Escape ends it; nothing is captured."), kind = .String, default = {s = ""}, value_kind = .Keys, tags = {"hotkey", "keybinding", "keys", "ruler", "measure", "length", "distance", "angle"}},
 }
 
 // What a click on the tray icon does (general.tray_click).
@@ -95,6 +98,8 @@ Settings :: struct {
 	history_view:       History_View_Mode,
 	history_thumbnail:  int,
 	ocr_languages:      string,
+	auto_interval_s:    int,      // capture.auto_interval
+	auto_source:        Source,   // capture.auto_source: one of AUTO_CAPTURE_SOURCES
 	confirm_on_release: bool,
 	frame_windows:      bool,
 	magnifier:          bool,
@@ -157,6 +162,10 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.record_cursor = config.bool_of(p, "record.cursor")
 	s.history_size, s.history_view, s.history_thumbnail = history_settings_read(p)
 	s.ocr_languages = strings.clone(strings.trim_space(config.string_of(p, "capture.ocr_languages")), allocator)
+	s.auto_interval_s = max(int(config.int_of(p, "capture.auto_interval")), 1)
+	s.auto_source = .Screen
+	auto_source := config.string_of(p, "capture.auto_source")
+	for name, src in SOURCE_NAMES { if name == auto_source && src in AUTO_CAPTURE_SOURCES { s.auto_source = src } }
 	s.confirm_on_release = config.bool_of(p, "region.confirm_on_release")
 	s.frame_windows = config.bool_of(p, "region.frame_windows")
 	s.magnifier = config.bool_of(p, "region.magnifier")

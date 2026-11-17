@@ -637,3 +637,37 @@ the_summary_gives_the_short_address :: proc(t: ^testing.T) {
 	testing.expect_value(t, s.open, "https://is.gd/x")
 	testing.expect(t, s.open_url)
 }
+
+// An address shared says so, and the address is the one a click opens; a share refused says why, the upload kept.
+@(test)
+the_summary_says_an_address_was_shared :: proc(t: ^testing.T) {
+	for refused in ([2]bool{false, true}) {
+		g := graph({.Capture, .Upload, .Share_Url}, {{0, 1}, {1, 2}})
+		defer flowgraph.graph_destroy(&g)
+		run: Run
+		run_start(&run, g, picture(2, 2), {id = 1})
+		defer run_free(&run)
+		testing.expect(t, slice.equal(ids(run_tasks(&run)), []u64{2}))
+		testing.expect(t, done_with_text(&run, 1, PORT_URL, "https://host/a.png", .Upload))
+		tasks := run_tasks(&run)
+		testing.expect(t, slice.equal(ids(tasks), []u64{3}))
+		given, _ := flowgraph.task_input(tasks[0], 0)
+		testing.expect_value(t, run_data(given).text, "https://host/a.png")
+		if refused {
+			testing.expect(t, flowgraph.run_finish(&run.flow, 2, {outcome = .Failed, message = "Service answered with the status 500"}))
+		} else {
+			testing.expect(t, done_with_text(&run, 2, PORT_URL, "https://host/a.png", .Share_Url))
+		}
+		testing.expect(t, flowgraph.run_over(&run.flow))
+		s := run_summary(&run)
+		if refused {
+			testing.expect_value(t, s.title, "Uploaded, not shared")
+			testing.expect_value(t, s.body, "Service answered with the status 500")
+		} else {
+			testing.expect_value(t, s.title, "Address shared")
+			testing.expect_value(t, s.body, "https://host/a.png")
+		}
+		testing.expect_value(t, s.open, "https://host/a.png")
+		testing.expect(t, s.open_url)
+	}
+}

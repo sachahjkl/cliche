@@ -21,9 +21,11 @@ package cliche
 //   Enter, Space         the rectangle chosen, else the output under the pointer
 //   arrows / Shift       move the rectangle a pixel (ten with Ctrl) / grow or shrink it from its bottom-right corner
 //   Escape, right click  the rectangle dropped, or, with none, the region given up
-// The colour picker (`picker`) is the same windows, undimmed, with no rectangle: a click takes the colour under the
-// pointer (Shift: as rgb()), Enter the one under the pointer, the arrows move that point a pixel (ten with Ctrl),
-// Escape gives it up.
+// The colour picker (Overlay_Mode.Picker) is the same windows, undimmed, with no rectangle: a click takes the colour
+// under the pointer (Shift: as rgb()), Enter the one under the pointer, the arrows move that point a pixel (ten with
+// Ctrl), Escape gives it up.
+// The ruler (Overlay_Mode.Ruler, ruler.odin) is the same windows, undimmed, with no rectangle: a drag draws a line, its
+// length and angle beside it (Shift: a multiple of 45°); Escape or a right click ends it. It takes nothing.
 // The decision is acted on after the frames (overlay_after_frame): no window is hidden from inside its own frame.
 
 import "core:fmt"
@@ -44,6 +46,17 @@ OUTLINE_PX        :: 1     // the outline of what is chosen, in the window's pix
 HANDLE_PX         :: 7     // the side of a grip's square on the rectangle chosen, in the window's pixels (scaled)
 
 Overlay_Decision :: enum u8 { None, Confirm, Cancel, Pick }
+
+// What the overlay is for: a region (or a recording's), the colour picker, the ruler. Its source's (overlay_mode_of).
+Overlay_Mode :: enum u8 { Region, Picker, Ruler }
+
+overlay_mode_of :: proc(s: Source) -> Overlay_Mode {
+	#partial switch s {
+	case .Color: return .Picker
+	case .Ruler: return .Ruler
+	}
+	return .Region
+}
 
 // One window of the overlay, over one output. On the heap: a Host stays where it is while it is open.
 Overlay_Window :: struct {
@@ -67,16 +80,17 @@ Overlay :: struct {
 	has_hover: bool,
 	decision: Overlay_Decision,
 	chosen:   Rect,             // what Confirm takes
-	picker:   bool,             // the colour picker: a click takes a pixel's colour, no rectangle
+	mode:     Overlay_Mode,
+	ruler:    Ruler,            // the ruler's line (mode .Ruler)
 	picked:   [4]u8,            // what Pick takes
 	pick_rgb: bool,             // its words as rgb() (Shift)
 	hover_grip: Grip,           // the grip of the rectangle under the pointer (its shape)
 	clicks:   Click_Track,      // the presses, for a double click
 }
 
-// Opens (where needed) and shows the overlay over the desktop the worker read: a region's, or the colour picker
-// (`picker`). False: no window could open.
-overlay_show :: proc(app: ^App, picker := false) -> bool {
+// Opens (where needed) and shows the overlay over the desktop the worker read: a region's, the colour picker or the
+// ruler (`mode`). False: no window could open.
+overlay_show :: proc(app: ^App, mode: Overlay_Mode) -> bool {
 	o := &app.overlay
 	if !app.has_desktop { return false }
 	if !overlay_windows_match(app) { return false }
@@ -95,7 +109,8 @@ overlay_show :: proc(app: ^App, picker := false) -> bool {
 	o.decision = .None
 	o.has_hover = false
 	o.has_pointer = false
-	o.picker = picker
+	o.mode = mode
+	o.ruler = {}
 	o.hover_grip = .None
 	o.clicks = {}
 	if !o.placed { o.windows[0].out = overlay_output(app, o.windows[0]) }
@@ -324,15 +339,20 @@ overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Eve
 		#partial switch e.kind {
 		case .Mouse_Move:
 			o.pointer, o.has_pointer = overlay_point(w, e.pos), true
-			selection_move(&o.sel, o.pointer)
+			switch o.mode {
+			case .Region: selection_move(&o.sel, o.pointer)
+			case .Ruler:  ruler_move(&o.ruler, o.pointer, .Shift in e.mods)
+			case .Picker:
+			}
 		case .Mouse_Press:
 			p := overlay_point(w, e.pos)
 			o.pointer, o.has_pointer = p, true
 			if e.button == .Right { overlay_escape(o); continue }
 			if e.button != .Left { continue }
-			if o.picker {
-				overlay_pick(app, p, .Shift in e.mods)
-				continue
+			switch o.mode {
+			case .Picker: overlay_pick(app, p, .Shift in e.mods); continue
+			case .Ruler:  ruler_press(&o.ruler, p); continue
+			case .Region:
 			}
 			// (a double click inside what is chosen takes it; its first click took the inside, and moved nothing)
 			if click_double(&o.clicks, p, ui.now_ms()) && o.sel.has_rect && rect_contains(o.sel.rect, p) {
@@ -344,8 +364,12 @@ overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Eve
 			o.sel.bounds = overlay_bounds_at(app, p)   // (a recording's: the output of the press)
 			selection_press(&o.sel, p)
 		case .Mouse_Release:
-			if e.button != .Left || o.picker { continue }
+			if e.button != .Left || o.mode == .Picker { continue }
 			p := overlay_point(w, e.pos)
+			if o.mode == .Ruler {
+				ruler_release(&o.ruler, p, .Shift in e.mods)
+				continue
+			}
 			switch selection_release(&o.sel, p) {
 			case .Click:
 				if r, ok := frame_pick(app.desktop.windows, p, o.sel.bounds, frames); ok { overlay_confirm(o, r) }
@@ -354,13 +378,17 @@ overlay_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Eve
 			case .Adjusted, .Held, .None:   // (adjusted: it stays chosen, Enter or a double click takes it)
 			}
 		case .Key_Press:
-			if o.picker { overlay_picker_key(app, e) } else { overlay_key(app, e) }
+			switch o.mode {
+			case .Region: overlay_key(app, e)
+			case .Picker: overlay_picker_key(app, e)
+			case .Ruler:  if e.key == .Escape { o.decision = .Cancel }
+			}
 		}
 	}
 	// (the window framed under the pointer, while no rectangle is chosen or dragged; else the grip under it)
 	o.has_hover = false
 	o.hover_grip = .None
-	if o.has_pointer && !o.picker && !o.sel.dragging {
+	if o.has_pointer && o.mode == .Region && !o.sel.dragging {
 		if o.sel.has_rect {
 			o.hover_grip = selection_grip_at(&o.sel, o.pointer)
 		} else {
@@ -434,7 +462,7 @@ overlay_pick :: proc(app: ^App, p: Point, rgb: bool) {
 // The pointer's shape over the overlay: the grip it is on or holds, else a cross.
 @(private = "file")
 overlay_cursor :: proc(o: ^Overlay) -> platform.Cursor {
-	if o.picker { return .Crosshair }
+	if o.mode != .Region { return .Crosshair }
 	g := o.hover_grip
 	if o.sel.dragging { g = o.sel.grip }   // (a new rectangle being drawn: None, a cross)
 	switch g {
@@ -482,6 +510,11 @@ Overlay_Draw :: struct {
 	handles:    bool,      // the grips' squares on what is chosen
 	swatch:     [4]u8,     // the colour under the pointer (the picker), beside the label
 	has_swatch: bool,
+	line:       bool,      // the ruler's line, from `line_from` to `line_to` (logical), its words `measure` beside it
+	line_from:  Point,
+	line_to:    Point,
+	measure:    string,
+	measure_w:  f32,       // their width at font_size
 }
 
 // Where the frozen picture is on the desktop.
@@ -500,7 +533,8 @@ overlay_build :: proc(h: ^host.Host, size: ui.Vec2) {
 		pointer = o.pointer, magnifier = app.settings.magnifier && here, font = app.shared.font, font_size = ui.font_size()}
 	// (no widget takes the pointer here: the shape is asked of the state, which the host gives the window after the build)
 	h.state.cursor_request = overlay_cursor(o)
-	if o.picker {
+	switch o.mode {
+	case .Picker:
 		// (the colours as they are: no shade; the magnifier always, it is the picker's tool)
 		d.dim, d.magnifier = 0, here
 		if o.has_pointer {
@@ -509,7 +543,16 @@ overlay_build :: proc(h: ^host.Host, size: ui.Vec2) {
 				d.label = fmt.tprintf("%s   %d, %d", color_pick_text(c, false), o.pointer.x, o.pointer.y)
 			}
 		}
-	} else {
+	case .Ruler:
+		// (no shade: what is measured is seen as it is; the magnifier as region.magnifier says, for the line's ends)
+		d.dim = 0
+		if o.has_pointer { d.label = fmt.tprintf("%d, %d", o.pointer.x, o.pointer.y) }
+		if o.ruler.has_line {
+			d.line, d.line_from, d.line_to = true, o.ruler.from, o.ruler.to
+			d.measure = ruler_label(o.ruler.from, o.ruler.to)
+			d.measure_w = ui.text_width(d.font, d.font_size, d.measure)
+		}
+	case .Region:
 		switch {
 		case o.sel.has_rect:  d.lit, d.has_lit = o.sel.rect, true
 		case o.has_hover:     d.lit, d.has_lit = o.hover, true
@@ -564,7 +607,38 @@ overlay_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		draw.rect(dc, full, {1, 1, 1, 0.9}, 0, px)
 		if d.handles { overlay_handles(d, dc, full) }
 	}
+	if d.line { overlay_ruler(d, dc, win) }
 	if d.magnifier { overlay_magnifier(d, dc, win) }
+}
+
+// The ruler's line, through the middle of its end pixels, a dark edge under a light line (it reads on any picture),
+// a tick across each end, and its words in a box beside its middle, kept inside the window.
+@(private = "file")
+overlay_ruler :: proc(d: ^Overlay_Draw, dc: ^draw.Context, win: draw.Rect) {
+	s := d.win_scale
+	half := [2]f32{0.5, 0.5} * s
+	a := to_window(d, {d.line_from.x, d.line_from.y, 1, 1}).min + half
+	b := to_window(d, {d.line_to.x, d.line_to.y, 1, 1}).min + half
+	px := max(math.round(OUTLINE_PX * s), 1)
+	draw.line(dc, a, b, px * 3, {0, 0, 0, 0.6})
+	draw.line(dc, a, b, px, {1, 1, 1, 1})
+	dir := b - a
+	length := math.sqrt(dir.x * dir.x + dir.y * dir.y)
+	normal := length > 0 ? [2]f32{-dir.y, dir.x} / length : [2]f32{0, 1}
+	tick := normal * HANDLE_PX * s
+	for end in ([2][2]f32{a, b}) {
+		draw.line(dc, end - tick, end + tick, px * 3, {0, 0, 0, 0.6})
+		draw.line(dc, end - tick, end + tick, px, {1, 1, 1, 1})
+	}
+	fs := d.font_size
+	box := [2]f32{d.measure_w + fs, fs * 1.6}
+	// (beside the middle, on the side of the normal that points up: the words do not sit on the line)
+	side := normal.y > 0 ? -normal : normal
+	at := (a + b) / 2 + side * fs * 1.4 - box / 2
+	at.x = clamp(at.x, win.min.x, max(win.max.x - box.x, win.min.x))
+	at.y = clamp(at.y, win.min.y, max(win.max.y - box.y, win.min.y))
+	draw.rect(dc, {at, at + box}, {0, 0, 0, 0.8}, fs * 0.3)
+	draw.text(dc, d.font, fs, {at.x + fs * 0.5, at.y + fs * 1.15}, {1, 1, 1, 1}, d.measure)
 }
 
 // `p` kept inside `r`.

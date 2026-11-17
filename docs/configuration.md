@@ -40,6 +40,8 @@ settings do not show them.
 |---|---|---|---|
 | `general.tray_click` | text, region, screen, window, qr, ocr, record, history or settings | region | What a click on Cliche's icon in the notification area does: capture a region, the screen, the window, read a QR code or the text, record a video, open the history or the settings. |
 | `capture.ocr_languages` | text | empty | The languages of the text read in a region (`cliche --ocr`), as the engine names them, `+` between them (Tesseract: `eng+fra`). Empty: your languages. |
+| `capture.auto_interval` | integer, 1 to 86400 seconds | 60 | The time between two captures of the auto capture. The tray's menu starts and stops it (`cliche --auto-capture`). |
+| `capture.auto_source` | text, screen, window, all-screens or last-region | screen | What each capture of the auto capture takes: the screen under the pointer, the window in front, all the screens, or the last region (chosen at the first capture when there is none yet). Each runs the workflow of that capture. |
 | `record.fps` | integer, 1 to 60 | 30 | The most frames a second of a video. Fewer come when the screen changes less. |
 | `record.gif_fps` | integer, 1 to 30 | 12 | The most frames a second of a GIF. Fewer make smaller files. |
 | `record.gif_width` | integer, 0 to 3840 pixels | 960 | The largest width of a GIF: a wider recording is scaled down. 0: its own size. |
@@ -71,6 +73,7 @@ settings do not show them.
 | `shortcut.all_screens` | keys | empty | Captures every screen in one picture. Empty: no keys. |
 | `shortcut.last_region` | keys | Ctrl+Alt+R | Captures the rectangle chosen last again, with no overlay. With none chosen yet: choose one. |
 | `shortcut.color` | keys | Ctrl+Alt+C | Picks a colour on the screen: a click copies it as `#rrggbb`, Shift and a click as `rgb(r, g, b)`. |
+| `shortcut.ruler` | keys | empty | Measures on the frozen screen: a drag draws a line with its length in pixels and its angle (Shift: a multiple of 45°). Escape ends it; nothing is captured. Empty: no keys. |
 
 A shortcut is Ctrl, Shift, Alt, Win and a key, joined by `+`. Click its field in the settings and press the keys. On
 Linux the desktop portal binds them, and may ask you first or give other keys; where it gives none, bind the command in

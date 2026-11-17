@@ -65,6 +65,26 @@ a_colour_is_picked_on_the_frozen_desktop :: proc(t: ^testing.T) {
 	f = step(t, Flow_Selecting{.Color}, Flow_Cancelled{}, Flow_Idle{})
 }
 
+// The ruler measures on the frozen desktop and takes nothing: neither a confirm nor a pick ends it, Escape alone does;
+// while it is shown, no capture starts. Its overlay is neither the region's nor the picker's.
+@(test)
+the_ruler_takes_nothing :: proc(t: ^testing.T) {
+	f: Flow = Flow_Idle{}
+	f = step(t, f, Flow_Trigger{.Ruler}, Flow_Capturing{.Ruler})
+	f = step(t, f, Flow_Captured{}, Flow_Selecting{.Ruler})
+	testing.expect(t, flow_busy(f))
+	_, ok := flow_step(f, Flow_Confirmed{})
+	testing.expect(t, !ok, "the ruler takes no rectangle")
+	_, ok = flow_step(f, Flow_Picked{})
+	testing.expect(t, !ok, "the ruler takes no colour")
+	_, ok = flow_step(f, Flow_Trigger{.Screen})
+	testing.expect(t, !ok, "no capture while it measures")
+	f = step(t, f, Flow_Cancelled{}, Flow_Idle{})
+	testing.expect_value(t, overlay_mode_of(.Ruler), Overlay_Mode.Ruler)
+	testing.expect_value(t, overlay_mode_of(.Color), Overlay_Mode.Picker)
+	testing.expect_value(t, overlay_mode_of(.Region), Overlay_Mode.Region)
+}
+
 // A delay is counted down a second at a time, its notice withdrawn just before the picture; the waits make the delay.
 @(test)
 a_delay_is_counted_down :: proc(t: ^testing.T) {

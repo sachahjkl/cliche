@@ -28,7 +28,7 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Screenshot delay | `capture.delay` `settings.odin:28`; not for Region `app.odin:399` | partial: one global value, no per-workflow delay, no countdown shown | P2 | S; a `delay` parameter on the Capture node `workflow_nodes.odin:74` |
 | Show cursor in screenshot | recordings only `settings.odin:36` | missing for pictures | P2 | M; gt:capture must give the cursor image and position |
 | Scrolling capture | no | decided: not now (WP5, "Decisions") | P2 | L; scroll events + frame stitching in gt:capture/gt:image, Windows first (Wayland cannot inject scroll without portals) |
-| Auto capture (every N seconds) | no | decided: not now (WP5, "Decisions") | P3 | S; timer in `app.odin` that fires a trigger |
+| Auto capture (every N seconds) | the tray's check item, `--auto-capture`, the palette; `capture.auto_interval`, `capture.auto_source` (`auto_capture.odin`) | done (WP5, "Decisions") | – | – |
 | Text capture (OCR) | trigger `.Ocr`, node Read text `workflow_nodes.odin:183`, `ocr_read.odin` | none | – | – |
 | Screen recording MP4 | `record.odin`, `Record_Format.Mp4` `record.odin:33` | partial: no audio, no pause | P2 | L for audio; S for pause |
 | Screen recording GIF | `Record_Format.Gif`, `record.gif_fps`, `record.gif_width` | none | – | – |
@@ -122,7 +122,7 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Before-upload confirmation | node Ask: a notification with Yes and No, its "yes" and "no" action outputs (`workflow_app.odin` `workflow_ask`, `Questions` in `workflow_run.odin`) | done (WP5) | – | – |
 | Delete file locally after upload | node Delete file; Upload's "done" action output to wait for the upload | done (WP5) | – | – |
 | Shorten URL | node Shorten URL: is.gd, v.gd built in, or a `.sxcu` URL shortener (`{input}`), `uploader.odin` `shorten_url` | done (WP5) | – | – |
-| Share URL (services) | no | decided: not now; a `URLSharingService` `.sxcu` is read, and the Shorten URL request (`uploader_request` with `input`) would send it | P3 | S |
+| Share URL (services) | node Share URL: a `URLSharingService` `.sxcu`, the Shorten URL request with nothing read back (`uploader.odin` `share_url`) | done (WP5, "Decisions"); ShareX's built-in services (X, Facebook...) are not built in | P3 | S per service, as a built-in `.sxcu` |
 | Copy URL | Copy text | none | – | – |
 | Open URL in the browser | node Open (an address in the browser, a file with its program) | done (WP5) | – | – |
 | Show QR code of the URL | node Make QR code (`gt:qr` encodes): text in, picture out | done (WP5) | – | – |
@@ -135,7 +135,7 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | ShareX | cliche today | Gap | Prio | Effort, fit |
 |---|---|---|---|---|
 | Screen colour picker (copies hex) | no | missing | P1 | S; new trigger `.Color`: the overlay with the magnifier, a click copies `#rrggbb` (pixel from the frozen frame) |
-| Ruler | size label `overlay.odin:306` | decided: not now (WP5, "Decisions") | P3 | S; overlay mode that does not confirm |
+| Ruler | `--ruler`, the tray, the palette, `shortcut.ruler`: `Source.Ruler`, the overlay's Ruler mode (`ruler.odin`) | done (WP5, "Decisions") | – | – |
 | OCR | trigger `.Ocr` | none | – | – |
 | QR code: decode | trigger `.Qr` | none | – | – |
 | QR code: generate from text | node Make QR code; on the clipboard's text: a workflow of the Clipboard trigger | done (WP5) | – | – |
@@ -293,8 +293,8 @@ Files: `workflow_nodes.odin`, `workflow_ops.odin`, `workflow_app.odin`, `workflo
 3. A click on a run's notification opens its address, else its file. The toolkit had the click already (Linux: the
    "default" action; Windows: the toast's activation).
 4. History: Open the URL, the tray's Recent submenu, the filter by date (a menu: today, 7 days, 30 days).
-5. Image combiner (the history's selection), QR code generator (the Make QR code node). Scrolling capture, auto capture
-   and the ruler: the decisions below.
+5. Image combiner (the history's selection), QR code generator (the Make QR code node), auto capture, the ruler, the
+   Share URL node. Scrolling capture: the decision below.
 
 #### Decisions
 
@@ -305,11 +305,19 @@ Files: `workflow_nodes.odin`, `workflow_ops.odin`, `workflow_app.odin`, `workflo
   X11 XTest; Wayland only through the RemoteDesktop portal (libei), which asks the person each session. (3) A flow in
   cliche: the window chosen, scroll, `capture.window`, until two frames are the same or a count is reached, on the
   worker. Windows first; Wayland when the portal is worth its question.
-- **Auto capture: not now (S).** It takes a thread that sleeps the interval and puts a trigger in the app's inbox (as a
-  second start's command does: `app_message`), two preferences (the interval, the trigger) on the Capture page, and a
-  tray item that starts and stops it. The loop needs no timeout: the thread wakes it. Nobody asked for it yet.
-- **Ruler: not now (S).** The region overlay already says a rectangle's size while it is drawn. A ruler is a source as
-  the colour picker is (`Source.Color`): the overlay with no rectangle, a drag draws a line with its length in pixels
-  and its angle, Escape ends, nothing is captured. It touches `overlay.odin` and `flow.odin`, outside this lot.
-- **Share URL (URLSharingService): not now (S).** The Shorten URL request already sends an address to a `.sxcu`; a
-  sharing service is the same request with no address to read back.
+- **Auto capture: done.** A thread (`auto_capture.odin`) waits the interval on a condition variable and posts the
+  capture's command to the app's inbox, where a second start's go; the capture stays the flow's, so a tick during
+  another capture is refused like a second press. A stop signals the thread and never waits for it: each run is its own
+  heap struct, its thread ends by itself, and a generation drops a stopped run's late tick. Two preferences on the Capture page: `capture.auto_interval` (seconds, 60) and `capture.auto_source` (the
+  screen, the window in front, all the screens, the last region: the captures with no overlay). A check item in the
+  tray, `cliche --auto-capture` and a palette command start and stop it. The first capture comes after one interval.
+  Intent: `src/md/features/auto-capture.md`.
+- **Ruler: done.** `Source.Ruler`, as the colour picker is: the worker reads the desktop, the flow waits in Selecting,
+  and only Flow_Cancelled (Escape, a right click) leaves it, so nothing is captured. The overlay's `picker` flag became
+  `Overlay_Mode` (Region, Picker, Ruler). A drag draws a line with its length in logical pixels, its angle (0 to the
+  right, 90 up) and the width and height it spans; Shift holds it to 45°. `cliche --ruler`, the tray, the palette and
+  `shortcut.ruler` (no keys by default). Intent: `src/md/features/ruler.md`.
+- **Share URL (URLSharingService): done.** A Share URL node, beside Shorten URL: the same request (`uploader_request`
+  with `input`), nothing read back but a 2xx status (`share_url`, `uploader_refused`); the address goes on. An uploader
+  serves uses (`Uploader_Use`: Upload, Shorten, Share). None is built in: an empty choice takes the first file of that
+  use. The run's notification says "Address shared". Intent: `src/md/features/share-url.md`.

@@ -26,7 +26,7 @@ Node_Kind :: enum u8 {
 	// interactive and flow control
 	Annotate, Ask, Condition,
 	// outputs
-	Copy_Image, Save_File, Upload, Shorten_Url, Copy_Text, Read_Qr, Read_Text, Make_Qr, Notify, Show_In_Folder, Open, Pin, Delete_File, Add_To_History,
+	Copy_Image, Save_File, Upload, Shorten_Url, Share_Url, Copy_Text, Read_Qr, Read_Text, Make_Qr, Notify, Show_In_Folder, Open, Pin, Delete_File, Add_To_History,
 }
 
 // What flows on a link (flowgraph.Port_Kind: CATALOG.kinds[k]; 0 is the engine's ACTION). A text takes an address or a
@@ -226,6 +226,10 @@ CATALOG := flowgraph.Catalog{
 		{name = "shorten_url", title = i18n.later("Shorten URL"), group = i18n.later("Outputs"), icon = lucide.LINK_2, tags = {"short", "link", "address", "is.gd", "v.gd", "shortener"}, inputs = {{name = i18n.later("address"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("address"), kind = PORT_URL}, DONE_OUTPUT}, place = PLACE_WORKER, effect = true, params = {
 			{name = "shortener", title = i18n.later("Shortener"), type = .List, placeholder = BUILTIN_SHORTENER_NAME},
 		}},
+		// (a ShareX URL sharing service: the Shorten URL request, nothing read back; the address goes on as it came)
+		{name = "share_url", title = i18n.later("Share URL"), group = i18n.later("Outputs"), icon = lucide.SHARE_2, tags = {"share", "link", "address", "post", "sxcu", "sharing service"}, inputs = {{name = i18n.later("address"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("address"), kind = PORT_URL}, DONE_OUTPUT}, place = PLACE_WORKER, effect = true, params = {
+			{name = "service", title = i18n.later("Service"), type = .List, placeholder = i18n.later("The first sharing service")},
+		}},
 		{name = "copy_text", title = i18n.later("Copy text"), group = i18n.later("Outputs"), icon = lucide.CLIPBOARD_COPY, tags = {"clipboard", "url", "address", "link"}, inputs = {{name = i18n.later("text"), kind = PORT_TEXT}, {name = i18n.later("when"), kind = flowgraph.ACTION}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}, DONE_OUTPUT}, place = PLACE_INTERFACE, effect = true},
 		{name = "read_qr", title = i18n.later("Read QR code"), group = i18n.later("Outputs"), icon = lucide.QR_CODE, tags = {"scan", "barcode", "decode"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, place = PLACE_WORKER},
 		{name = "read_text", title = i18n.later("Read text"), group = i18n.later("Outputs"), icon = lucide.TEXT_CURSOR_INPUT, tags = {"ocr", "recognition", "tesseract"}, inputs = {{name = i18n.later("picture"), kind = PORT_IMAGE}}, outputs = {{name = i18n.later("text"), kind = PORT_TEXT}}, place = PLACE_WORKER, params = {
@@ -262,6 +266,9 @@ node_summary :: proc(n: ^flowgraph.Node) -> string {
 	case .Shorten_Url:
 		s := flowgraph.param_text(&CATALOG, n, "shortener")
 		return fmt.tprintf(i18n.tr("with %s"), s != "" ? s : BUILTIN_SHORTENER_NAME)
+	case .Share_Url:
+		s := flowgraph.param_text(&CATALOG, n, "service")
+		return s != "" ? fmt.tprintf(i18n.tr("to %s"), s) : i18n.tr("to the first sharing service")
 	case .Make_Qr:
 		return fmt.tprintf(i18n.tr("squares of %d px"), flowgraph.param_int(&CATALOG, n, "module"))
 	case .Capture:

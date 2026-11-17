@@ -3,8 +3,8 @@ package cliche
 // The Upload action: the picture sent to a host, the URL it answers given back. An uploader is described as ShareX's
 // custom uploaders are, in a .sxcu file (JSON; https://getsharex.com/docs/custom-uploader), so a file made for ShareX
 // works here as it is. The uploaders are the built-in ones (Litterbox; the URL shorteners is.gd and v.gd, which the
-// Shorten URL node uses) and the .sxcu files of <config dir>/FromentSoftware/Cliche/uploaders. Everything here that reads a file or the
-// network runs on the worker.
+// Shorten URL node uses) and the .sxcu files of <config dir>/FromentSoftware/Cliche/uploaders; a URL sharing service
+// (the Share URL node's) is only ever a file. Everything here that reads a file or the network runs on the worker.
 
 import "core:encoding/json"
 import "core:fmt"
@@ -128,18 +128,25 @@ BUILTIN_SHORTENERS :: [?]string{`{
   "Body": "None"
 }`}
 
-// Whether `u` shortens addresses, and whether it takes files: a file that says neither is a picture's host.
-uploader_shortens :: proc(u: Uploader) -> bool { return .Url_Shortener in u.destinations }
+// What a node asks of an uploader: to take a file (Upload), to shorten an address (Shorten URL), or to share one
+// (Share URL). One .sxcu may serve several.
+Uploader_Use :: enum u8 { Upload, Shorten, Share }
 
-uploader_uploads :: proc(u: Uploader) -> bool {
-	return u.destinations & {.Image_Uploader, .Text_Uploader, .File_Uploader} != {} || u.destinations == {}
+// Whether `u` serves `use`. A file that says no destination is a picture's host.
+uploader_fits :: proc(u: Uploader, use: Uploader_Use) -> bool {
+	switch use {
+	case .Upload:  return u.destinations & {.Image_Uploader, .Text_Uploader, .File_Uploader} != {} || u.destinations == {}
+	case .Shorten: return .Url_Shortener in u.destinations
+	case .Share:   return .Url_Sharing_Service in u.destinations
+	}
+	return false
 }
 
-// The names of the uploaders that upload (or, `shorteners`, that shorten), in the list's order (allocator).
-uploaders_names :: proc(list: []Uploader, shorteners: bool, allocator := context.allocator) -> []string {
+// The names of the uploaders that serve `use`, in the list's order (allocator).
+uploaders_names :: proc(list: []Uploader, use: Uploader_Use, allocator := context.allocator) -> []string {
 	out := make([dynamic]string, 0, len(list), allocator)
 	for u in list {
-		if shorteners ? uploader_shortens(u) : uploader_uploads(u) { append(&out, strings.clone(u.name, allocator)) }
+		if uploader_fits(u, use) { append(&out, strings.clone(u.name, allocator)) }
 	}
 	return out[:]
 }
@@ -337,7 +344,7 @@ Upload_Request :: struct {
 }
 
 // The request that uploads `file` (named file_name) with `u`, its syntax expanded; or, with no file, the one that sends
-// `input` (an address to shorten: {input}). problem: why it cannot be made (temp allocator; "": none).
+// `input` (an address to shorten or to share: {input}). problem: why it cannot be made (temp allocator; "": none).
 uploader_request :: proc(u: Uploader, file: []u8, file_name: string, input := "") -> (r: Upload_Request, problem: string) {
 	in_url := Syntax{file_name = file_name, input = input, url_encode = true}
 	in_text := Syntax{file_name = file_name, input = input}
@@ -363,7 +370,8 @@ uploader_request :: proc(u: Uploader, file: []u8, file_name: string, input := ""
 	_, has_type := http.header_value(headers[:], "Content-Type")
 	content_type := ""
 	if input != "" {
-		// (a text sent, not a file: a URL shortener's request, whose body is any of ShareX's but a file's)
+		// (a text sent, not a file: a URL shortener's or a sharing service's request, whose body is any of ShareX's but a
+		// file's)
 		#partial switch u.body {
 		case .None:
 		case .Multipart_Form_Data, .Form_Url_Encoded:
@@ -434,20 +442,9 @@ mime_type :: proc(file_name: string) -> string {
 // The URL of the upload read from the host's answer (temp allocator). A status that is not 2xx is a problem: the
 // uploader's ErrorMessage read from the answer when it has one, else the status and the start of the answer.
 uploader_answer :: proc(u: Uploader, a: Answer, file_name: string) -> (url: string, problem: string) {
+	if why := uploader_refused(u, a, file_name); why != "" { return "", why }
 	answer := a
 	s := Syntax{file_name = file_name, url_encode = true, answer = &answer}
-	if a.status < 200 || a.status > 299 {
-		if u.error_message != "" {
-			if message, _ := syntax_expand(u.error_message, s); strings.trim_space(message) != "" {
-				return "", fmt.tprintf(i18n.tr("%s answered: %s"), u.name, strings.trim_space(message))
-			}
-		}
-		first := strings.trim_space(a.text)
-		if i := strings.index_any(first, "\r\n"); i >= 0 { first = first[:i] }
-		if len(first) > 120 { first = first[:120] }
-		if first == "" { return "", fmt.tprintf(i18n.tr("%s answered with the status %d"), u.name, a.status) }
-		return "", fmt.tprintf(i18n.tr("%s answered with the status %d: %s"), u.name, a.status, first)
-	}
 	if u.url == "" {
 		url = strings.trim_space(a.text)
 	} else {
@@ -457,6 +454,24 @@ uploader_answer :: proc(u: Uploader, a: Answer, file_name: string) -> (url: stri
 	}
 	if url == "" { return "", fmt.tprintf(i18n.tr("%s gave no URL in its answer"), u.name) }
 	return url, ""
+}
+
+// Why the host refused (temp allocator; "": a 2xx status, it took the request): the uploader's ErrorMessage read from
+// the answer when it has one, else the status and the start of the answer.
+uploader_refused :: proc(u: Uploader, a: Answer, file_name: string) -> string {
+	if a.status >= 200 && a.status <= 299 { return "" }
+	answer := a
+	s := Syntax{file_name = file_name, url_encode = true, answer = &answer}
+	if u.error_message != "" {
+		if message, _ := syntax_expand(u.error_message, s); strings.trim_space(message) != "" {
+			return fmt.tprintf(i18n.tr("%s answered: %s"), u.name, strings.trim_space(message))
+		}
+	}
+	first := strings.trim_space(a.text)
+	if i := strings.index_any(first, "\r\n"); i >= 0 { first = first[:i] }
+	if len(first) > 120 { first = first[:120] }
+	if first == "" { return fmt.tprintf(i18n.tr("%s answered with the status %d"), u.name, a.status) }
+	return fmt.tprintf(i18n.tr("%s answered with the status %d: %s"), u.name, a.status, first)
 }
 
 // The upload, on the worker: `file` (named file_name, a PNG file's bytes) sent with `u`, and the URL its host answered.
@@ -493,6 +508,23 @@ shorten_url :: proc(u: Uploader, address: string, allocator := context.allocator
 		return "", fmt.aprintf(i18n.tr("%s answered: %s"), u.name, link, allocator = allocator)
 	}
 	return strings.clone(link, allocator), ""
+}
+
+// An address sent to `u` (a URL sharing service), on the worker: the Shorten URL request, but nothing is read back
+// from the answer (ShareX's CustomURLSharer: the service posts the address, it gives no new one). It blocks for as long
+// as the service takes. problem: the allocator's ("": shared).
+share_url :: proc(u: Uploader, address: string, allocator := context.allocator) -> (problem: string) {
+	r, why := uploader_request(u, nil, "", input = address)
+	if why != "" { return strings.clone(why, allocator) }
+	req := http.Request{
+		max_bytes = UPLOAD_ANSWER_MAX, user_agent = APP_NAME, timeout = UPLOAD_TIMEOUT,
+		headers = r.headers, body = r.body,
+	}
+	res, err := http.request(r.method, r.url, req, context.temp_allocator)
+	if err != .None { return fmt.aprintf("%s: %s", u.name, http.error_text(err), allocator = allocator) }
+	refused := uploader_refused(u, {status = res.status, text = string(res.body), url = res.url, headers = res.headers}, "")
+	if refused != "" { return strings.clone(refused, allocator) }
+	return ""
 }
 
 // Where the uploaders are kept
@@ -534,12 +566,12 @@ uploaders_load :: proc(allocator := context.allocator) -> (list: []Uploader, pro
 	return out[:], bad[:]
 }
 
-// The uploader named `name` in the list that uploads (or, `shortener`, that shortens addresses); the first built-in one
-// of that use when none has that name (a file removed since, or "": the default).
-uploader_find :: proc(list: []Uploader, name: string, shortener := false) -> (u: ^Uploader, found: bool) {
-	fits :: proc(u: Uploader, shortener: bool) -> bool { return shortener ? uploader_shortens(u) : uploader_uploads(u) }
-	for &x in list { if x.name == name && fits(x, shortener) { return &x, true } }
-	for &x in list { if x.file == "" && fits(x, shortener) { return &x, false } }
+// The uploader named `name` in the list that serves `use`; when none has that name (a file removed since, or "": the
+// default), the first built-in one of that use, else the first of the folder (no sharing service is built in).
+uploader_find :: proc(list: []Uploader, name: string, use := Uploader_Use.Upload) -> (u: ^Uploader, found: bool) {
+	for &x in list { if x.name == name && uploader_fits(x, use) { return &x, true } }
+	for &x in list { if x.file == "" && uploader_fits(x, use) { return &x, false } }
+	for &x in list { if uploader_fits(x, use) { return &x, false } }
 	return nil, false
 }
 

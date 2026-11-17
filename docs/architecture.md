@@ -26,10 +26,13 @@ renderer is made at the first window that needs one, and that window is hidden, 
   turn, when they changed.
 - **The log** (`gt:log`) writes `cliche.log` in the state folder; a crash writes a report beside it (`gt:crash`), which
   the next start announces.
+- **The auto capture** (`src/auto_capture.odin`), only while it runs: it waits the interval on a condition variable,
+  then posts its capture's command to the inbox, as a second start does. A stop wakes it and does not wait for it: the
+  thread ends by itself, and a tick of a stopped run is dropped by its generation.
 
 ## The capture flow
 
-One state machine (`src/flow.odin`): `Idle -> Capturing -> Selecting (region, colour) -> Encoding -> Idle | Failed`. One
+One state machine (`src/flow.odin`): `Idle -> Capturing -> Selecting (region, colour, ruler) -> Encoding -> Idle | Failed`. One
 union, one transition procedure; a transition not in the table is refused, and the tests drive it without a window. The
 picture is handed to a run of the capture's workflow, and the flow is Idle again: the next capture may start while the
 run goes on.
@@ -37,7 +40,8 @@ run goes on.
 The sources: a region (chosen on the frozen desktop), the screen under the pointer, the window in front, all the screens
 (`capture.desktop`), the last region (the rectangle chosen last, cut from the desktop now: no overlay; with none yet, a
 region), and the colour picker (the overlay with no rectangle: a click copies a pixel's colour, `src/color_pick.odin`,
-and the flow ends with no picture). The workflow that will run gives its Capture node's delay and pointer: the worker
+and the flow ends with no picture), and the ruler (the overlay with no rectangle: a drag measures a line,
+`src/ruler.odin`; Escape is its only way out, and nothing is taken). The workflow that will run gives its Capture node's delay and pointer: the worker
 counts the delay down (`countdown_plan`: a notice each second, withdrawn just before the picture) and asks gt:capture
 for the pointer (`capture.set_cursor`; Wayland and Windows draw it, the portal and X11 cannot).
 
@@ -177,7 +181,8 @@ the tray (a red icon and its own menu meanwhile) and the notification.
 
 A workflow's Upload step sends a picture (as PNG), a file or a text to the uploader chosen (`src/uploader.odin`: ShareX's
 `.sxcu` files and their syntax), on the worker; a Copy text step after it puts its address on the clipboard. Shorten URL
-sends an address to a URL shortener (is.gd and v.gd built in, or a `.sxcu` one: `{input}`). Read text reads the text of a
+sends an address to a URL shortener (is.gd and v.gd built in, or a `.sxcu` one: `{input}`); Share URL sends it the same
+way to a `.sxcu` URL sharing service and reads nothing back but whether the service took it. Read text reads the text of a
 picture with `gt:ocr`, Read QR code a QR code with `gt:qr`, Make QR code makes one with `gt:qr`, all on the worker.
 
 The history (`src/history_view.odin`) combines two pictures or more of its selection into one (`gt:image` `combine`, on

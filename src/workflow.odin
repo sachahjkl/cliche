@@ -56,6 +56,7 @@ TRIGGER_SOURCE := [Trigger]Source{
 CAPTURE_SOURCE_TEXT := [Source]string{
 	.Region = i18n.later("A region"), .Screen = i18n.later("The screen"), .Window = i18n.later("The window in front"),
 	.All_Screens = i18n.later("All the screens"), .Last_Region = i18n.later("The last region"), .Color = i18n.later("A colour"),
+	.Ruler = i18n.later("A measure"),
 }
 
 // What a capture runs: the workflow of a trigger, or (`workflow` not 0) a workflow named by its own shortcut.

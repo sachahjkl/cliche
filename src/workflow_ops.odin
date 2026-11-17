@@ -107,7 +107,7 @@ node_work :: proc(j: ^Job_Node, fonts: ^host.Worker_Fonts) -> (out: Result_Node)
 		address := strings.trim_space(in_text)
 		if address == "" { return node_failed(out, i18n.tr("no address came in")) }
 		list, _ := uploaders_load(context.temp_allocator)
-		u, _ := uploader_find(list, flowgraph.param_text(&CATALOG, n, "shortener"), shortener = true)
+		u, _ := uploader_find(list, flowgraph.param_text(&CATALOG, n, "shortener"), .Shorten)
 		if u == nil { return node_failed(out, i18n.tr("no URL shortener is set up")) }
 		short, problem := shorten_url(u^, address)
 		if problem != "" {
@@ -116,6 +116,19 @@ node_work :: proc(j: ^Job_Node, fonts: ^host.Worker_Fonts) -> (out: Result_Node)
 			return node_failed(out, message)
 		}
 		out.result.outputs[0] = run_value(PORT_URL, {text = short, origin = .Shorten_Url})
+	case .Share_Url:
+		address := strings.trim_space(in_text)
+		if address == "" { return node_failed(out, i18n.tr("no address came in")) }
+		list, _ := uploaders_load(context.temp_allocator)
+		u, _ := uploader_find(list, flowgraph.param_text(&CATALOG, n, "service"), .Share)
+		if u == nil { return node_failed(out, i18n.tr("no URL sharing service is set up: put its .sxcu in the uploaders' folder")) }
+		if problem := share_url(u^, address); problem != "" {
+			message := strings.clone(problem, context.temp_allocator)
+			delete(problem)
+			return node_failed(out, message)
+		}
+		// (the same address goes on: the service gives none back, and what follows may copy or open it)
+		out.result.outputs[0] = run_value(PORT_URL, {text = strings.clone(address), origin = .Share_Url})
 	case .Open:
 		target := strings.trim_space(in_text)
 		if target == "" { return node_failed(out, i18n.tr("nothing came in to open")) }
@@ -232,7 +245,7 @@ node_transform :: proc(n: ^flowgraph.Node, shot: Shot, fonts: ^host.Worker_Fonts
 	case .Pixelate:
 		made = pic.clone(src)
 		pic.pixelate(made, flowgraph.param_int(&CATALOG, n, "cell"))
-	case .Capture, .Annotate, .Ask, .Condition, .Copy_Image, .Save_File, .Upload, .Shorten_Url, .Copy_Text, .Read_Qr, .Read_Text, .Make_Qr, .Notify, .Show_In_Folder, .Open, .Pin, .Delete_File, .Add_To_History:
+	case .Capture, .Annotate, .Ask, .Condition, .Copy_Image, .Save_File, .Upload, .Shorten_Url, .Share_Url, .Copy_Text, .Read_Qr, .Read_Text, .Make_Qr, .Notify, .Show_In_Folder, .Open, .Pin, .Delete_File, .Add_To_History:
 		return
 	}
 	if made.pixels == nil || made.width <= 0 || made.height <= 0 { return }

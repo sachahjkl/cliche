@@ -288,7 +288,7 @@ uploader_shortens_addresses :: proc(t: ^testing.T) {
 	isgd, problem := uploader_parse(transmute([]u8)string(shorteners[0]), "", context.temp_allocator)
 	testing.expect_value(t, problem, "")
 	testing.expect_value(t, isgd.name, BUILTIN_SHORTENER_NAME)
-	testing.expect(t, uploader_shortens(isgd) && !uploader_uploads(isgd), "is.gd shortens and uploads nothing")
+	testing.expect(t, uploader_fits(isgd, .Shorten) && !uploader_fits(isgd, .Upload) && !uploader_fits(isgd, .Share), "is.gd shortens and uploads nothing")
 	r, why := uploader_request(isgd, nil, "", input = "https://e.com/a b?x=1")
 	testing.expect_value(t, why, "")
 	testing.expect_value(t, r.method, "GET")
@@ -306,11 +306,51 @@ uploader_shortens_addresses :: proc(t: ^testing.T) {
 
 	litterbox, _ := uploader_parse(transmute([]u8)string(BUILTIN_UPLOADER), "", context.temp_allocator)
 	list := []Uploader{litterbox, isgd, {name = "mine", file = "/f/mine.sxcu", destinations = {.Url_Shortener}}}
-	testing.expect_value(t, len(uploaders_names(list, shorteners = false, allocator = context.temp_allocator)), 1)
-	names := uploaders_names(list, shorteners = true, allocator = context.temp_allocator)
+	testing.expect_value(t, len(uploaders_names(list, .Upload, allocator = context.temp_allocator)), 1)
+	names := uploaders_names(list, .Shorten, allocator = context.temp_allocator)
 	testing.expect(t, len(names) == 2 && names[0] == BUILTIN_SHORTENER_NAME && names[1] == "mine", "the shorteners, in order")
-	u, found := uploader_find(list, "", shortener = true)
+	u, found := uploader_find(list, "", .Shorten)
 	testing.expect(t, !found && u.name == BUILTIN_SHORTENER_NAME, "the built-in shortener by default")
 	u, found = uploader_find(list, "mine")
 	testing.expect(t, !found && u.name == litterbox.name, "a shortener is no host for a picture")
+}
+
+// A ShareX URL sharing service: its DestinationType read (by name and by ShareX's flag), the request the Shorten URL one
+// is ({input}), nothing read back but whether the service took it; none is built in, so the first file is the default.
+@(test)
+uploader_shares_addresses :: proc(t: ^testing.T) {
+	// (the JSON body's own braces escaped, as ShareX's syntax wants: an unescaped one starts a call)
+	text := `{"Version": "15.0.0", "Name": "Board", "DestinationType": "URLSharingService", "RequestMethod": "POST", "RequestURL": "https://board.example/api/links", "Headers": {"Authorization": "Bearer k"}, "Body": "JSON", "Data": "\\{\"link\": \"{input}\"\\}", "ErrorMessage": "{json:error}"}`
+	board, problem := uploader_parse(transmute([]u8)text, "/f/board.sxcu", context.temp_allocator)
+	testing.expect_value(t, problem, "")
+	testing.expect_value(t, board.destinations, Destinations{.Url_Sharing_Service})
+	testing.expect(t, uploader_fits(board, .Share) && !uploader_fits(board, .Upload) && !uploader_fits(board, .Shorten), "a sharing service only shares")
+	// (ShareX writes the flags as a number too: URLSharingService is 1 << 4)
+	flag_text := `{"Version": "15.0.0", "Name": "F", "DestinationType": 16, "RequestURL": "https://f/"}`
+	flag, _ := uploader_parse(transmute([]u8)flag_text, "", context.temp_allocator)
+	testing.expect_value(t, flag.destinations, Destinations{.Url_Sharing_Service})
+
+	r, why := uploader_request(board, nil, "", input = "https://host/a.png")
+	testing.expect_value(t, why, "")
+	testing.expect_value(t, r.method, "POST")
+	testing.expect_value(t, r.url, "https://board.example/api/links")
+	testing.expect_value(t, string(r.body), `{"link": "https://host/a.png"}`)
+	content_type, _ := http.header_value(r.headers, "Content-Type")
+	testing.expect_value(t, content_type, "application/json")
+	auth, _ := http.header_value(r.headers, "Authorization")
+	testing.expect_value(t, auth, "Bearer k")
+
+	// (taken: any 2xx, its body not read; refused: the ErrorMessage read from the answer)
+	testing.expect_value(t, uploader_refused(board, {status = 204}, ""), "")
+	testing.expect_value(t, uploader_refused(board, {status = 400, text = `{"error": "bad link"}`}, ""), "Board answered: bad link")
+	testing.expect_value(t, uploader_refused(flag, {status = 500, text = "down\nmore"}, ""), "F answered with the status 500: down")
+
+	litterbox, _ := uploader_parse(transmute([]u8)string(BUILTIN_UPLOADER), "", context.temp_allocator)
+	list := []Uploader{litterbox, board}
+	names := uploaders_names(list, .Share, allocator = context.temp_allocator)
+	testing.expect(t, len(names) == 1 && names[0] == "Board", "the sharing services")
+	u, found := uploader_find(list, "", .Share)
+	testing.expect(t, !found && u != nil && u.name == "Board", "the first sharing service by default")
+	u, _ = uploader_find([]Uploader{litterbox}, "", .Share)
+	testing.expect(t, u == nil, "no sharing service: none")
 }
