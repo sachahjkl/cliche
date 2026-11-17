@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.18.0] - 2026-11-17 11:23
+
+### Fixed
+- **A recording's size says "kB"**: the history and the notification at the end of a recording counted thousands of bytes but wrote "KB", the unit of 1024. They now write "340 kB", with one decimal under 10 ("2.0 MB") and none above ("13 MB"), in the language's own units.
+
 ## [0.17.1] - 2026-11-16 22:19
 
 ### Changed
@@ -294,6 +299,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.18.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.18.0
 [0.17.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.17.0
 [0.16.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.16.0
