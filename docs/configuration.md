@@ -42,6 +42,10 @@ settings do not show them.
 | `capture.ocr_languages` | text | empty | The languages of the text read in a region (`cliche --ocr`), as the engine names them, `+` between them (Tesseract: `eng+fra`). Empty: your languages. |
 | `capture.auto_interval` | integer, 1 to 86400 seconds | 60 | The time between two captures of the auto capture. The tray's menu starts and stops it (`cliche --auto-capture`). |
 | `capture.auto_source` | text, screen, window, all-screens or last-region | screen | What each capture of the auto capture takes: the screen under the pointer, the window in front, all the screens, or the last region (chosen at the first capture when there is none yet). Each runs the workflow of that capture. |
+| `capture.scroll_notches` | integer, 1 to 20 | 3 | How far the scrolling capture turns the wheel between two screens, in notches. A step that moves more than a screen is halved once. |
+| `capture.scroll_screens` | integer, 2 to 500 | 50 | The scrolling capture stops after this many screens when the page has not ended before (`cliche --scrolling-capture`). |
+| `capture.scroll_settle` | integer, 50 to 10000 milliseconds | 1000 | The longest wait after each step for the page to move and stop moving. The end of the page costs one wait. |
+| `capture.scroll_bar_px` | integer, 0 to 200 logical pixels | 0 | The width at the right edge of the page that the scrolling capture does not compare between two screens: a scroll bar's thumb moves at each step. It stays in the picture. 0: the system's scroll bar with a margin (Windows: its width as the system says; elsewhere 20). |
 | `record.fps` | integer, 1 to 60 | 30 | The most frames a second of a video. Fewer come when the screen changes less. |
 | `record.gif_fps` | integer, 1 to 30 | 12 | The most frames a second of a GIF. Fewer make smaller files. |
 | `record.gif_width` | integer, 0 to 3840 pixels | 960 | The largest width of a GIF: a wider recording is scaled down. 0: its own size. |

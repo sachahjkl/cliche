@@ -27,7 +27,7 @@ Effort: S = under a day; M = a few days; L = a week or more.
 | Window from a list | no | missing | P3 | M; needs window list (`app.desktop.windows`) in a menu |
 | Screenshot delay | `capture.delay` `settings.odin:28`; not for Region `app.odin:399` | partial: one global value, no per-workflow delay, no countdown shown | P2 | S; a `delay` parameter on the Capture node `workflow_nodes.odin:74` |
 | Show cursor in screenshot | recordings only `settings.odin:36` | missing for pictures | P2 | M; gt:capture must give the cursor image and position |
-| Scrolling capture | no | decided: not now (WP5, "Decisions") | P2 | L; scroll events + frame stitching in gt:capture/gt:image, Windows first (Wayland cannot inject scroll without portals) |
+| Scrolling capture | the tray's check item, `--scrolling-capture`, the palette; `capture.scroll_notches`, `capture.scroll_screens`, `capture.scroll_settle`, `capture.scroll_bar_px` (`scrolling_capture.odin`) | done on Windows and X11 (WP5, "Decisions"); Wayland: not available (no wheel without the RemoteDesktop portal) | – | – |
 | Auto capture (every N seconds) | the tray's check item, `--auto-capture`, the palette; `capture.auto_interval`, `capture.auto_source` (`auto_capture.odin`) | done (WP5, "Decisions") | – | – |
 | Text capture (OCR) | trigger `.Ocr`, node Read text `workflow_nodes.odin:183`, `ocr_read.odin` | none | – | – |
 | Screen recording MP4 | `record.odin`, `Record_Format.Mp4` `record.odin:33` | partial: no audio, no pause | P2 | L for audio; S for pause |
@@ -294,17 +294,26 @@ Files: `workflow_nodes.odin`, `workflow_ops.odin`, `workflow_app.odin`, `workflo
    "default" action; Windows: the toast's activation).
 4. History: Open the URL, the tray's Recent submenu, the filter by date (a menu: today, 7 days, 30 days).
 5. Image combiner (the history's selection), QR code generator (the Make QR code node), auto capture, the ruler, the
-   Share URL node. Scrolling capture: the decision below.
+   Share URL node, the scrolling capture.
 
 #### Decisions
 
-- **Scrolling capture: not now (L).** It takes three parts. (1) A stitcher, generic, in `gt:image`: frames of the same
-  width, the overlap of each with the one before found by comparing rows (a hash per row, the longest run that
-  matches), a fixed header and footer detected as rows that do not move, then one tall picture; tested on synthetic
-  frames. (2) Scrolling the window under the pointer by a step, per system: Windows `SendInput` with `MOUSEEVENTF_WHEEL`;
-  X11 XTest; Wayland only through the RemoteDesktop portal (libei), which asks the person each session. (3) A flow in
-  cliche: the window chosen, scroll, `capture.window`, until two frames are the same or a count is reached, on the
-  worker. Windows first; Wayland when the portal is worth its question.
+- **Scrolling capture: done (Windows, X11).** Three parts. (1) The stitcher in `gt:image` (`stitch_begin`,
+  `stitch_add`, `stitch_end`): row hashes, the largest overlap, a header and a footer that do not move. (2)
+  `platform.send_wheel` in the toolkit: Windows `SendInput`, X11 XTEST from the window's thread, Wayland false. (3) The
+  run in cliche (`scrolling_capture.odin`), one state machine, `Scroll_Run`, tested on a fake page and a fake wheel.
+  The page is chosen on the region's overlay (a rectangle, or a click on a framed window: `Region_Use.Scroll`), not
+  the window in front, so the person says which part scrolls. The worker cuts the rectangle from the desktop
+  (`grab_rect`), waits for the page to move then to stop (`capture.scroll_settle`), and stitches, the scroll bar's
+  columns at the right edge left out of the comparison (`Stitch_Options.ignore_right`, `capture.scroll_bar_px`; 0:
+  Windows' scroll bar width, elsewhere 20 logical pixels): its thumb moves at each step. The interface thread
+  turns the wheel (`capture.scroll_notches`, 3), as X11 requires the window's thread. It stops on `.Same` (the page's
+  end), `.Full`, `capture.scroll_screens` (50) or a frame that does not join after one retry at half the step. Windows
+  moves the pointer over the page and takes Escape while it runs; X11 asks the person to keep the pointer there.
+  Wayland says it is not available, before any overlay; the RemoteDesktop portal stays refused for its question at
+  each session. The picture runs the region's workflow (no trigger of its own). The tray's check item,
+  `cliche --scrolling-capture` and the palette start and cancel it; a cancelled run keeps nothing. Intent:
+  `src/md/features/scrolling-capture.md`.
 - **Auto capture: done.** A thread (`auto_capture.odin`) waits the interval on a condition variable and posts the
   capture's command to the app's inbox, where a second start's go; the capture stays the flow's, so a tick during
   another capture is refused like a second press. A stop signals the thread and never waits for it: each run is its own

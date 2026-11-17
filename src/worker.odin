@@ -40,7 +40,7 @@ Job_Integrate :: struct { menu, autostart: bool }             // cliche's launch
 Job_Setup_Facts :: struct {}                                  // whether this cliche is the installed copy (updates.odin)
 Job_Setup_Updated :: struct { version: string }               // an update in place: the install's manifest and record say it (owned)
 
-Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Save_As, Job_Upload, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Setup_Facts, Job_Setup_Updated, Job_Run_Input, Job_Combine }
+Job :: union { Job_History, Job_Open, Job_Grab, Job_Crop, Job_Save, Job_Save_As, Job_Upload, Job_Copy_Encode, Job_Write, Job_Node, Job_Thumbnail, Job_Workflows_Load, Job_Picture_Load, Job_Open_Folder, Job_Integrate, Job_Uploaders, Job_Import_Uploader, Job_Setup_Facts, Job_Setup_Updated, Job_Run_Input, Job_Combine, Job_Scroll_Frame, Job_Scroll_End }
 
 // The session is open (or why not); the folder screenshots go to when save.folder is empty (owned).
 Result_Opened :: struct { error: capture.Error, backend: capture.Backend, default_folder: string }
@@ -90,7 +90,7 @@ Result_Setup_Facts :: struct { installed: bool }
 // A capture's delay counted down: `seconds` left before the picture (0: it is taken now, the countdown's notice goes).
 Result_Countdown :: struct { seconds: int }
 
-Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Uploaded, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders, Result_Setup_Facts, Result_Countdown, Result_Run_Input, Result_Combined }
+Result :: union { Result_History, Result_Opened, Result_Desktop, Result_Shot, Result_Saved, Result_Uploaded, Result_Copy_Encoded, Result_Thumbnail, Result_Written, Result_Node, Result_Workflows, Result_Picture, Result_Integrated, Result_Uploaders, Result_Setup_Facts, Result_Countdown, Result_Run_Input, Result_Combined, Result_Scroll_Frame, Result_Scroll_Done }
 
 Worker :: struct {
 	pool:      tasks.Pool,
@@ -106,6 +106,7 @@ Worker :: struct {
 	// the worker's thread only
 	history:   History_Disk,       // the history's copy and its file (history.odin)
 	fonts:     host.Worker_Fonts,       // a watermark's text (workflow_ops.odin)
+	scroll:    Scroll_Stitch,           // the scrolling capture's stitch (scrolling_capture.odin)
 	session:   ^capture.Session,
 	session_error: capture.Error,
 }
@@ -182,6 +183,7 @@ worker_close :: proc(data: rawptr) {
 	w.session = nil
 	history_disk_free(&w.history)
 	host.worker_fonts_destroy(&w.fonts)
+	scroll_stitch_free(&w.scroll)   // (a scrolling capture still going at quit)
 }
 
 @(private = "file")
@@ -206,6 +208,14 @@ worker_do :: proc(w: ^Worker, j: Job) {
 		case .Last_Region:    worker_post(w, grab_rect(w.session, v.rect))
 		}
 		capture.set_cursor(w.session, false)
+	case Job_Scroll_Frame:
+		if !worker_session(w) {
+			worker_post(w, Result_Scroll_Frame{error = flow_error_of(w.session_error)})
+			return
+		}
+		worker_post(w, scroll_frame_work(&w.scroll, w.session, v))
+	case Job_Scroll_End:
+		worker_post(w, scroll_end_work(&w.scroll, v.keep))
 	case Job_Crop:
 		out, ok := capture.crop(v.frame, v.rect)
 		if !ok { worker_post(w, Result_Shot{error = .Empty}); return }
@@ -356,6 +366,7 @@ result_free :: proc(r: ^Result) {
 	#partial switch &v in r {
 	case Result_Desktop: desktop_free(&v)
 	case Result_Shot:    shot_free(&v.shot)
+	case Result_Scroll_Done: shot_free(&v.shot)
 	case Result_Saved:   delete(v.path); delete(v.problem)
 	case Result_Uploaded: delete(v.url); delete(v.problem)
 	case Result_Copy_Encoded: shot_free(&v.shot); delete(v.png)

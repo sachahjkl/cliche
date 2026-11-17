@@ -40,7 +40,11 @@ import "gt:ui"
 PROGRAM_CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
 
 // The tray menu's items. The first eleven are Shortcut_Action's, in its order.
-Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Ruler, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit, Upload_Clipboard, Upload_File, Auto_Capture }
+Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Ruler, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit, Upload_Clipboard, Upload_File, Auto_Capture, Scrolling_Capture }
+
+// What the rectangle chosen on the region's overlay is for: a picture of it, a recording's region (record_app.odin),
+// or the page a scrolling capture scrolls (scrolling_capture.odin).
+Region_Use :: enum u8 { Picture, Record, Scroll }
 
 // The ids of the tray's recent entries: TRAY_RECENT_ID + their place in App.tray_recent (past Tray_Item's).
 TRAY_RECENT_ID :: 1000
@@ -79,7 +83,7 @@ App :: struct {
 	desktop:    Result_Desktop,                            // the region's desktop, from Selecting to its cut (owned)
 	has_desktop: bool,
 	capture_target: Capture_Target,                        // what started this capture: its workflow runs on its picture
-	capture_record: bool,                                  // this capture is a recording's region (record_app.odin)
+	capture_use: Region_Use,                               // what this capture's rectangle is for
 	last_region: Rect,                                     // the rectangle chosen last on the overlay (Source.Last_Region)
 	has_last_region: bool,
 	countdown_shown: bool,                                 // a capture's countdown is said now (Result_Countdown)
@@ -111,6 +115,11 @@ App :: struct {
 	tray_menu:  Tray_Menu,                                 // the menu shown
 	tray_auto:  Tray_Auto,                                 // its auto capture's item as shown
 	auto_capture: Auto_Capture,                            // auto_capture.odin: its current run and generation
+	scroll:     Scroll_Run,                                // scrolling_capture.odin: the scrolling capture's state
+	scroll_rect: Rect,                                     // its page, logical
+	scroll_escape: bool,                                   // Escape is its hotkey now (SCROLL_ESCAPE_HOTKEY)
+	scroll_wheel_known, scroll_wheel_ok: bool,             // whether the wheel can be turned here, once a start asked
+	tray_scroll: bool,                                     // the tray's item shows a scrolling capture going
 	tray_language: u32,                                    // i18n.version() of its texts: the system keeps what it was given
 	tray_recent: [TRAY_RECENT_MAX]u64,                     // the history's entries its Recent submenu shows (0: none), newest first
 	tray_recent_version: u64,                              // the history's version they were read at (+1: 0 is "never")
@@ -417,6 +426,7 @@ app_command :: proc(app: ^App, verb: Verb, token: string) {
 	case .Color:    app_color_pick(app)
 	case .Ruler:    app_ruler(app)
 	case .Auto_Capture: app_auto_capture_toggle(app)
+	case .Scrolling_Capture: app_scroll_toggle(app)
 	case .Qr:       app_trigger(app, .Qr)
 	case .Ocr:      app_trigger(app, .Ocr)
 	case .Record:     app_record_trigger(app, .Mp4)
@@ -448,39 +458,43 @@ app_step :: proc(app: ^App, e: Flow_Event) -> bool {
 
 // A capture for `t`'s workflow starts. False: one is already being taken (one at a time).
 app_trigger :: proc(app: ^App, t: Trigger) -> bool {
-	return app_capture_start(app, TRIGGER_SOURCE[t], {trigger = t}, record = false)
+	return app_capture_start(app, TRIGGER_SOURCE[t], {trigger = t}, .Picture)
 }
 
 // A workflow's own shortcut: its Capture node's source, for that workflow. False: it is gone, or a capture is going on.
 app_workflow_shortcut :: proc(app: ^App, workflow: u64) -> bool {
 	wf := workflows_find(&app.workflows, workflow)
 	if wf == nil { return false }
-	return app_capture_start(app, capture_options(wf).source, {workflow = workflow}, record = false)
+	return app_capture_start(app, capture_options(wf).source, {workflow = workflow}, .Picture)
 }
 
 // The screen's colour picker: the frozen desktop with its magnifier; a click copies the colour (app_color_picked).
 app_color_pick :: proc(app: ^App) -> bool {
-	return app_capture_start(app, .Color, {}, record = false)
+	return app_capture_start(app, .Color, {}, .Picture)
 }
 
 // The ruler: the frozen desktop, where a drag measures a line (ruler.odin); Escape ends it (app_region_cancelled).
 app_ruler :: proc(app: ^App) -> bool {
-	return app_capture_start(app, .Ruler, {}, record = false)
+	return app_capture_start(app, .Ruler, {}, .Picture)
 }
 
-// A capture of `source` starts: for the workflow of `target`, or for a recording's region (`record`). The workflow's
-// Capture node gives its delay and whether the pointer is in the picture.
-app_capture_start :: proc(app: ^App, asked: Source, target: Capture_Target, record: bool) -> bool {
+// A capture of `source` starts: for the workflow of `target`, or for a rectangle with another `use` (a recording's
+// region, a scrolling capture's page). The workflow's Capture node gives its delay and whether the pointer is in the
+// picture.
+app_capture_start :: proc(app: ^App, asked: Source, target: Capture_Target, use: Region_Use) -> bool {
+	// (a scrolling capture is one capture while it runs: anything else would come into its frames)
+	if use != .Scroll && scroll_busy(&app.scroll) { return false }
 	// (the last region asked before there is one: the region overlay)
 	source := source_resolve(asked, app.has_last_region)
 	if !app_step(app, Flow_Trigger{source}) { return false }
 	render.trace_start(SOURCE_NAMES[source])
-	app.capture_target, app.capture_record = target, record
+	app.capture_target, app.capture_use = target, use
 	// (the renderer's device made while the desktop is read: the overlay's first show does not wait for the driver)
 	if source in SOURCES_SELECTED && app.shared.main == nil && render.device_preload_state() == .Not_Started { render.preload_device() }
-	// (a recording's region, a colour and the ruler: no workflow's options; a colour is read without the pointer over it)
+	// (a recording's region, a scrolling capture's page, a colour and the ruler: no workflow's options; a colour is read
+	// without the pointer over it)
 	o: Capture_Options
-	if !record && source != .Color && source != .Ruler { o = capture_options(workflows_target(&app.workflows, target)) }
+	if use == .Picture && source != .Color && source != .Ruler { o = capture_options(workflows_target(&app.workflows, target)) }
 	worker_send(&app.worker, Job_Grab{source = source, delay_ms = o.delay_s * 1000, cursor = o.cursor, rect = app.last_region})
 	return true
 }
@@ -538,6 +552,10 @@ app_results :: proc(app: ^App) {
 			app_desktop(app, v)
 		case Result_Shot:
 			app_shot(app, v)
+		case Result_Scroll_Frame:
+			app_scroll_frame(app, v)
+		case Result_Scroll_Done:
+			app_scroll_done(app, v)
 		case Result_Saved:
 			editor_saved(app, v)
 		case Result_Uploaded:
@@ -560,8 +578,7 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 		error := flow_error_of(d.error)   // (read before desktop_free, which clears d)
 		desktop_free(&d)
 		app_step(app, Flow_Capture_Failed{error})
-		if app.capture_record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
-		app_outcome(app)
+		app_desktop_failed(app)
 		return
 	}
 	app.desktop, app.has_desktop = d, true
@@ -571,9 +588,24 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 	if !overlay_show(app, mode) {
 		app_desktop_drop(app)
 		app_step(app, Flow_Capture_Failed{.Failed})
-		if app.capture_record { app_record_abandoned(app, failed = true); app_step(app, Flow_Reset{}); return }
-		app_outcome(app)
+		app_desktop_failed(app)
 	}
+}
+
+// The desktop for a rectangle could not be read or shown: the recording or the scrolling capture waiting for it ends
+// too. A recording says it its own way; the others say why there is no picture.
+@(private = "file")
+app_desktop_failed :: proc(app: ^App) {
+	switch app.capture_use {
+	case .Record:
+		app_record_abandoned(app, failed = true)
+		app_step(app, Flow_Reset{})
+		return
+	case .Scroll:
+		app_scroll_unchosen(app)
+	case .Picture:
+	}
+	app_outcome(app)
 }
 
 app_desktop_drop :: proc(app: ^App) {
@@ -585,10 +617,19 @@ app_desktop_drop :: proc(app: ^App) {
 app_region_confirmed :: proc(app: ^App, r: Rect) {
 	// (what Source.Last_Region takes again, a recording's region too)
 	app.last_region, app.has_last_region = r, true
-	if app.capture_record {
+	switch app.capture_use {
+	case .Record:
 		overlay_hide(app)
 		app_record_chosen(app, r)
 		return
+	case .Scroll:
+		// (the capture flow is done with the frozen desktop: the scrolling capture reads the live one)
+		app_step(app, Flow_Cancelled{})
+		overlay_hide(app)
+		app_desktop_drop(app)
+		app_scroll_chosen(app, r)
+		return
+	case .Picture:
 	}
 	if !app_step(app, Flow_Confirmed{}) { return }
 	overlay_hide(app)
@@ -613,7 +654,11 @@ app_region_cancelled :: proc(app: ^App) {
 	app_step(app, Flow_Cancelled{})
 	overlay_hide(app)
 	app_desktop_drop(app)
-	if app.capture_record { app_record_abandoned(app, failed = false) }
+	switch app.capture_use {
+	case .Record:  app_record_abandoned(app, failed = false)
+	case .Scroll:  app_scroll_unchosen(app)
+	case .Picture:
+	}
 }
 
 @(private = "file")
@@ -644,11 +689,11 @@ app_shot :: proc(app: ^App, r: Result_Shot) {
 }
 
 // The picture of a capture goes to a run of its trigger's workflow (workflow_app.odin), which owns it from now on: the
-// capture is over (Flow_Handed), and another may start while the run goes on. A recording's region comes from the overlay:
-// no picture comes here.
+// capture is over (Flow_Handed), and another may start while the run goes on. A recording's region and a scrolling
+// capture's page come from the overlay: no picture comes here.
 @(private = "file")
 app_chain :: proc(app: ^App, shot: Shot) {
-	if app.capture_record {
+	if app.capture_use != .Picture {
 		shot := shot
 		shot_free(&shot)
 		return
@@ -709,6 +754,11 @@ app_outcome :: proc(app: ^App) {
 @(private = "file")
 app_anchor_events :: proc(app: ^App) {
 	for e in platform.poll_events(app.anchor, false) {
+		// (Escape, taken from the desktop while a scrolling capture runs: not one of the shortcuts' ids)
+		if e.kind == .Hotkey && e.hotkey == SCROLL_ESCAPE_HOTKEY {
+			app_scroll_cancel(app)
+			continue
+		}
 		if shortcuts.feed(app.shortcuts, e) { continue }
 		// (a clipboard read for a run, an Ask node's answer, a click on the last run's notification)
 		if workflow_anchor_event(app, e) { continue }
@@ -751,6 +801,7 @@ TRAY_SHORTCUT_TEXT := [Shortcut_Action]string{
 app_tray_menu :: proc(app: ^App) {
 	app.tray_language = i18n.version()
 	app.tray_auto = tray_auto_now(app)
+	app.tray_scroll = scroll_busy(&app.scroll)
 	if app.tray == nil { return }
 	switch {
 	case record_running(app.record): app.tray_menu = .Recording
@@ -776,6 +827,8 @@ app_tray_menu :: proc(app: ^App) {
 		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Edit), text = i18n.tr("Capture a region and edit"), shortcut = app.tray_edit_keys})
 		// (a check item: its mark says whether it runs; its words, the interval it takes)
 		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Auto_Capture), kind = .Check, checked = app.tray_auto.running, text = fmt.tprintf(i18n.tr("Auto capture every %d s"), app.tray_auto.seconds)})
+		// (checked while one runs: a click then cancels it)
+		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Scrolling_Capture), kind = .Check, checked = app.tray_scroll, text = i18n.tr("Scrolling capture")})
 		append(&items, platform.Tray_Menu_Item{kind = .Separator})
 		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Upload_Clipboard), text = i18n.tr("Upload the clipboard")})
 		append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Upload_File), text = i18n.tr("Upload files…")})
@@ -832,7 +885,7 @@ app_tray_follow :: proc(app: ^App) {
 	}
 	menu := Tray_Menu.Rest
 	if record_running(app.record) { menu = .Recording } else if record_ready(app.record) { menu = .Ready }
-	if changed || menu != app.tray_menu || app.tray_language != i18n.version() || tray_recent_due(app) || tray_auto_now(app) != app.tray_auto { app_tray_menu(app) }
+	if changed || menu != app.tray_menu || app.tray_language != i18n.version() || tray_recent_due(app) || tray_auto_now(app) != app.tray_auto || scroll_busy(&app.scroll) != app.tray_scroll { app_tray_menu(app) }
 }
 
 // The auto capture's item as it must show now.
@@ -870,6 +923,7 @@ app_tray :: proc(app: ^App) {
 				app_shortcut_run(app, Shortcut_Action(e.item - int(Tray_Item.Screen)))
 			case .Edit:          app_trigger(app, .Edit)
 			case .Auto_Capture:  app_auto_capture_toggle(app)
+			case .Scrolling_Capture: app_scroll_toggle(app)
 			case .Upload_Clipboard: workflow_from_clipboard(app)
 			case .Upload_File:   workflow_from_files(app)
 			case .Workflows:     workflows_show(app)

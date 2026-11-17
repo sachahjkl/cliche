@@ -52,7 +52,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 
 // The actions of the palette and of the sheet of keys that the history's (History_Action) do not hold already.
 Settings_Action :: enum u8 {
-	Capture_Screen, Capture_Window, Capture_All_Screens, Capture_Last_Region, Capture_Edit, Pick_Color, Ruler, Auto_Capture, Read_Qr, Read_Text, Record, Record_Gif,
+	Capture_Screen, Capture_Window, Capture_All_Screens, Capture_Last_Region, Capture_Edit, Pick_Color, Ruler, Auto_Capture, Scrolling_Capture, Read_Qr, Read_Text, Record, Record_Gif,
 	Choose_Folder, Open_Uploaders, Import_Uploader, Shortcuts_Page, System_Shortcuts, Check_Updates,
 }
 
@@ -65,6 +65,7 @@ SETTINGS_ACTIONS := [Settings_Action]ui.Command{
 	.Pick_Color       = {id = "pick_color", label = i18n.later("Pick a colour on the screen"), group = i18n.later("Capture"), icon = lucide.PALETTE, tags = {"colour", "color", "eyedropper", "picker", "hex", "rgb"}},
 	.Ruler            = {id = "ruler", label = i18n.later("Measure on the screen"), group = i18n.later("Capture"), icon = lucide.RULER, tags = {"ruler", "length", "distance", "angle", "pixels", "measure"}},
 	.Auto_Capture     = {id = "auto_capture", label = i18n.later("Start or stop the auto capture"), group = i18n.later("Capture"), icon = lucide.TIMER, tags = {"auto", "timer", "interval", "every", "repeat", "periodic", "timelapse"}},
+	.Scrolling_Capture = {id = "scrolling_capture", label = i18n.later("Scrolling capture"), group = i18n.later("Capture"), icon = lucide.ARROW_DOWN_UP, tags = {"scroll", "long", "page", "full page", "stitch", "tall"}},
 	.Read_Qr          = {id = "read_qr", label = i18n.later("Read a QR code"), group = i18n.later("Capture"), icon = lucide.QR_CODE, tags = {"scan", "barcode"}},
 	.Read_Text        = {id = "read_text", label = i18n.later("Read the text"), group = i18n.later("Capture"), icon = lucide.CLIPBOARD, tags = {"ocr", "recognition", "copy"}},
 	.Record           = {id = "record", label = i18n.later("Record a video"), group = i18n.later("Record"), icon = lucide.FILM, tags = {"mp4", "screencast", "video"}},
@@ -143,6 +144,7 @@ settings_action :: proc(app: ^App, a: Settings_Action) {
 	case .Pick_Color:       hw.hide_due = true; app_color_pick(app)
 	case .Ruler:            hw.hide_due = true; app_ruler(app)
 	case .Auto_Capture:     app_auto_capture_toggle(app)
+	case .Scrolling_Capture: hw.hide_due = true; app_scroll_toggle(app)
 	case .Read_Qr:          hw.hide_due = true; app_trigger(app, .Qr)
 	case .Read_Text:        hw.hide_due = true; app_trigger(app, .Ocr)
 	case .Record:           hw.hide_due = true; app_record_trigger(app, .Mp4)
@@ -225,6 +227,7 @@ settings_problem :: proc(user: rawptr, name: string) -> string {
 	if name == prefs_page.SYSTEM_TITLE_PREF && app.settings.system_title && w != nil && !platform.system_title_available(w) {
 		return i18n.tr("This desktop draws no title bar for Cliche's windows (GNOME): Cliche keeps its own.")
 	}
+	if name == "capture.scroll_notches" { return scroll_settings_problem(app) }
 	return ""
 }
 

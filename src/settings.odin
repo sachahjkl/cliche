@@ -33,6 +33,10 @@ PREF_DEFS := [?]config.Def{
 	{name = "capture.ocr_languages", title = i18n.later("Languages of the text read"), description = i18n.later("The languages of the text read in a region (cliche --ocr), as the engine names them, \"+\" between them (Tesseract: eng+fra). Empty: your languages."), kind = .String, default = {s = ""}, tags = {"ocr", "text", "language", "tesseract", "recognition"}},
 	{name = "capture.auto_interval", title = i18n.later("Auto capture interval"), description = i18n.later("The time between two captures of the auto capture. The tray's menu starts and stops it (cliche --auto-capture)."), kind = .Int, default = {i = 60}, min = 1, max = 86400, bounded = true, value_kind = .Duration, unit = .Second, tags = {"auto", "timer", "interval", "every", "repeat", "periodic", "timelapse"}},
 	{name = "capture.auto_source", title = i18n.later("Auto capture takes"), description = i18n.later("What each capture of the auto capture takes: the screen under the pointer, the window in front, all the screens, or the last region (chosen at the first capture when there is none yet). Each runs the workflow of that capture."), kind = .String, default = {s = "screen"}, tags = {"auto", "timer", "screen", "window", "region", "monitors"}},
+	{name = "capture.scroll_notches", title = i18n.later("Scrolling capture step"), description = i18n.later("How far the scrolling capture turns the wheel between two screens, in notches. A step that moves more than a screen is halved once."), kind = .Int, default = {i = 3}, min = 1, max = 20, bounded = true, tags = {"scrolling", "scroll", "long", "page", "wheel", "stitch"}},
+	{name = "capture.scroll_screens", title = i18n.later("Scrolling capture's most screens"), description = i18n.later("The scrolling capture stops after this many screens when the page has not ended before (cliche --scrolling-capture)."), kind = .Int, default = {i = 50}, min = 2, max = 500, bounded = true, tags = {"scrolling", "scroll", "long", "page", "limit"}},
+	{name = "capture.scroll_settle", title = i18n.later("Scrolling capture's wait"), description = i18n.later("The longest wait after each step for the page to move and stop moving. The end of the page costs one wait."), kind = .Int, default = {i = 1000}, min = 50, max = 10000, bounded = true, value_kind = .Duration, unit = .Millisecond, tags = {"scrolling", "scroll", "delay", "settle", "smooth"}},
+	{name = "capture.scroll_bar_px", title = i18n.later("Scrolling capture's scroll bar"), description = i18n.later("The width at the right edge of the page that the scrolling capture does not compare between two screens: a scroll bar's thumb moves at each step. It stays in the picture. 0: the system's scroll bar with a margin."), kind = .Int, default = {i = 0}, min = 0, max = 200, bounded = true, value_kind = .Length, tags = {"scrolling", "scroll", "scroll bar", "scrollbar", "thumb", "stitch", "edge"}},
 
 	// Recording
 	{name = "record.fps", title = i18n.later("Video frame rate"), description = i18n.later("The most frames a second of a video. Fewer come when the screen changes less."), kind = .Int, default = {i = 30}, min = 1, max = 60, bounded = true, value_kind = .Rate, tags = {"video", "mp4", "frame rate", "smooth"}},
@@ -100,6 +104,10 @@ Settings :: struct {
 	ocr_languages:      string,
 	auto_interval_s:    int,      // capture.auto_interval
 	auto_source:        Source,   // capture.auto_source: one of AUTO_CAPTURE_SOURCES
+	scroll_notches:     int,      // capture.scroll_notches
+	scroll_screens:     int,      // capture.scroll_screens
+	scroll_settle_ms:   int,      // capture.scroll_settle
+	scroll_bar_px:      int,      // capture.scroll_bar_px, logical; 0: automatic (scroll_bar_auto_px)
 	confirm_on_release: bool,
 	frame_windows:      bool,
 	magnifier:          bool,
@@ -166,6 +174,10 @@ prefs_read :: proc(p: ^config.Prefs, allocator := context.allocator) -> (s: Sett
 	s.auto_source = .Screen
 	auto_source := config.string_of(p, "capture.auto_source")
 	for name, src in SOURCE_NAMES { if name == auto_source && src in AUTO_CAPTURE_SOURCES { s.auto_source = src } }
+	s.scroll_notches = max(int(config.int_of(p, "capture.scroll_notches")), 1)
+	s.scroll_screens = max(int(config.int_of(p, "capture.scroll_screens")), 2)
+	s.scroll_settle_ms = max(int(config.int_of(p, "capture.scroll_settle")), 0)
+	s.scroll_bar_px = max(int(config.int_of(p, "capture.scroll_bar_px")), 0)
 	s.confirm_on_release = config.bool_of(p, "region.confirm_on_release")
 	s.frame_windows = config.bool_of(p, "region.frame_windows")
 	s.magnifier = config.bool_of(p, "region.magnifier")

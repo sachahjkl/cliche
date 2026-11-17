@@ -271,13 +271,14 @@ overlay_after_frame :: proc(app: ^App) {
 	}
 }
 
-// Where a selection stays (region-overlay.md): the fullscreen window's output; a recording's, the output that holds
-// `p`; else the box around every output.
+// Where a selection stays (region-overlay.md): the fullscreen window's output; a recording's or a scrolling capture's,
+// the output that holds `p` (the scrolling capture's wheel and pointer are for one window); else the box around every
+// output.
 @(private = "file")
 overlay_bounds_at :: proc(app: ^App, p: Point) -> Rect {
 	o := &app.overlay
 	if !o.placed && len(o.windows) > 0 { return o.windows[0].out }
-	if app.capture_record { return overlay_output_at(app, p) }
+	if app.capture_use != .Picture { return overlay_output_at(app, p) }
 	return outputs_bounds(app.desktop.outputs)
 }
 

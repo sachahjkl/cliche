@@ -14,3 +14,9 @@ pointer_on_desktop :: proc() -> (p: Point, ok: bool) {
 	if !win.GetCursorPos(&pt) { return }
 	return {pt.x, pt.y}, true
 }
+
+// Moves the pointer to `p` (the desktop's logical pixels, taken as physical as above): the scrolling capture's wheel
+// goes to the window under it, and the person can let go of the mouse.
+pointer_place :: proc(p: Point) -> bool {
+	return bool(win.SetCursorPos(p.x, p.y))
+}

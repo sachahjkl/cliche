@@ -34,6 +34,8 @@ documentation (`README.md` at the root) and not the map of the code (`docs/archi
   selection over the whole desktop; a drag across outputs; new windows opened before the old ones close
 - [features/ruler.md](features/ruler.md): the ruler, a source as the colour picker is; the overlay's third mode; what
   the length and the angle measure
+- [features/scrolling-capture.md](features/scrolling-capture.md): one tall picture of a page that scrolls; the run's
+  state machine, the worker's settle, the wheel on the interface thread, the retry at half the step, the pointer
 - [features/share-url.md](features/share-url.md): the Share URL step, the Shorten URL request with nothing read back;
   an uploader's uses
 - [features/tool-bars.md](features/tool-bars.md): every row of tools is the toolkit's bar; which wraps, which folds

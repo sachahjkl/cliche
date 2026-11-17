@@ -76,6 +76,9 @@ fr Capturer une zone et la modifier
 en Auto capture every %d s
 fr Capture automatique toutes les %d s
 
+en Scrolling capture
+fr Capture avec défilement
+
 en Upload the clipboard
 fr Mettre en ligne le presse-papiers
 
@@ -1128,6 +1131,24 @@ fr aucune image n'est arrivée
 en this build has no WebP encoder
 fr cette version n'a pas d'encodeur WebP
 
+en This desktop lets no program turn the wheel of another program's window. Capture a region instead.
+fr Ce bureau ne permet à aucun programme de tourner la molette dans la fenêtre d'un autre programme. Capturez plutôt une zone.
+
+en No scrolling capture
+fr Aucune capture avec défilement
+
+en Escape or Cliche's icon stops it.
+fr Échap ou l'icône de Cliche l'arrête.
+
+en Cliche's icon stops it.
+fr L'icône de Cliche l'arrête.
+
+en Keep the pointer over the page
+fr Gardez le pointeur sur la page
+
+en Scrolling capture cancelled
+fr Capture avec défilement annulée
+
 en A click on the icon
 fr Un clic sur l'icône
 
@@ -1151,6 +1172,30 @@ fr La capture automatique prend
 
 en What each capture of the auto capture takes: the screen under the pointer, the window in front, all the screens, or the last region (chosen at the first capture when there is none yet). Each runs the workflow of that capture.
 fr Ce que prend chaque capture de la capture automatique : l'écran sous le pointeur, la fenêtre au premier plan, tous les écrans, ou la dernière zone (choisie à la première capture quand il n'y en a pas encore). Chacune exécute le scénario de cette capture.
+
+en Scrolling capture step
+fr Pas de la capture avec défilement
+
+en How far the scrolling capture turns the wheel between two screens, in notches. A step that moves more than a screen is halved once.
+fr De combien de crans la capture avec défilement tourne la molette entre deux écrans. Un pas qui déplace la page de plus d'un écran est divisé par deux une fois.
+
+en Scrolling capture's most screens
+fr Écrans au plus de la capture avec défilement
+
+en The scrolling capture stops after this many screens when the page has not ended before (cliche --scrolling-capture).
+fr La capture avec défilement s'arrête après ce nombre d'écrans si la page n'a pas fini avant (cliche --scrolling-capture).
+
+en Scrolling capture's wait
+fr Attente de la capture avec défilement
+
+en The longest wait after each step for the page to move and stop moving. The end of the page costs one wait.
+fr L'attente la plus longue après chaque pas pour que la page bouge puis s'arrête. La fin de la page coûte une attente.
+
+en Scrolling capture's scroll bar
+fr Barre de défilement de la capture avec défilement
+
+en The width at the right edge of the page that the scrolling capture does not compare between two screens: a scroll bar's thumb moves at each step. It stays in the picture. 0: the system's scroll bar with a margin.
+fr La largeur au bord droit de la page que la capture avec défilement ne compare pas entre deux écrans : le curseur d'une barre de défilement bouge à chaque pas. Elle reste dans l'image. 0 : la barre de défilement du système avec une marge.
 
 en Video frame rate
 fr Images par seconde (vidéo)

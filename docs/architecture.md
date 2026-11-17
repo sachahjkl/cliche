@@ -45,6 +45,11 @@ and the flow ends with no picture), and the ruler (the overlay with no rectangle
 counts the delay down (`countdown_plan`: a notice each second, withdrawn just before the picture) and asks gt:capture
 for the pointer (`capture.set_cursor`; Wayland and Windows draw it, the portal and X11 cannot).
 
+The region's overlay also chooses a rectangle for another use (`Region_Use`): a recording's region, and a scrolling
+capture's page. The scrolling capture is a state machine of its own (`src/scrolling_capture.odin`, `Scroll_Run`): the
+worker takes the rectangle, waits for the page to settle and stitches it (`gt:image`'s stitcher); the interface thread
+turns the wheel (`platform.send_wheel`) between two frames. While it runs, every other capture is refused.
+
 ## A region
 
 On the trigger the worker reads the desktop (`capture.desktop`, every output in one picture) and the windows with their

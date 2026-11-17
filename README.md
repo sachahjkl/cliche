@@ -41,6 +41,7 @@ saved, save a copy when the upload failed).
     cliche --color              pick a colour on the screen: a click copies #rrggbb (Shift: rgb(r, g, b))
     cliche --ruler              measure a line's length and angle on the frozen screen
     cliche --auto-capture       capture every few seconds; again: stop
+    cliche --scrolling-capture  one tall picture of a page that scrolls; again: cancel
     cliche --qr                 read the QR code in a region
     cliche --ocr                read the text in a region (Tesseract on Linux)
     cliche --record             choose a region to record as an MP4 video; again: start, then stop
@@ -84,6 +85,14 @@ captured.
 The auto capture (the icon's menu, `cliche --auto-capture`) captures the screen every 60 seconds until you stop it in the
 same menu. The settings' Capture page sets the interval and what it takes (the screen, the window in front, all the
 screens or the last region); each capture runs the workflow of that capture.
+
+The scrolling capture (the icon's menu, `cliche --scrolling-capture`, the command palette) takes one tall picture of a
+page that scrolls. Choose the page as a region: a rectangle, or a click on its window. Cliche turns the mouse wheel over
+it a few notches at a time and joins the screens until the page ends, or until 50 screens. On Windows it moves the
+pointer over the page and Escape cancels; on X11 keep the pointer over the page. Wayland lets no program turn another
+program's wheel: there it says so. The picture runs the region's workflow. The settings' Capture page sets the step,
+the most screens, how long to wait for the page to settle, and the width of the scroll bar at the right edge, which
+is not compared between two screens.
 
 The main window shows the captures kept, as a grid or a list, with a preview you can widen. Its gear (or Ctrl+,) shows
 the settings in its place, and its graph button (Ctrl+Shift+W) the workflows; Escape goes back. Ctrl+K opens the command
