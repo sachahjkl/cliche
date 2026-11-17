@@ -3,6 +3,14 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.22.0] - 2026-11-17 21:03
+
+### Changed
+- **The engraving on the back of the licence card blends into the foil**: it is struck in the card's own silver now, and still waits for the right angle.
+
+### Fixed
+- **A capture started from the tray menu no longer shows the menu** (Windows).
+
 ## [0.21.0] - 2026-11-17 18:20
 
 ### Added
@@ -317,6 +325,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.22.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.22.0
 [0.21.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.21.0
 [0.20.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.20.0
 [0.19.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.19.0
