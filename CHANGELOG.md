@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.24.0] - 2026-11-18 16:07
+
+### Changed
+- **Old Head theme**: its title bar is a navy band with square bevelled buttons, and its scroll bars have bevelled arrows and thumb.
+
 ## [0.23.0] - 2026-11-18 13:38
 
 ### Added
@@ -335,6 +340,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.24.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.24.0
 [0.23.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.23.0
 [0.22.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.22.1
 [0.22.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.22.0
