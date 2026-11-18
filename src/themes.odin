@@ -12,7 +12,7 @@ THEME_CLICHE :: ui.Theme_Def{"cliche",
 	// light
 	{{0xe9eaf0ff, 0xf4f5f9ff, 0xffffffff, 0xffffffff, 0xecedf3ff, 0xdcdee8ff}, {0x9a9db0ff, 0x676a7dff, 0x1a1b25ff, 0x000000ff},
 		{0xd9532eff, 0x4c5bd4ff, 0x6b56a3ff, 0x2f8f46ff, 0xc98a10ff, 0xd93d42ff, 0x2f7c86ff, 0xa64a72ff}},
-	.Both, nil, false, 0}
+	.Both, nil, false, 0, {}}
 
 // The themes the settings can show: cliche's, then the toolkit's.
 themes :: proc() -> []ui.Theme_Def {
