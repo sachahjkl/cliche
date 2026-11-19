@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.25.1] - 2026-11-18 23:59
+
+### Fixed
+- **The Menu key opens a row's menu while the list has the keyboard**: Shift+F10 too.
+
 ## [0.25.0] - 2026-11-18 21:12
 
 ### Changed
@@ -348,6 +353,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.25.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.25.1
 [0.25.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.25.0
 [0.24.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.24.0
 [0.23.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.23.0
