@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.26.1] - 2026-11-19 22:21
+
+### Fixed
+- **Smooth animations on Wayland**: a menu, a dialog or a switch moves at each refresh of the screen, with no need to move the pointer.
+
 ## [0.26.0] - 2026-11-19 16:58
 
 ### Added
@@ -358,6 +363,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.26.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.26.1
 [0.26.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.26.0
 [0.25.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.25.1
 [0.25.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.25.0
