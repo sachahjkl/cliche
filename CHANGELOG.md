@@ -3,6 +3,18 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.27.0] - 2026-11-20 11:52
+
+### Added
+- **Lower latency on Linux**: during an animation or a drag, each frame starts as late as it can and still reaches the next refresh, so it shows the newest input.
+- **A file's menu in the file dialogs**: copy its path or name, open it with its program, show it in its folder, rename it in place, or move it to the trash with an undo.
+
+### Changed
+- **Every menu filters what is typed**: a field at the top of a menu keeps the items that match, in every menu.
+
+### Fixed
+- **`nix run github:sachahjkl/cliche` works.** A flake fetched from GitHub is a tarball without the gui_toolkit submodule, and the build stopped at once; the package now takes the toolkit from an input pinned to the submodule's commit.
+
 ## [0.26.2] - 2026-11-20 07:08
 
 ### Fixed
@@ -368,6 +380,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.27.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.27.0
 [0.26.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.26.2
 [0.26.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.26.1
 [0.26.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.26.0
