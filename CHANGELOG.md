@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.26.2] - 2026-11-20 07:08
+
+### Fixed
+- **The full frame rate on a second screen**: on Wayland a window on a 144 Hz screen beside a 60 Hz one moves at 144 frames a second, not 60.
+
 ## [0.26.1] - 2026-11-19 22:21
 
 ### Fixed
@@ -363,6 +368,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.26.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.26.2
 [0.26.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.26.1
 [0.26.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.26.0
 [0.25.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.25.1
