@@ -929,7 +929,7 @@ history_tools_groups :: proc(app: ^App, filters, sizes, views: []string, field_h
 		// (the date's filter in a menu: four choices would make the bar too wide; the tip says the one in use)
 		// (each tool of an action is given it: the bar states its act name, where the palette's Shift+Enter on it comes. The
 		// calendar opens the menu the Period action opens)
-		ui.toolbar_tool("period", {label = i18n.tr("Show by date…"), icon = lucide.CALENDAR, menu = HISTORY_PERIOD_MENU_ID, menu_search = false,
+		ui.toolbar_tool("period", {label = i18n.tr("Show by date…"), icon = lucide.CALENDAR, menu = HISTORY_PERIOD_MENU_ID,
 			tip = fmt.tprintf("%s: %s", i18n.tr("Date"), i18n.tr(HISTORY_PERIOD_TEXT[hw.period])), command = HISTORY_ACTIONS[.Period]})
 		// (the keys in the tooltips as the keyboards of the language name them)
 		preview := ui.view_is_open(&app.views, PREVIEW_VIEW)

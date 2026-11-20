@@ -533,7 +533,7 @@ workflow_graph_event :: proc(app: ^App, wf: ^flowgraph.Graph_Entry, e: ui.Graph_
 			workflow_add_open(app, v.at, nil)
 		} else {
 			m.menu_node = v.node
-			ui.menu_open(WORKFLOW_NODE_MENU_ID, ui.mouse_pos(), search = false)
+			ui.menu_open(WORKFLOW_NODE_MENU_ID, ui.mouse_pos())
 		}
 	case ui.Graph_Opened:
 		clear(&m.selection)

@@ -403,7 +403,7 @@ pin_build :: proc(h: ^host.Host, size: host.Vec2) {
 
 	if p.menu_due {
 		p.menu_due = false
-		ui.menu_open(PIN_MENU, p.menu_at, search = false)
+		ui.menu_open(PIN_MENU, p.menu_at)
 	}
 	if ui.menu(PIN_MENU) {
 		if ui.menu_item(i18n.tr("Copy the picture"), icon = lucide.CLIPBOARD_COPY).clicked { pin_copy(p) }

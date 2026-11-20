@@ -1666,7 +1666,7 @@ editor_actions_bar :: proc(ed: ^Editor, em: f32) {
 		if ui.toolbar("editor_actions", {overflow = .Wrap, align = .Center}) {
 			if ui.toolbar_group("zoom", {title = i18n.tr("Zoom")}) {
 				// (its words are the zoom in percent; its menu, built outside the bar: editor_zoom_menu)
-				ui.toolbar_tool("zoom", {label = fmt.tprintf("%d %%", int(math.round(ed.model.view.zoom * 100))), words = true, tip = i18n.tr("Zoom"), menu = EDITOR_ZOOM_MENU, menu_search = false})
+				ui.toolbar_tool("zoom", {label = fmt.tprintf("%d %%", int(math.round(ed.model.view.zoom * 100))), words = true, tip = i18n.tr("Zoom"), menu = EDITOR_ZOOM_MENU})
 			}
 			if ui.toolbar_group("picture", {title = i18n.tr("Picture"), separator = true}) {
 				for a in ([?]Editor_Action{.Undo, .Redo, .Copy, .Save, .Upload, .Pin}) {
@@ -1993,7 +1993,7 @@ rgb_srgba :: proc(rgb: u32, alpha: f32) -> ui.Srgba {
 editor_shape_menu :: proc(ed: ^Editor) {
 	if ed.shape_menu_due {
 		ed.shape_menu_due = false
-		ui.menu_open(EDITOR_SHAPE_MENU, ed.shape_menu_at, search = false)
+		ui.menu_open(EDITOR_SHAPE_MENU, ed.shape_menu_at)
 	}
 	item :: proc(ed: ^Editor, a: Editor_Action) { editor_menu_item(ed, a) }
 	if ui.menu(EDITOR_SHAPE_MENU) {
