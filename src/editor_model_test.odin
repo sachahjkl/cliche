@@ -825,15 +825,15 @@ editor_turns_and_mirrors_the_picture :: proc(t: ^testing.T) {
 	defer edit_model_destroy(&m)
 	edit_add(&m, {kind = .Line, a = {100, 50}, b = {200, 50}, style = EDIT_STYLE_DEFAULT})
 	edit_add(&m, {kind = .Text, a = {100, 100}, text = strings.clone("abcd"), style = EDIT_STYLE_DEFAULT})
-	testing.expect(t, !edit_picture_change(&m, {kind = .Rotate, turns = 4}))
-	testing.expect(t, edit_picture_change(&m, {kind = .Rotate, turns = 1}))
+	testing.expect(t, !edit_picture_change(&m, {kind = .Rotate, quarters = 4}))
+	testing.expect(t, edit_picture_change(&m, {kind = .Rotate, quarters = 1}))
 	testing.expect_value(t, m.doc.size, Edit_Vec{800, 1000})
 	testing.expect(t, near(m.doc.shapes[0].a, {750, 100}) && near(m.doc.shapes[0].b, {750, 200}))
 	text := m.doc.shapes[1]
 	testing.expect(t, near(text.a, {661.6, 109.6}) && near(text.b - text.a, {48, 28.8}))
 	testing.expect(t, edit_picture_change(&m, {kind = .Flip, across = true}))
 	testing.expect(t, near(m.doc.shapes[0].a, {50, 100}))
-	testing.expect(t, edit_picture_change(&m, {kind = .Rotate, turns = 3}))
+	testing.expect(t, edit_picture_change(&m, {kind = .Rotate, quarters = 3}))
 	testing.expect_value(t, m.doc.size, Edit_Vec{1000, 800})
 	testing.expect_value(t, len(m.doc.history.undo), 5)
 	testing.expect(t, edit_undo(&m))
@@ -883,13 +883,13 @@ editor_picture_follows_its_operations :: proc(t: ^testing.T) {
 		for &v, i in out { v = p[i * 4] }
 		return out
 	}
-	turned, size := edit_picture_make(rgba, {3, 2}, {{kind = .Rotate, turns = 1}}, context.temp_allocator)
+	turned, size := edit_picture_make(rgba, {3, 2}, {{kind = .Rotate, quarters = 1}}, context.temp_allocator)
 	testing.expect_value(t, size, [2]int{2, 3})
 	testing.expect(t, slice_equal(reds(turned), {40, 10, 50, 20, 60, 30}))
 	cut, cut_size := edit_picture_make(rgba, {3, 2}, {{kind = .Cut, across = true, at = 1, length = 1}}, context.temp_allocator)
 	testing.expect_value(t, cut_size, [2]int{2, 2})
 	testing.expect(t, slice_equal(reds(cut), {10, 30, 40, 60}))
-	ops := []Edit_Op{{kind = .Rotate, turns = 2}, {kind = .Canvas, margins = {1, 0, 0, 0}, color = 0xFF112233}}
+	ops := []Edit_Op{{kind = .Rotate, quarters = 2}, {kind = .Canvas, margins = {1, 0, 0, 0}, color = 0xFF112233}}
 	padded, padded_size := edit_picture_make(rgba, {3, 2}, ops, context.temp_allocator)
 	testing.expect_value(t, padded_size, [2]int{4, 2})
 	testing.expect(t, slice_equal(padded[:4], {0x11, 0x22, 0x33, 0xFF}))

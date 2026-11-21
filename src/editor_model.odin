@@ -185,14 +185,14 @@ Edit_Shape :: struct {
 Edit_Op_Kind :: enum u8 { Rotate, Flip, Resize, Canvas, Cut }
 
 Edit_Op :: struct {
-	kind:    Edit_Op_Kind,
-	turns:   int,      // Rotate: quarter turns clockwise (1, 2, 3)
-	across:  bool,     // Flip: left to right (else top to bottom). Cut: a band of columns (else of rows)
-	size:    [2]int,   // Resize: the picture's new size, pixels
-	margins: [4]int,   // Canvas: left, top, right, bottom, pixels (0 or more)
-	color:   u32,      // Canvas: the margins' colour, 0xAARRGGBB
-	at:      int,      // Cut: where the band starts, pixels
-	length:  int,      // Cut: the band's length, pixels
+	kind:     Edit_Op_Kind,
+	quarters: int,      // Rotate: quarter turns clockwise (1, 2, 3)
+	across:   bool,     // Flip: left to right (else top to bottom). Cut: a band of columns (else of rows)
+	size:     [2]int,   // Resize: the picture's new size, pixels
+	margins:  [4]int,   // Canvas: left, top, right, bottom, pixels (0 or more)
+	color:    u32,      // Canvas: the margins' colour, 0xAARRGGBB
+	at:       int,      // Cut: where the band starts, pixels
+	length:   int,      // Cut: the band's length, pixels
 }
 
 // The shapes, the crop and the picture's operations as they were (owned).
@@ -797,7 +797,7 @@ edit_selection_count :: proc(m: ^Edit_Model) -> int { return m.doc.picked_count 
 // The picture's size after `op`, from `size`.
 edit_op_size :: proc(op: Edit_Op, size: Edit_Vec) -> Edit_Vec {
 	switch op.kind {
-	case .Rotate: return op.turns % 2 != 0 ? Edit_Vec{size.y, size.x} : size
+	case .Rotate: return op.quarters % 2 != 0 ? Edit_Vec{size.y, size.x} : size
 	case .Flip:   return size
 	case .Resize: return {f32(op.size.x), f32(op.size.y)}
 	case .Canvas: return size + {f32(op.margins[0] + op.margins[2]), f32(op.margins[1] + op.margins[3])}
@@ -810,7 +810,7 @@ edit_op_size :: proc(op: Edit_Op, size: Edit_Vec) -> Edit_Vec {
 edit_op_point :: proc(op: Edit_Op, size, p: Edit_Vec) -> Edit_Vec {
 	switch op.kind {
 	case .Rotate:
-		switch ((op.turns % 4) + 4) % 4 {
+		switch ((op.quarters % 4) + 4) % 4 {
 		case 1: return {size.y - p.y, p.x}
 		case 2: return size - p
 		case 3: return {p.y, size.x - p.x}
@@ -838,8 +838,8 @@ op_fit :: proc(op: Edit_Op, size: Edit_Vec) -> (out: Edit_Op, ok: bool) {
 	w, h := int(size.x), int(size.y)
 	switch op.kind {
 	case .Rotate:
-		out.turns = ((op.turns % 4) + 4) % 4
-		return out, out.turns != 0
+		out.quarters = ((op.quarters % 4) + 4) % 4
+		return out, out.quarters != 0
 	case .Flip:
 		return out, true
 	case .Resize:

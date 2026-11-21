@@ -13,6 +13,7 @@ import "gt:platform"
 import pic "gt:image"
 import png "gt:png"
 import qr "gt:qr"
+import "gt:turn"
 import i18n "gt:i18n"
 
 // The largest side of a node's thumbnail in the Workflows mode, in pixels.
@@ -194,8 +195,8 @@ node_transform :: proc(n: ^flowgraph.Node, shot: Shot, fonts: ^host.Worker_Fonts
 		if w <= 0 || h <= 0 { return }
 		made = pic.crop(src, l, t, w, h)
 	case .Rotate:
-		turns := [3]int{1, 2, 3}   // (90° right, 180°, 90° left: quarter turns clockwise)
-		made = pic.rotate(src, turns[flowgraph.param_int(&CATALOG, n, "turn")])
+		quarters := [3]int{1, 2, 3}   // (90° right, 180°, 90° left: quarter turns clockwise)
+		made = pic.rotate(src, quarters[flowgraph.param_int(&CATALOG, n, "turn")])
 	case .Flip:
 		made = pic.flip(src, horizontal = flowgraph.param_int(&CATALOG, n, "direction") == 0)
 	case .Pad:
@@ -230,7 +231,8 @@ node_transform :: proc(n: ^flowgraph.Node, shot: Shot, fonts: ^host.Worker_Fonts
 		pic.saturation(made, f32(flowgraph.param_float(&CATALOG, n, "amount") / 100))
 	case .Hue:
 		made = pic.clone(src)
-		pic.hue_rotate(made, f32(flowgraph.param_float(&CATALOG, n, "degrees")))
+		// (the parameter is degrees, as the person types it; the toolkit takes turns)
+		pic.hue_rotate(made, turn.from_degrees(f32(flowgraph.param_float(&CATALOG, n, "degrees"))))
 	case .Sepia:
 		made = pic.clone(src)
 		pic.sepia(made)
@@ -280,7 +282,7 @@ background_make :: proc(n: ^flowgraph.Node, src: pic.Image) -> pic.Image {
 	}
 	// (a flat fill is a gradient from a colour to itself)
 	fill := pic.solid(flowgraph.param_color(&CATALOG, n, "color"))
-	if flowgraph.param_int(&CATALOG, n, "fill") == 1 { fill = {from = flowgraph.param_color(&CATALOG, n, "color"), to = flowgraph.param_color(&CATALOG, n, "color2"), angle = f32(flowgraph.param_float(&CATALOG, n, "angle"))} }
+	if flowgraph.param_int(&CATALOG, n, "fill") == 1 { fill = {from = flowgraph.param_color(&CATALOG, n, "color"), to = flowgraph.param_color(&CATALOG, n, "color2"), angle = turn.from_degrees(f32(flowgraph.param_float(&CATALOG, n, "angle")))} }
 	out := pic.background(current, flowgraph.param_int(&CATALOG, n, "margin"), fill)
 	if owned { pic.destroy(&current) }
 	return out

@@ -164,7 +164,7 @@ edit_picture_make :: proc(rgba: []u8, size: [2]int, ops: []Edit_Op, allocator :=
 	for op in ops {
 		next: pic.Image
 		switch op.kind {
-		case .Rotate: next = pic.rotate(img, op.turns, allocator)
+		case .Rotate: next = pic.rotate(img, op.quarters, allocator)
 		case .Flip:   next = pic.flip(img, op.across, allocator)
 		case .Resize: next = pic.resize(img, op.size.x, op.size.y, allocator = allocator)
 		case .Canvas:
@@ -236,7 +236,7 @@ paint_body :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
 	case .Ellipse:
 		r := target_box(p, edit_box_of(s.a, s.b))
 		path := draw.path_make(allocator = context.temp_allocator)
-		draw.path_arc(&path, draw.rect_center(r), draw.rect_size(r) * 0.5, 0, 2 * math.PI)
+		draw.path_arc(&path, draw.rect_center(r), draw.rect_size(r) * 0.5, 0, 1)
 		draw.path_close(&path)
 		if filled { draw.path_fill(dc, &path, fill) }
 		stroke(dc, &path, w, color, s.style.dash)
@@ -377,7 +377,7 @@ paint_magnify :: proc(dc: ^draw.Context, p: ^Edit_Paint, s: ^Edit_Shape) {
 		draw.push_clip_ellipse(dc, draw.rect_center(r), draw.rect_size(r) * 0.5)
 		draw.image(dc, p.picture, r, src)
 		draw.pop_clip(dc)
-		draw.path_arc(&path, draw.rect_center(r), draw.rect_size(r) * 0.5, 0, 2 * math.PI)
+		draw.path_arc(&path, draw.rect_center(r), draw.rect_size(r) * 0.5, 0, 1)
 		draw.path_close(&path)
 	case .Rectangle:
 		draw.image(dc, p.picture, r, src)

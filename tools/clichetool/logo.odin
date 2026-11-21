@@ -77,7 +77,7 @@ logo_draw :: proc(pixels, size: int, _: rawptr) -> paint.Canvas {
 		l: paint.Path
 		defer paint.path_destroy(&l)
 		corner_path(&l, 20, 20, t, a)
-		paint.path_transform(&l, paint.rotate_at(paint.IDENTITY, f32(quarter) * 90, LOGO_UNITS / 2, LOGO_UNITS / 2))
+		paint.path_transform(&l, paint.rotate_at(paint.IDENTITY, f32(quarter) * 0.25, LOGO_UNITS / 2, LOGO_UNITS / 2))
 		shape(&c, l, 0, LOGO_UNITS, CORNER_TOP, CORNER_BOTTOM, CORNER_EDGE)
 	}
 
