@@ -3,6 +3,14 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.28.2] - 2026-11-25 20:14
+
+### Changed
+- **Recording an MP4 uses less of the processor**: each frame's colours are converted up to eight times faster.
+
+### Fixed
+- **An MP4 recording no longer crashes cliche**: a recording longer than two seconds could end cliche at any moment, and lose the end of the video.
+
 ## [0.28.1] - 2026-11-25 09:50
 
 ### Fixed
@@ -391,6 +399,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.28.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.28.2
 [0.28.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.28.1
 [0.28.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.28.0
 [0.27.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.27.0
