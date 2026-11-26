@@ -5,7 +5,7 @@
     # The toolkit, at the submodule's commit: a flake fetched from GitHub is a tarball without submodules
     # (gui_toolkit docs/toolbox.md, "The flake's toolkit").
     gui_toolkit = {
-      url = "github:sachahjkl/gui_toolkit/e2d9b10a066245a97b9f6ee9031960a761f41fc4";
+      url = "github:sachahjkl/gui_toolkit/0f0f89cc3a35275d61658497f3e3b0f63f04d87a";
       flake = false;
     };
     nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.2605";

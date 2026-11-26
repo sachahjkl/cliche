@@ -371,7 +371,7 @@ workflow_bar :: proc(app: ^App, em: f32) {
 				if ui.toolbar_tool("fit", {command = WORKFLOW_ACTIONS[.Fit]}) { workflow_action(app, .Fit) }
 			}
 			if ui.toolbar_group("run", {title = i18n.tr("Run on the last capture"), priority = 2, separator = true}) {
-				if ui.toolbar_tool("preview", {command = WORKFLOW_ACTIONS[.Preview], words = true, disabled = m.shown == 0}) { workflow_action(app, .Preview) }
+				if ui.toolbar_tool("preview", {command = WORKFLOW_ACTIONS[.Preview], words = true, face = .Raised, disabled = m.shown == 0}) { workflow_action(app, .Preview) }
 			}
 			if ui.toolbar_group("window", {pinned = true}) {
 				if ui.toolbar_tool("palette", {command = ui.palette_command()}) { history_palette_show(app) }
