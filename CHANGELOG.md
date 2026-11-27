@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.29.5] - 2026-11-27 13:08
+
+### Changed
+- **Upright photos in the file dialogs**: a photo's thumbnail is turned as the camera recorded it, and SVG files show a thumbnail.
+
 ## [0.29.4] - 2026-11-27 11:11
 
 ### Changed
@@ -427,6 +432,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.29.5]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.5
 [0.29.4]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.4
 [0.29.3]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.3
 [0.29.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.2
