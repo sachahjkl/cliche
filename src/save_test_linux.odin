@@ -9,8 +9,7 @@ import "gt:testkit"
 // Save as over a file the person chose keeps its mode, and a link to it stays a link (fsx.DOCUMENT).
 @(test)
 save_as_keeps_the_file_it_writes_over :: proc(t: ^testing.T) {
-	dir := testkit.temp_folder(t)
-	defer delete(dir)
+	dir := testkit.temp_folder(t)   // (its own cleanup frees it)
 	target := strings.concatenate({dir, "/shot.png"}, context.temp_allocator)
 	link := strings.concatenate({dir, "/link.png"}, context.temp_allocator)
 	testing.expect(t, os.write_entire_file(target, transmute([]u8)string("old")) == nil)
