@@ -46,7 +46,7 @@ save_file :: proc(file: []u8, folder_pref, name: string) -> (path: string, err: 
 	for n in 1 ..= NAME_TRIES {
 		try := path_join(folder, name_numbered(name, n, context.temp_allocator))
 		if os.exists(try) { continue }
-		if !fsx.write_atomic(try, file, flush = true) { return "", .Not_Saved }
+		if !fsx.write_atomic(try, file, {flush = true}) { return "", .Not_Saved }
 		return strings.clone(try), .None
 	}
 	return "", .Not_Saved
@@ -119,7 +119,8 @@ save_as_shot :: proc(j: ^Job_Save_As) -> (out: Saved) {
 	file, problem := save_encode(j.shot, j.format, j.quality)
 	defer delete(file)
 	if problem != "" { out.error = .Empty; out.problem = strings.clone(problem); return }
-	if !write_file(j.path, file) { out.error = .Not_Saved; return }
+	// (the person's file, often written over: it keeps its mode and owner, and a link to it stays a link)
+	if !write_file(j.path, file, fsx.DOCUMENT) { out.error = .Not_Saved; return }
 	out.path = strings.clone(j.path)
 	return
 }
@@ -163,8 +164,8 @@ path_native :: proc(p: string, allocator := context.allocator) -> string {
 	return out
 }
 
-// Writes `data` to `path` whole, its folder made first.
-write_file :: proc(path: string, data: []u8) -> bool {
+// Writes `data` to `path` whole, its folder made first. `o`: fsx.DOCUMENT for a file the person chose (Save as).
+write_file :: proc(path: string, data: []u8, o: fsx.Write_Options = {}) -> bool {
 	if slash := strings.last_index_any(path, "/\\"); slash > 0 { _ = os.make_directory_all(path[:slash]) }
-	return fsx.write_atomic(path, data)
+	return fsx.write_atomic(path, data, o)
 }
