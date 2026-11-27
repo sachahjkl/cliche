@@ -389,6 +389,7 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	}
 	app_standard_follow(app, &hw.host)
 	views_window(app, &hw.host)
+	debug_panel_register(app, &hw.host)
 	// (the preview as the user left it at the last quit; shown at the very first start)
 	_ = ui.view_restore(&app.views, PREVIEW_VIEW, app, first_start_open = true, owner = &hw.host.state)
 	// (the window's close hides it)

@@ -24,6 +24,8 @@ documentation (`README.md` at the root) and not the map of the code (`docs/archi
 
 - [features/auto-capture.md](features/auto-capture.md): a capture every N seconds; a thread that posts the capture's
   command to the inbox, woken to stop
+- [features/debug-panel.md](features/debug-panel.md): cliche's state machines and the overlay's settings in the
+  toolkit's debug window; one panel in the main window, nothing read of the worker, settings tried and not saved
 - [features/editor-bars.md](features/editor-bars.md): the editor's two bars, tools above and actions under; why nothing
   folds away
 - [features/history-selection.md](features/history-selection.md): the history's selection, the toolkit's, one for the
