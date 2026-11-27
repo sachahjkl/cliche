@@ -3,6 +3,14 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.29.6] - 2026-11-27 14:47
+
+### Changed
+- **cliche's windows open faster**: about three times faster at the first capture after a start.
+
+### Fixed
+- **Save as over a link or a shared file**: the editor's Save as writes through a link to the file it points to, and the file keeps its permissions and its owner.
+
 ## [0.29.5] - 2026-11-27 13:08
 
 ### Changed
@@ -432,6 +440,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.29.6]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.6
 [0.29.5]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.5
 [0.29.4]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.4
 [0.29.3]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.3
