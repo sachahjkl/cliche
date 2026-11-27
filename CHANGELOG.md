@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.29.1] - 2026-11-27 08:47
+
+### Fixed
+- **A turning wheel keeps scrolling**: a field that slides under the pointer while a list scrolls no longer takes the wheel; it takes it after the wheel rests.
+
 ## [0.29.0] - 2026-11-26 22:33
 
 ### Added
@@ -407,6 +412,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.29.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.1
 [0.29.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.0
 [0.28.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.28.2
 [0.28.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.28.1

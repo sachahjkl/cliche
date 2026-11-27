@@ -13,7 +13,7 @@ import "gt:platform"
 import process "gt:process"
 import setup "gt:setup"
 
-APP_VERSION :: "0.29.0"
+APP_VERSION :: "0.29.1"
 // What changed, version by version: the settings' What's new page (in the program, beside its site's changelog).
 CHANGELOG :: #load("../CHANGELOG.md", string)
 
