@@ -1300,10 +1300,11 @@ handle_cursor :: proc(h: Edit_Handle) -> platform.Cursor {
 ////////////////////////////////
 // Actions
 
-@(private = "file")
+// Whether `a` applies to the picture. Not the export in flight: its readback lasts a few frames, and the bars turned
+// disabled and back at each Copy. editor_action refuses a press meanwhile.
 editor_action_enabled :: proc(ed: ^Editor, a: Editor_Action) -> bool {
 	m := &ed.model
-	if !ed.has_picture || ed.exporting || ed.export_wait || ed.done_due { return a == .Close || a == .Keys }
+	if !ed.has_picture || ed.export_wait || ed.done_due { return a == .Close || a == .Keys }
 	#partial switch a {
 	case .Undo:                         return edit_can_undo(m)
 	case .Redo:                         return edit_can_redo(m)
@@ -1324,9 +1325,10 @@ editor_action_enabled :: proc(ed: ^Editor, a: Editor_Action) -> bool {
 	return true
 }
 
-@(private = "file")
 editor_action :: proc(ed: ^Editor, a: Editor_Action) {
 	m := &ed.model
+	// (the export draws the document at its next frame: nothing changes it before, nothing starts another)
+	if ed.exporting && a != .Close && a != .Keys { return }
 	switch a {
 	case .Tool_Select, .Tool_Rectangle, .Tool_Ellipse, .Tool_Arrow, .Tool_Line, .Tool_Pen, .Tool_Text, .Tool_Balloon, .Tool_Highlighter,
 	     .Tool_Pixelate, .Tool_Blur, .Tool_Eraser, .Tool_Magnify, .Tool_Step, .Tool_Crop, .Tool_Cut_Out:
