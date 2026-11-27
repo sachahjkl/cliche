@@ -425,7 +425,9 @@ workflow_graph :: proc(app: ^App, em: f32) {
 		},
 		icon_font = app.history_window.icons,
 		snap = 10,
-		minimap = len(wf.graph.nodes) > 6,
+		minimap = {show = len(wf.graph.nodes) > 6},
+		// (a port's name says what its link carries: picture, file, text, when, done; it stays on the node)
+		port_rows = true,
 	}
 	ui.next({width = ui.fill(), height = ui.fill()})
 	events := ui.node_graph("###workflow_graph", &m.view, m.flow.nodes[:], m.flow.links[:], m.selection[:], opts)
