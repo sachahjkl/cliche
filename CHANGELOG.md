@@ -3,6 +3,11 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.29.4] - 2026-11-27 11:11
+
+### Changed
+- **Tighter dropdowns**: a dropdown has less room at its sides, and its open list is as wide as its longest row. The tip of a cut-off word is one line.
+
 ## [0.29.3] - 2026-11-27 10:32
 
 ### Fixed
@@ -422,6 +427,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.29.4]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.4
 [0.29.3]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.3
 [0.29.2]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.2
 [0.29.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.1
