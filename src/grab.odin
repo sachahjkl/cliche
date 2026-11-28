@@ -10,12 +10,16 @@ import "gt:render"
 grab_desktop :: proc(s: ^capture.Session) -> Result_Desktop {
 	r: Result_Desktop
 	// (the lists first: what the picture shows is then at least as recent as where the windows were said to be)
-	r.outputs = outputs_clone(capture.outputs(s))
+	// (an idle session that broke on the first call revives on the next: retry once before capturing)
+	outs := capture.outputs(s)
+	if len(outs) == 0 { outs = capture.outputs(s) }
+	r.outputs = outputs_clone(outs)
 	r.windows = windows_clone(capture.windows(s))
 	r.have_rects = capture.windows_have_rects(s)
 	// (where the pointer is: the region's overlay opens on that screen)
 	if _, output, ok := capture.pointer(s); ok { r.pointer_output, r.has_pointer_output = output, true }
 	r.frame, r.error = capture.desktop(s)
+	if r.error == .None && len(r.outputs) == 0 { r.outputs = outputs_clone(capture.outputs(s)) }
 	return r
 }
 
@@ -23,6 +27,7 @@ grab_desktop :: proc(s: ^capture.Session) -> Result_Desktop {
 // Windows), else as the program knows it; the first output when nothing says.
 grab_screen :: proc(s: ^capture.Session, pointer: proc() -> (Point, bool)) -> Result_Shot {
 	outs := capture.outputs(s)
+	if len(outs) == 0 { outs = capture.outputs(s) }
 	if len(outs) == 0 { return {error = .Empty} }
 	at := 0
 	if _, output, ok := capture.pointer(s); ok {

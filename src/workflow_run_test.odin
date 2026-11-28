@@ -671,3 +671,11 @@ the_summary_says_an_address_was_shared :: proc(t: ^testing.T) {
 		testing.expect(t, s.open_url)
 	}
 }
+
+// OCR takes a second or two: starting Read_Text announces progress in real runs, never in a preview.
+@(test)
+ocr_step_announces_progress_only_in_real_runs :: proc(t: ^testing.T) {
+	testing.expect_value(t, workflow_task_notice(.Read_Text, false), "Reading text…")
+	testing.expect_value(t, workflow_task_notice(.Read_Text, true), "")
+	testing.expect_value(t, workflow_task_notice(.Save_File, false), "")
+}

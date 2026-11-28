@@ -586,6 +586,7 @@ app_desktop :: proc(app: ^App, d: Result_Desktop) {
 	mode := Overlay_Mode.Region
 	if s, selecting := app.flow.(Flow_Selecting); selecting { mode = overlay_mode_of(s.source) }
 	if !overlay_show(app, mode) {
+		log.warnf("overlay cannot show (outputs=%d, frame=%dx%d)", len(app.desktop.outputs), app.desktop.frame.width, app.desktop.frame.height)
 		app_desktop_drop(app)
 		app_step(app, Flow_Capture_Failed{.Failed})
 		app_desktop_failed(app)

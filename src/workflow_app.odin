@@ -186,6 +186,9 @@ workflow_pump :: proc(app: ^App, run: ^Run) {
 			switch Node_Place(CATALOG.nodes[task.kind].place) {
 			case .Worker:
 				n := &run.flow.graph.nodes[task.node]
+				if notice := workflow_task_notice(Node_Kind(n.kind), run.preview); notice != "" {
+					app_announce(app, .Info, i18n.tr(notice))
+				}
 				input, _ := flowgraph.task_input(task, 0)
 				worker_send(&app.worker, Job_Node{
 					run = run.flow.id, node = task.node, n = flowgraph.node_clone(n^), input = flowgraph.value_hold(input),
@@ -205,6 +208,13 @@ workflow_pump :: proc(app: ^App, run: ^Run) {
 	}
 	workflow_view_follow(app, run)
 	if flowgraph.run_over(&run.flow) { workflow_run_end(app, run) }
+}
+
+// In-progress notice shown while a slow worker step runs (replaced by the run's final notification). Empty in preview.
+workflow_task_notice :: proc(kind: Node_Kind, preview: bool) -> string {
+	if preview { return "" }
+	if kind == .Read_Text { return i18n.later("Reading text…") }
+	return ""
 }
 
 // What a node takes from the settings when its own parameter is empty.

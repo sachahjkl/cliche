@@ -257,6 +257,7 @@ Editor :: struct {
 	sheet:       ui.Shortcuts_Sheet,
 	drop_due:    bool,       // the question before the changes are dropped opens at the next build
 	close_due:   bool,       // closed in a frame: acted on after it (editor_after_frame)
+	close_after_export: bool, // a close asked while a Copy/Save/Upload reads back: runs once the shot goes to the worker
 	done_due:    bool,       // Done with nothing changed, in a frame: acted on after it (what follows may open a window)
 
 	model:       Edit_Model,
@@ -354,7 +355,7 @@ editor_open_shot :: proc(ed: ^Editor, shot: Shot, scale: f32 = 1) -> bool {
 	edit_model_init(&ed.model, shot.size, scale, editor_measure, ed, editor_sample)
 	editor_choices_load(app, &ed.model)
 	ed.field_typing = 0
-	ed.drop_due, ed.close_due, ed.done_due, ed.exporting, ed.export_wait = false, false, false, false, false
+	ed.drop_due, ed.close_due, ed.close_after_export, ed.done_due, ed.exporting, ed.export_wait = false, false, false, false, false, false
 	ed.filters_revision = 0
 	ed.color_target = .None
 	ed.shape_menu_due = false
@@ -488,6 +489,7 @@ editor_after_frame :: proc(ed: ^Editor) {
 		}
 	}
 	if ed.exporting { editor_export_poll(ed) }
+	editor_close_deferred(ed)
 	if ed.done_due {
 		// (the picture as it was taken: nothing to draw; what reads its pixels stops before they go on)
 		ed.done_due = false
@@ -642,7 +644,7 @@ editor_picture_drop :: proc(ed: ^Editor) {
 	ui.view_close(&ed.app.views, EDITOR_SIZE_VIEW, ed.name)   // (it asks about this picture)
 	editor_save_as_stop(ed)
 	edit_export_free(&ed.export)
-	ed.exporting, ed.export_wait = false, false
+	ed.exporting, ed.export_wait, ed.close_after_export = false, false, false
 	if !ed.has_picture { return }
 	edit_model_destroy(&ed.model)
 	shot_free(&ed.shot)
@@ -1375,8 +1377,20 @@ editor_action :: proc(ed: ^Editor, a: Editor_Action) {
 // A close asked (the window's button, Escape, Ctrl+W): at once with nothing changed, else after the question. The
 // question opens in the editor's build (editor_dialogs): the window's close comes outside one.
 editor_close_asked :: proc(ed: ^Editor) {
-	if ed.exporting || ed.done_due { return }
+	if ed.done_due { return }
+	// (a Copy, Save or Upload is waiting on filters or GPU readback: finish handing it to the worker, then close)
+	if ed.exporting || ed.export_wait {
+		ed.close_after_export = true
+		return
+	}
 	if ed.has_picture && edit_changed(&ed.model) { ed.drop_due = true } else { ed.close_due = true }
+}
+
+// A close deferred while an export was in flight runs once the export handed its shot to the worker (or failed).
+editor_close_deferred :: proc(ed: ^Editor) {
+	if !ed.close_after_export || ed.exporting || ed.export_wait { return }
+	ed.close_after_export = false
+	editor_close_asked(ed)
 }
 
 // The picture flattened for `purpose`. A text being typed is kept first. Done with nothing changed hands the picture as

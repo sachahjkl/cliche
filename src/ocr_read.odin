@@ -2,6 +2,7 @@ package cliche
 
 // The text in a picture, read on the worker (gt:ocr: Tesseract on Linux, Windows.Media.Ocr), for the clipboard.
 
+import "core:log"
 import "core:strings"
 import ocr "gt:ocr"
 
@@ -10,8 +11,14 @@ ocr_read :: proc(shot: Shot, languages: string, allocator := context.allocator) 
 	opts: ocr.Recognize_Options
 	if languages != "" { opts.languages = strings.split(languages, "+", context.temp_allocator) }
 	r, e := ocr.recognize(shot.rgba, shot.size.x, shot.size.y, shot.size.x * 4, .RGBA, opts)
-	if e == .No_Engine || e == .No_Language { return "", .No_Ocr }
-	if e != .None { return "", .No_Text }
+	if e == .No_Engine || e == .No_Language {
+		log.warnf("ocr: %v (languages=%q)", e, languages)
+		return "", .No_Ocr
+	}
+	if e != .None {
+		log.warnf("ocr: %v (languages=%q, size=%dx%d)", e, languages, shot.size.x, shot.size.y)
+		return "", .No_Text
+	}
 	defer ocr.result_destroy(&r)
 	trimmed := strings.trim_space(r.text)
 	if trimmed == "" { return "", .No_Text }

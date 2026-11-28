@@ -1638,6 +1638,9 @@ fr Une mesure
 en Edit then share
 fr Modifier puis partager
 
+en Reading text…
+fr Lecture du texte…
+
 en the text cannot go to the clipboard
 fr le texte ne peut pas aller dans le presse-papiers
 
