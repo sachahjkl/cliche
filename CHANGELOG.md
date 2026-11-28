@@ -3,6 +3,16 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.30.1] - 2026-11-28 15:42
+
+### Added
+- **Progress notice while reading text**: starting Read the text now shows "Reading text…" until the result or failure replaces it.
+
+### Fixed
+- **Clipboard copies work on Wayland without window focus**: reading text (OCR), copying from the editor right before closing it, and background captures now reach the clipboard reliably.
+- **Screen capture recovers after idle or under load**: captures no longer fail intermittently after staying idle or when the system is busy.
+- **Closing the editor right after Copy keeps the copy**: closing while filters or GPU readback are still running defers the close until the copy goes to the worker.
+
 ## [0.30.0] - 2026-11-28 13:04
 
 ### Added
@@ -453,6 +463,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.30.1]: https://github.com/sachahjkl/cliche/releases/tag/v0.30.1
 [0.30.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.30.0
 [0.29.7]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.7
 [0.29.6]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.6
