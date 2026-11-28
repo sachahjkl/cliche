@@ -3,6 +3,14 @@
 All notable changes to cliche are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.30.0] - 2026-11-28 13:04
+
+### Added
+- **About Cliche**: an About dialog from the tray menu or the command palette shows the logo, version, licence, What's new, links, and buttons to copy the version or diagnostics.
+
+### Changed
+- **Docked panels keep their header bar**: a lone docked panel, such as the history preview, keeps a slim bar with its drag grip, menu and close button.
+
 ## [0.29.7] - 2026-11-27 19:13
 
 ### Changed
@@ -445,6 +453,7 @@ The command line has `--install`, `--uninstall`, `--status` (what is installed, 
 - **The window closes again** with its close button.
 - **A recording of a region with an odd width or height is saved**: it failed with "the recording could not be saved".
 
+[0.30.0]: https://github.com/sachahjkl/cliche/releases/tag/v0.30.0
 [0.29.7]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.7
 [0.29.6]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.6
 [0.29.5]: https://github.com/sachahjkl/cliche/releases/tag/v0.29.5
