@@ -10,7 +10,7 @@ import "gt:ui"
 // palette's own keys are the toolkit's (ui.palette_keys): no table has a line of it.
 @(test)
 the_window_commands_are_read_in_every_mode :: proc(t: ^testing.T) {
-	for a in ([]History_Action{.Workflows, .Settings, .Keys, .Close, .Quit}) {
+	for a in ([]History_Action{.Workflows, .Settings, .Keys, .About, .Close, .Quit}) {
 		testing.expectf(t, HISTORY_ACTIONS[a].scope == .Window, "%v is the window's", a)
 	}
 	testing.expect_value(t, len(ui.command_window_typing_keys(slice.enumerated_array(&HISTORY_ACTIONS))), 0)

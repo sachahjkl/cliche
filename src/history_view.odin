@@ -31,6 +31,7 @@ import "gt:platform"
 import prefs_page "gt:prefs_page"
 import crash_bar "gt:crash_bar"
 import "gt:render"
+import setup "gt:setup"
 import timefmt "gt:timefmt"
 import "gt:ui"
 import i18n "gt:i18n"
@@ -166,6 +167,8 @@ History_Window :: struct {
 	settings_mode: Settings_Mode,   // settings_view.odin
 	workflow_mode: Workflow_Mode,   // workflow_view.odin
 	delete_ids:  [dynamic]u64,    // the files the question HISTORY_DELETE_VIEW asks about
+	about_open:  bool,            // the About modal (about.odin)
+	about_logo:  Maybe(setup.Logo),
 	setup_due:   bool,            // the setup's view opens at the next build (asked outside one: cliche --setup)
 	status:      string,          // what the last action did, under the view (owned)
 }
@@ -173,7 +176,7 @@ History_Window :: struct {
 // The actions of the palette, the menu, the sheet of keys.
 History_Action :: enum u8 {
 	Open, Open_Url, Reveal, Copy_Picture, Copy_Path, Copy_Url, Copy_Text, Edit, Pin, Upload, Combine_Side, Combine_Stack, Delete_File, Remove,
-	Preview, Select_All, Search, Period, Grid, List, Open_Folder, Capture_Region, Workflows, Settings, Keys, Close, Quit,
+	Preview, Select_All, Search, Period, Grid, List, Open_Folder, Capture_Region, Workflows, Settings, Keys, About, Close, Quit,
 }
 
 // (the ids: the person's keys and aliases, and the palette's memory, are stored by them. One id in two tables is one
@@ -206,6 +209,7 @@ HISTORY_ACTIONS := [History_Action]ui.Command{
 	.Workflows      = {id = "workflows", label = i18n.later("Workflows"), group = i18n.later("Window"), keys = {{.W, {.Ctrl, .Shift}}}, icon = lucide.GIT_FORK, tags = {"after capture", "steps", "pipeline", "actions", "graph"}, scope = .Window},
 	.Settings       = {id = "settings", label = i18n.later("Settings"), group = i18n.later("Window"), keys = {{.Comma, {.Ctrl}}}, icon = lucide.SETTINGS, tags = {"preferences", "options"}, scope = .Window},
 	.Keys           = {id = "shortcuts", label = i18n.later("Keyboard shortcuts"), group = i18n.later("Window"), keys = {{.F1, {}}}, icon = lucide.KEYBOARD, tags = {"help", "keys"}, scope = .Window},
+	.About          = {id = "about", label = i18n.later("About Cliche"), group = i18n.later("Window"), icon = lucide.INFO, tags = {"version", "licence", "license", "changelog", "whats new", "diagnostics", "info"}, scope = .Window},
 	.Close          = {id = "close", label = i18n.later("Close the window"), group = i18n.later("Window"), keys = {{.W, {.Ctrl}}}, icon = lucide.X, tags = {"hide"}, scope = .Window},
 	.Quit           = {id = "quit", label = i18n.later("Quit Cliche"), group = i18n.later("Window"), keys = {{.Q, {.Ctrl}}}, icon = lucide.POWER, tags = {"exit", "stop"}, scope = .Window},
 }
@@ -373,18 +377,17 @@ history_window_open :: proc(app: ^App, headless: bool) -> bool {
 	// (the setup's "By" line, in its modal and on the settings' Installation page: a texture of this window's renderer,
 	// made before the offer opens the modal; install_end frees it)
 	_ = prefs_page.install_vendor_mark(&app.install, &app.shared.r, #load("../assets/froment-software-64.png"))
+	if logo, ok := setup.logo_make(&app.shared.r, ICON_PNGS[3].png); ok { hw.about_logo = logo }
 	// (the install read on a task, once the main window is there to show its dialog: offered on Windows; never to a
 	// window of the screenshots. The worker's reading at the start (updates_installed) may have said `known` already: the
 	// offer still runs, once, as this window opens once)
 	if !headless { prefs_page.install_offer(&app.install, &hw.host.state, offer = ODIN_OS == .Windows) }
 	// (after an update, once, in this window: a message that stays opens the settings at What's new)
-	if !headless && app.changelog.english == "" {
-		app.changelog.english = CHANGELOG
+	if app.changelog.english == "" { app.changelog.english = CHANGELOG }
+	if !headless {
 		news := ui.Announcer{mode = .Window, state = &hw.host.state}
 		prefs_page.changelog_after_update(&app.changelog, &app.prefs, APP_VERSION, &news, proc(user: rawptr) {
-			app := (^App)(user)
-			settings_show(app)
-			prefs_page.show(&app.history_window.settings_mode.page, &app.prefs, settings_options(app), prefs_page.CHANGELOG_PAGE)
+			about_whats_new((^App)(user))
 		}, app)
 	}
 	app_standard_follow(app, &hw.host)
@@ -496,6 +499,7 @@ history_after_frame :: proc(app: ^App) {
 	ui.view_close(vs, HISTORY_DELETE_VIEW)
 	clear(&hw.delete_ids)
 	ui.view_close(vs, WORKFLOW_DELETE_VIEW)
+	hw.about_open = false
 	ui.menu_close()
 	host.host_hide(&hw.host)
 	hw.visible = false
@@ -508,6 +512,7 @@ history_after_frame :: proc(app: ^App) {
 // host_close.
 history_window_free :: proc(app: ^App) {
 	hw := &app.history_window
+	setup.logo_destroy(&app.shared.r, &hw.about_logo)
 	history_textures_drop(app)
 	delete(hw.thumbs)
 	ui.palette_destroy(&hw.palette)   // (its usage memory written)
@@ -631,11 +636,13 @@ history_build :: proc(h: ^host.Host, size: host.Vec2) {
 // Whether a view of the window that takes the keys is open, wherever the user put it: its palettes, its sheet, a
 // question, the setup. The window's own keys wait for it, as they waited for its dialogs. The preview is not one: it
 // leaves the keys to the page.
+history_views_open_for_test :: history_views_open
+
 @(private = "file")
 history_views_open :: proc(app: ^App) -> bool {
 	hw := &app.history_window
 	vs := &app.views
-	return ui.palette_is_open(&hw.palette) || ui.shortcuts_sheet_is_open(&hw.sheet) || ui.palette_is_open(&hw.workflow_mode.add) ||
+	return hw.about_open || ui.palette_is_open(&hw.palette) || ui.shortcuts_sheet_is_open(&hw.sheet) || ui.palette_is_open(&hw.workflow_mode.add) ||
 		ui.view_is_open(vs, HISTORY_DELETE_VIEW) || ui.view_is_open(vs, WORKFLOW_DELETE_VIEW) || prefs_page.install_open_now(&app.install)
 }
 
@@ -1453,6 +1460,7 @@ history_dialogs :: proc(app: ^App) {
 		clear(&hw.delete_ids)
 	case .None:
 	}
+	about_modal(app)
 }
 
 // The question before the files of `ids` are deleted for good (those with a file on the disk).
@@ -1499,7 +1507,7 @@ history_enabled :: proc(app: ^App) -> History_Actions {
 	if stamp == hw.enabled_stamp && hw.enabled_made { return hw.enabled }
 	hw.enabled_stamp, hw.enabled_made = stamp, true
 	// (on the settings: what concerns the window alone; the history's actions wait for it)
-	window := History_Actions{.Open_Folder, .Capture_Region, .Workflows, .Settings, .Keys, .Close, .Quit}
+	window := History_Actions{.Open_Folder, .Capture_Region, .Workflows, .Settings, .Keys, .About, .Close, .Quit}
 	if settings {
 		hw.enabled = window
 		return window
@@ -1633,6 +1641,8 @@ history_action :: proc(app: ^App, a: History_Action) {
 	case .Keys:
 		history_sheet_keep(app)
 		ui.shortcuts_sheet_open(&hw.sheet, hw.sheet_table.commands, i18n.tr("Cliche's keys"), hw.sheet_table.version)
+	case .About:
+		hw.about_open = true
 	case .Close:
 		hw.hide_due = true
 	case .Quit:

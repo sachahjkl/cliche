@@ -1,6 +1,12 @@
 # The texts in fr (docs/i18n.md). Written by the i18n command: a translation left empty is the English.
 language fr
 
+en Repository
+fr Dépôt
+
+en Fast screenshots and screen recordings, shared at once.
+fr Captures et enregistrements d'écran rapides, partagés aussitôt.
+
 en Capture in %d s
 fr Capture dans %d s
 
@@ -96,6 +102,9 @@ fr Scénarios
 
 en Settings
 fr Réglages
+
+en About Cliche
+fr À propos de Cliche
 
 en Quit Cliche
 fr Quitter Cliche

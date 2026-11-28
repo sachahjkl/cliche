@@ -40,7 +40,7 @@ import "gt:ui"
 PROGRAM_CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
 
 // The tray menu's items. The first eleven are Shortcut_Action's, in its order.
-Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Ruler, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, Quit, Upload_Clipboard, Upload_File, Auto_Capture, Scrolling_Capture }
+Tray_Item :: enum { None, Screen, Region, Record, Record_Gif, Window, Ocr, Qr, All_Screens, Last_Region, Color, Ruler, Edit, Record_Start, Record_Stop, Record_Cancel, History, Workflows, Settings, About, Quit, Upload_Clipboard, Upload_File, Auto_Capture, Scrolling_Capture }
 
 // What the rectangle chosen on the region's overlay is for: a picture of it, a recording's region (record_app.odin),
 // or the page a scrolling capture scrolls (scrolling_capture.odin).
@@ -841,6 +841,7 @@ app_tray_menu :: proc(app: ^App) {
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Workflows), text = i18n.tr("Workflows")})
 	append(&items, platform.Tray_Menu_Item{kind = .Separator})
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Settings), text = i18n.tr("Settings"), default = app.tray_menu == .Rest && app.settings.tray_click == .Settings})
+	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.About), text = i18n.tr("About Cliche")})
 	append(&items, platform.Tray_Menu_Item{id = int(Tray_Item.Quit), text = i18n.tr("Quit Cliche")})
 	platform.tray_set_menu(app.tray, items[:])
 }
@@ -932,6 +933,7 @@ app_tray :: proc(app: ^App) {
 			case .Record_Cancel: app_record_cancel(app)
 			case .History:       history_window_show(app)
 			case .Settings:      settings_show(app)
+			case .About:         about_show(app)
 			case .Quit:          app.quit = true
 			case .None:
 			}
