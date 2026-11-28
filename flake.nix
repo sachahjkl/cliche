@@ -1,6 +1,12 @@
 {
   description = "cliche: screenshots and screen recorder";
 
+  # The binary cache that the CI fills: nix run and nix develop download what it already built.
+  nixConfig = {
+    extra-substituters = ["https://cache.froment.software"];
+    extra-trusted-public-keys = ["homelab-cache-1:ZaUHSv8slKsAKc9kd0AGI8p1HUjUumfho7ShgUVlnUg="];
+  };
+
   inputs = {
     # The toolkit, at the submodule's commit: a flake fetched from GitHub is a tarball without submodules
     # (gui_toolkit docs/toolbox.md, "The flake's toolkit").

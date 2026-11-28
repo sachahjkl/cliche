@@ -1,0 +1,31 @@
+name: Nix cache
+
+# Each push to master builds the flake's package and pushes every derivation it builds to the binary cache
+# (https://cache.froment.software), so `nix run github:sachahjkl/cliche` downloads the program instead of building it.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: nix-cache-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # The cache accepts a push with the job's OIDC token: no secret.
+  id-token: write
+
+jobs:
+  package:
+    name: Package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: Mic92/niks3-action@v1
+        with:
+          server-url: https://cache.froment.software
+      - name: Build the package
+        run: nix build .#default --print-build-logs
