@@ -41,7 +41,7 @@ project :: proc() -> toolbox.Project {
 		// (a release has only the icons cliche names: lucide.<NAME> constants everywhere; WebP on Windows: its export)
 		features = {.Lucide_Subset, .Webp},
 		// (what Windows shows of it: src/integration.odin's identity says the same)
-		title = "cliche", description = "Fast screenshots and screen recordings, shared at once.",
+		title = "cliche", description = "Screenshots and screen recorder",
 		publisher = "Froment Software", copyright = "Copyright (c) 2026 sachahjkl",
 	}
 }
@@ -96,7 +96,7 @@ SITE_DOWNLOADS := [?]tk_site.Download{
 
 @(private = "file")
 site_meta :: proc() -> tk_site.Meta {
-	m := tk_site.meta_default("Cliche", "https://cliche.froment.software/", "https://github.com/sachahjkl/cliche", "Fast screenshots and screen recordings, shared at once", "#0e0f14", "#ef8a5a", card = "img/editor.png")
+	m := tk_site.meta_default("Cliche", "https://cliche.froment.software/", "https://github.com/sachahjkl/cliche", "Screenshots and screen recorder", "#0e0f14", "#ef8a5a", card = "img/editor.png")
 	m.ld_fields = SITE_LD[:]
 	m.shop = SHOP
 	return m

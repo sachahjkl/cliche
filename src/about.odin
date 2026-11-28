@@ -59,7 +59,6 @@ about_info :: proc(app: ^App, links: ^[1]ui.About_Link) -> ui.About_Info {
 	return {
 		name         = APP_TITLE,
 		version      = APP_VERSION,
-		tagline      = i18n.tr("Fast screenshots and screen recordings, shared at once."),
 		licence      = "MIT",
 		copyright    = "© 2026 Froment Software",
 		logo         = logo_tex,

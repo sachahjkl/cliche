@@ -1,5 +1,5 @@
 {
-  description = "cliche: fast screenshots and screen recordings, shared at once.";
+  description = "cliche: screenshots and screen recorder";
 
   inputs = {
     # The toolkit, at the submodule's commit: a flake fetched from GitHub is a tarball without submodules
@@ -125,7 +125,7 @@
           name = "cliche";
           desktopName = "cliche";
           genericName = "Screenshot Tool";
-          comment = "Fast screenshots and screen recordings, shared at once.";
+          comment = "Screenshots and screen recorder";
           exec = "cliche";
           icon = "cliche";
           categories = ["Utility" "Graphics"];
@@ -150,7 +150,7 @@
       '';
 
       meta = {
-        description = "Fast screenshots and screen recordings, shared at once.";
+        description = "Screenshots and screen recorder";
         homepage = "https://github.com/sachahjkl/cliche";
         license = lib.licenses.mit;
         platforms = [system];

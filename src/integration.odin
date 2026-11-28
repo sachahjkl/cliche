@@ -54,7 +54,7 @@ identity: desktop.Identity
 cliche_identity :: proc() -> desktop.Identity {
 	sync.once_do(&identity_once, proc() {
 		identity = desktop.identity_of("Froment Software", APP_TITLE, APP_NAME, runtime.heap_allocator())
-		identity.description = "Fast screenshots and screen recordings, shared at once."
+		identity.description = "Screenshots and screen recorder"
 		identity.generic_name = "Screenshot Tool"
 		identity.categories = "Utility;Graphics;"
 		identity.keywords = "screenshot;screen;capture;record;gif;qr;"

@@ -2,7 +2,7 @@
 
 <h1 align="center">cliche</h1>
 
-<p align="center">Fast screenshots and screen recordings, shared at once.</p>
+<p align="center">Screenshots and screen recorder</p>
 
 cliche lives in the notification area. A shortcut takes a picture at once: a region drawn on the frozen screen (the
 window under the pointer is framed for you), the screen under the pointer, or the window in front. The picture then runs

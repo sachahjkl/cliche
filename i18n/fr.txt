@@ -4,9 +4,6 @@ language fr
 en Repository
 fr Dépôt
 
-en Fast screenshots and screen recordings, shared at once.
-fr Captures et enregistrements d'écran rapides, partagés aussitôt.
-
 en Capture in %d s
 fr Capture dans %d s
 
